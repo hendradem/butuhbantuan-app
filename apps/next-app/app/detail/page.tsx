@@ -4,14 +4,7 @@ import BottomSheetMain from '../components/bottomsheet/Bottomsheet'
 import useBottomSheet from '../hooks/useBottomSheet'
 import Maps from '../components/maps/Maps'
 import DetailMaps from '../components/maps/DetailMaps'
-import {
-    FaCarOn,
-    FaArrowLeft,
-    FaFire,
-    FaTruckMedical,
-    FaCar,
-    FaLocationDot,
-} from 'react-icons/fa6'
+import { FaCarOn, FaCar, FaLocationDot } from 'react-icons/fa6'
 import { RiMessage3Line, RiShareFill } from 'react-icons/ri'
 
 import Link from 'next/link'
@@ -62,7 +55,11 @@ const Page = () => {
             setSelectedEmergencyPartner(partner)
             bottomSheet.onClose()
             bottomSheet.onOpen()
+
+            console.log('item clicked')
+            console.log(partner)
         },
+
         [bottomSheet]
     )
 
@@ -331,9 +328,10 @@ const Page = () => {
                                         {selectedEmergencyPartner.name}{' '}
                                     </h3>
                                     <span className="badge warning py-0">
-                                        {useCalculateDuration(
+                                        {/* {useCalculateDuration(
                                             selectedEmergencyPartner.duration
-                                        )}{' '}
+                                        )}{' '} */}
+                                        {selectedEmergencyPartner.name}
                                         Menit
                                     </span>
                                 </div>
