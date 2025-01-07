@@ -11,8 +11,8 @@ const useUserLocation = () => {
         address?: string | undefined,
         urbanVillage?: string | undefined
     ): void => {
-        window.localStorage.setItem('lat', latState.toString())
-        window.localStorage.setItem('long', longState.toString())
+        window.localStorage.setItem('lat', latState?.toString())
+        window.localStorage.setItem('long', longState?.toString())
         window.localStorage.setItem('address', address?.toString() || '')
         window.localStorage.setItem(
             'urban_village',
