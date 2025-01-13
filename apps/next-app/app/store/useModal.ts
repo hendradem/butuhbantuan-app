@@ -1,20 +1,20 @@
-import { create } from "zustand";
+import { create } from 'zustand'
 
 type State = {
-  isChangeLocationModalOpen: boolean;
-};
+    isChangeLocationModalOpen: boolean
+}
 
 type Action = {
-  updateChangeLocationModal: (
-    isChangeLocationModalOpen: State["isChangeLocationModalOpen"]
-  ) => void;
-};
+    updateChangeLocationModal: (
+        isChangeLocationModalOpen: State['isChangeLocationModalOpen']
+    ) => void
+}
 
 const useModal = create<State & Action>()((set) => ({
-  isChangeLocationModalOpen: false,
-  updateChangeLocationModal: (isChangeLocationModalOpen) => {
-    set(() => ({ isChangeLocationModalOpen: isChangeLocationModalOpen }));
-  },
-}));
+    isChangeLocationModalOpen: false,
+    updateChangeLocationModal: (isChangeLocationModalOpen) => {
+        set(() => ({ isChangeLocationModalOpen: isChangeLocationModalOpen }))
+    },
+}))
 
-export default useModal;
+export default useModal
