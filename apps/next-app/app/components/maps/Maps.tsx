@@ -2,20 +2,15 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
-import ReactMapGL, { Marker, GeolocateControl } from 'react-map-gl'
 import { fetcher } from '@/app/libs/fetcher'
 import useUserLocation from '@/app/hooks/useUserLocation'
 import config from '@/app/config'
-import Image from 'next/image'
 import useUserLocationData from '@/app/store/useUserLocationData'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
 import debounce from 'lodash.debounce'
 import { useSearchParams } from 'next/navigation'
 import mapboxgl from 'mapbox-gl'
-import MapboxDirections from '@mapbox/mapbox-gl-directions/dist/mapbox-gl-directions'
-
-import { HiMapPin } from 'react-icons/hi2'
 import {
     FaArrowLeft,
     FaFire,
@@ -23,6 +18,8 @@ import {
     FaMagnifyingGlass,
     FaXmark,
 } from 'react-icons/fa6'
+import { useQuery } from '@tanstack/react-query'
+import useGeolocation from '@/app/store/api/useGeolocation'
 
 const mapsData = [
     {
@@ -96,7 +93,8 @@ type LocationState = {
     address: String
 }
 
-const Maps: React.FC<MapsProps> = ({ mapHeight, mapComponentType }) => {
+const Maps: React.FC<MapsProps> = ({ mapComponentType }) => {
+    const geolocationAPI: any = useGeolocation()
     const serchParams = useSearchParams()
     const emergencyType = serchParams.get('type')
     const { setUserLocation } = useUserLocation()
@@ -110,18 +108,55 @@ const Maps: React.FC<MapsProps> = ({ mapHeight, mapComponentType }) => {
         useState<number>(0)
     const [userLongitudeFromGeolocation, setUserLongitudeFromGeolocation] =
         useState<number>(0)
-    const geolocateControlRef = useRef(null)
     const [shouldFetch, setShouldFetch] = useState<boolean>(false)
     const { currentUserLocation } = useUserLocation()
     const [isSearchBoxActive, setIsSearchBoxActive] = useState<boolean>(false)
     const [currentUserAddress, setCurrentUserAddress] = useState(
         currentUserLocation?.address || ''
     )
-    const [searchAddressValue, setSearchAddressValue] = useState('')
     const [isLoading, setIsLoading] = useState<boolean>(false)
     const [locationValue, setLocationValue] = useState<string>('')
     const [locationResult, setLocationResult] = useState<LocationState[]>([])
-    const [isOpen, setIsOpen] = useState<boolean>(true)
+    const [startLatitude, setStartLatitude] = useState(-7.7063721)
+    const [startLongitude, setStartLongitude] = useState(110.3450278)
+
+    // ==== DATA FETCHING =====
+    const { data, error } = useSWR(
+        // get address based on user coordinates
+        geolocationAPI.getAddressInfo(
+            userLongitudeFromGeolocation,
+            userLatitudeFromGeolocation
+        ),
+        fetcher,
+        {}
+    )
+
+    if (data) console.log(data)
+    if (error) console.log(error)
+
+    // if (userAddressInformationData) {
+    //     console.log('dapet')
+    //     const data = userAddressInformationData
+
+    //     const resLatitude = data?.features[0]?.center[1]
+    //     const resLongitude = data?.features[0]?.center[0]
+    //     const address = data?.features[0]?.place_name
+    //     const urbanVillage = data?.features[0]?.context[0].text
+
+    //     updateRegionalData({
+    //         subdistrict: data?.features[0]?.context[2]?.text,
+    //         regency: data?.features[0]?.context[3]?.text,
+    //         province: data?.features[0]?.context[4]?.text,
+    //     })
+    //     updateCoordinate({
+    //         long: data?.features[0]?.center[0],
+    //         lat: data?.features[0]?.center[1],
+    //     })
+
+    //     setUserLocation(resLatitude, resLongitude, address, urbanVillage)
+    // }
+
+    // ==== END DATA FETCHING ====
 
     // ==== SEARCBOX =====
     const debouncedResult = useMemo(() => {
@@ -133,38 +168,45 @@ const Maps: React.FC<MapsProps> = ({ mapHeight, mapComponentType }) => {
         setLocationValue(e.target.value)
     }
 
+    // const {
+    //     data: locationData,
+    //     error,
+    //     refetch: refetchLocationData,
+    // } = useQuery({
+    //     queryKey: ['todos'],
+    //     queryFn: geolocationAPI.getLocation(locationValue),
+    // })
+
+    // if (locationData) console.log(locationData)
+
     const searchData = () => {
         setIsLoading(true)
-        var requestOptions = {
-            method: 'GET',
-        }
-
-        fetch(
-            `https://api.geoapify.com/v1/geocode/autocomplete?text=${locationValue}&apiKey=8039083723464cb389ed3d1f4bd86d35`,
-            requestOptions
-        )
-            .then((response) => response.json())
-            .then((result) => {
-                console.log(result)
-                let temp: any = []
-                result?.features.map((item: any) => {
-                    const data = {
-                        name: item?.properties?.name,
-                        address: item?.properties?.formatted,
-                        lat: item?.properties?.lat,
-                        long: item?.properties?.lon,
-                        district: item?.properties?.district,
-                        place_name: item?.properties?.name,
-                        urban_village: item?.properties?.suburb,
-                    }
-                    temp.push(data)
-                })
-                setLocationResult(temp)
-                setIsLoading(false)
-            })
-            .catch((error) => console.log('error', error))
     }
 
+    const mapLocationResultData = () => {
+        let temp: any = []
+        // result?.features.map((item: any) => {
+        //     const data = {
+        //         name: item?.properties?.name,
+        //         address: item?.properties?.formatted,
+        //         lat: item?.properties?.lat,
+        //         long: item?.properties?.lon,
+        //         district: item?.properties?.district,
+        //         place_name: item?.properties?.name,
+        //         urban_village: item?.properties?.suburb,
+        //     }
+        //     temp.push(data)
+        // })
+        // setLocationResult(temp)
+        // setIsLoading(false)
+    }
+    /*************  ✨ Codeium Command ⭐  *************/
+    /**
+     * This function is used to handle the selected address from the search box results.
+     * It will update the user location state and set the map to the selected address.
+     * @param {any} address - The selected address object from the search box results.
+     */
+    /******  c122b78a-d7f2-4296-b84e-e43a499caf8a  *******/
     const handleSelectedAddress = (address: any): void => {
         setUserLatitudeFromGeolocation(address.lat)
         setUserLongitudeFromGeolocation(address.long)
@@ -175,64 +217,46 @@ const Maps: React.FC<MapsProps> = ({ mapHeight, mapComponentType }) => {
             address.address,
             address.urban_village
         )
+
+        setIsSearchBoxActive(false)
+        setLocationResult([])
+
+        // to move the map to the selected address
+        setStartLatitude(address.lat)
+        setStartLongitude(address.long)
     }
     // ===== END SEARCHBOX =====
 
     // ==== MAPS =====
-    const mapContainerRef = useRef<any>()
     const mapWrapper = useRef<any>()
-    const mapRef = useRef<any>()
-
-    const startLatitude = -7.7063721
-    const startLongitude = 110.3450278
-
-    const geojson = {
-        type: 'FeatureCollection',
-        features: [
-            {
-                type: 'Feature',
-                geometry: {
-                    type: 'Point',
-                    coordinates: [-7.684482, 110.3533971],
-                },
-                properties: {
-                    title: 'Mapbox',
-                    description: 'Washington, D.C.',
-                },
-            },
-            {
-                type: 'Feature',
-                geometry: {
-                    type: 'Point',
-                    coordinates: [-7.718055, 110.3545401],
-                },
-                properties: {
-                    title: 'Mapbox',
-                    description: 'San Francisco, California',
-                },
-            },
-        ],
-    }
+    let mapContainer: any
+    const [geolocationControl, setGeolocationControl] = useState<any>(null)
 
     const buildTheMap = async () => {
-        const map = new mapboxgl.Map({
+        mapContainer = new mapboxgl.Map({
             container: mapWrapper.current,
             style: 'mapbox://styles/mapbox/streets-v10',
             center: [startLongitude, startLatitude],
             zoom: 12,
             accessToken: config.MAPBOX_API_KEY,
         })
-        const geolocate = new mapboxgl.GeolocateControl({
+
+        const geolocateContainer = new mapboxgl.GeolocateControl({
             positionOptions: {
                 enableHighAccuracy: true,
             },
             trackUserLocation: true,
         })
-        map.addControl(geolocate)
-        map.on('load', () => {
-            geolocate.trigger()
+
+        mapContainer.addControl(geolocateContainer)
+        mapContainer.on('load', () => {
+            geolocateContainer.trigger()
+            setGeolocationControl(geolocateContainer)
         })
-        geolocate.on('geolocate', (e: any) => {
+        mapContainer.on('click', () => {
+            setIsSearchBoxActive(false)
+        })
+        geolocateContainer.on('geolocate', (e: any) => {
             const latitude = e.coords.latitude
             const longitude = e.coords.longitude
 
@@ -254,8 +278,9 @@ const Maps: React.FC<MapsProps> = ({ mapHeight, mapComponentType }) => {
                     `<h3>Pop Up Title</h3><p>Pop Up Content</p>`
                 )
             )
-            .addTo(map)
+            .addTo(mapContainer)
     }
+    // ==== END MAPS =====
 
     useEffect(() => {
         buildTheMap()
@@ -284,36 +309,9 @@ const Maps: React.FC<MapsProps> = ({ mapHeight, mapComponentType }) => {
         setIsLoading(true)
     }
 
-    const handleMapOnClick = (): void => {
-        setIsSearchBoxActive(false)
-    }
-
-    // to get address info based on user coordinates
-    const { data, mutate } = useSWR(
-        shouldFetch
-            ? `${config.MAPBOX_URL}/geocoding/v5/mapbox.places/${userLongitudeFromGeolocation},${userLatitudeFromGeolocation}.json?access_token=${config.MAPBOX_API_KEY}`
-            : null,
-        fetcher,
-        {}
-    )
-
-    if (data) {
-        const resLatitude = data?.features[0]?.center[1]
-        const resLongitude = data?.features[0]?.center[0]
-        const address = data?.features[0]?.place_name
-        const urbanVillage = data?.features[0]?.context[0].text
-
-        updateRegionalData({
-            subdistrict: data?.features[0]?.context[2]?.text,
-            regency: data?.features[0]?.context[3]?.text,
-            province: data?.features[0]?.context[4]?.text,
-        })
-        updateCoordinate({
-            long: data?.features[0]?.center[0],
-            lat: data?.features[0]?.center[1],
-        })
-
-        setUserLocation(resLatitude, resLongitude, address, urbanVillage)
+    const handleOnGeolocate = (e: any): void => {
+        console.log(geolocationControl)
+        geolocationControl.trigger()
     }
 
     useEffect(() => {

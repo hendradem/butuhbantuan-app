@@ -21,7 +21,7 @@ import useUserLocationData from '../store/useUserLocationData'
 import Modal from '@/app/components/commons/Modal'
 import useModal from '@/app/store/useModal'
 import Image from 'next/image'
-import ambulanceData from '@/app/store/ambulancedata.json'
+import ambulanceData from '@/app/store/data/ambulancedata.json'
 import useCalculateDistance from '@/app/hooks/useCalculate'
 import useCalculateDuration from '@/app/hooks/useCalculateDuration'
 
@@ -33,9 +33,6 @@ const Page = () => {
     const bottomSheet = useBottomSheet()
     const serchParams = useSearchParams()
     const emergencyType = serchParams.get('type')
-    const subdistrict = localStorage.getItem('subdisctrict')
-    const regency = localStorage.getItem('regency')
-    const userAddress = localStorage.getItem('address')
 
     const endLong = localStorage.getItem('long')
     const endLat = localStorage.getItem('lat')
@@ -226,7 +223,12 @@ const Page = () => {
 
                     <div className="px-3">
                         <h2 className="font-medium my-3">
-                            {emergencyType} di sekitarmu
+                            {emergencyType &&
+                                'Menampilkan ' +
+                                    emergencyType?.charAt(0).toUpperCase() +
+                                    emergencyType?.slice(1) +
+                                    ' '}
+                            di sekitarmu
                         </h2>
 
                         <div className="filter flex space-x-1 mb-3 border-b border-t py-1">
