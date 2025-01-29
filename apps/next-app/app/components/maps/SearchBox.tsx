@@ -1,16 +1,14 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
+import useUserLocationData from '@/app/store/useUserLocationData'
 import Link from 'next/link'
 import {
-    FaFire,
     FaLocationCrosshairs,
     FaMagnifyingGlass,
     FaXmark,
 } from 'react-icons/fa6'
 import debounce from 'lodash.debounce'
-import { FaArrowLeft } from 'react-icons/fa'
-
-type AllowedComponentType = 'home' | 'detail'
+import { useAddressLocation } from '@/app/store/api/location.api'
 
 type MapsPropsType = {}
 
@@ -21,14 +19,77 @@ type LocationStateType = {
 
 const SearchBox: React.FC<MapsPropsType> = () => {
     const serchParams = useSearchParams()
-    const emergencyType = serchParams.get('type')
-    const [isSearchBoxActive, setIsSearchBoxActive] = useState<boolean>(false)
-    const [isLoading, setIsLoading] = useState<boolean>(false)
-    const [locationResult, setLocationResult] = useState<LocationStateType[]>(
-        []
+    const userAddress = useUserLocationData((state) => state.fullAddress)
+
+    const updateCoordinate = useUserLocationData(
+        (state) => state.updateCoordinate
     )
 
-    const [currentUserAddress, setCurrentUserAddress] = useState('')
+    const [isSearchBoxActive, setIsSearchBoxActive] = useState<boolean>(false)
+    const [isLoading, setIsLoading] = useState<boolean>(false)
+    const [locationAddressQuery, setLocationAddressQuery] = useState<string>('')
+
+    const [locationResult, setLocationResult] = useState([])
+    const [currentUserAddress, setCurrentUserAddress] = useState<string>('')
+
+    const {
+        data: searchAddressResult,
+        refetch: refetchSearchAddress,
+        isLoading: searchAddressLoading,
+    } = useAddressLocation(locationAddressQuery)
+
+    const handleSearchInputChange = (e: any): void => {
+        setCurrentUserAddress(e.target.value)
+        debouncedResult(e)
+    }
+    const debouncedResult = useMemo(() => {
+        return debounce((e: any) => searchUserLocation(e), 1000)
+    }, [])
+    const searchUserLocation = (e: any) => {
+        setLocationAddressQuery(e.target.value)
+    }
+
+    const handleOnGeolocate = (e: any): void => {
+        console.log('clicked')
+    }
+    const handleSelectedAddress = (address: any): void => {
+        updateCoordinate(address.lat, address.long)
+    }
+    const handleSearchBoxOnFocus = (): void => {
+        setIsSearchBoxActive(true)
+    }
+
+    useEffect(() => {
+        if (userAddress) {
+            setCurrentUserAddress(userAddress)
+        } else {
+            setCurrentUserAddress('')
+        }
+    }, [userAddress])
+
+    useEffect(() => {
+        if (locationAddressQuery) refetchSearchAddress()
+    }, [locationAddressQuery])
+
+    useEffect(() => {
+        if (!searchAddressLoading) {
+            let temp: any = []
+            searchAddressResult?.features?.map((item: any) => {
+                const data = {
+                    name: item?.properties?.name,
+                    address: item?.properties?.formatted,
+                    lat: item?.properties?.lat,
+                    long: item?.properties?.lon,
+                    district: item?.properties?.district,
+                    place_name: item?.properties?.name,
+                    urban_village: item?.properties?.suburb,
+                }
+                temp.push(data)
+            })
+
+            setLocationResult(temp)
+        }
+    }, [searchAddressResult])
 
     return (
         <form>
@@ -38,49 +99,65 @@ const SearchBox: React.FC<MapsPropsType> = () => {
                 >
                     <button
                         type="button"
-                        className="flex items-center justify-center w-12 h-9 ml-1.5 rounded-full cursor-pointer hover:bg-gray-100"
+                        className="flex items-center justify-center w-12 h-9 ml-1.5 rounded-full "
                     >
                         <FaMagnifyingGlass className="text-gray-600 text-[17px]" />
                     </button>
                     <input
                         type="text"
-                        value={currentUserAddress}
+                        defaultValue={currentUserAddress}
                         onChange={(e) => {
                             handleSearchInputChange(e)
                         }}
-                        onClick={(e) => {
-                            handleSearchBoxOnFocus(e)
+                        onClick={() => {
+                            handleSearchBoxOnFocus()
                         }}
                         className={`  text-gray-900 text-sm border-none focus:ring-none focus:border-none focus:outline-none block w-full p-3 px-0`}
                         placeholder="Cari lokasi, desa atau daerah terdekat"
                     />
-
-                    {isSearchBoxActive && currentUserAddress && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                handleRemoveSelectedAddress()
-                            }}
-                            className="flex items-center justify-center w-12 h-9 me-1.5 rounded-full cursor-pointer hover:bg-gray-100"
-                        >
-                            <FaXmark className="text-gray-600 text-[17px]" />
-                        </button>
-                    )}
-
-                    {!isSearchBoxActive && (
-                        <button
-                            type="button"
-                            onClick={(e) => {
-                                handleOnGeolocate(e)
-                            }}
-                            className="flex items-center justify-center w-12 h-9 me-1.5 rounded-full cursor-pointer hover:bg-gray-100"
-                        >
-                            <FaLocationCrosshairs className="text-gray-600 text-[17px]" />
-                        </button>
-                    )}
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            handleOnGeolocate(e)
+                        }}
+                        className="flex items-center justify-center w-12 h-9 me-1.5 rounded-full cursor-pointer hover:bg-gray-100"
+                    >
+                        <FaLocationCrosshairs className="text-gray-600 text-[17px]" />
+                    </button>
                 </div>
 
-                {isSearchBoxActive && (
+                {locationResult?.length > 0 && (
+                    <div className="result bg-white p-2 rounded-b-lg">
+                        <p className="text-sm mb-1 font-normal text-neutral-600">
+                            Hasil pencarian untuk{' '}
+                            <span className="font-semibold">
+                                {locationAddressQuery}
+                            </span>
+                        </p>
+                        {locationResult?.map(
+                            (item: LocationStateType, index) => {
+                                return (
+                                    <div
+                                        key={index}
+                                        className="w-full flex items-center gap-2 text-neutral-800 text-sm hover:bg-gray-50 rounded p-2 cursor-pointer"
+                                        onClick={() => {
+                                            handleSelectedAddress(item)
+                                        }}
+                                    >
+                                        <p className="text-md">
+                                            <FaMagnifyingGlass />
+                                        </p>
+                                        <p className="font-normal w-full truncate">
+                                            {item?.name}
+                                        </p>
+                                    </div>
+                                )
+                            }
+                        )}
+                    </div>
+                )}
+
+                {/* {isSearchBoxActive && (
                     <div className="w-full bg-white text-neutral-800 shadow border border-gray-100 rounded-xl rounded-t-none p-4">
                         {!isLoading && locationResult.length === 0 && (
                             <div>
@@ -134,7 +211,7 @@ const SearchBox: React.FC<MapsPropsType> = () => {
                             )
                         )}
                     </div>
-                )}
+                )} */}
             </div>
         </form>
     )
