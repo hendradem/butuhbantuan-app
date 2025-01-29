@@ -1,3 +1,4 @@
+import { Toaster } from 'react-hot-toast'
 import ChangeLocationModal from './components/modals/ChangeLocationModal'
 import { ReactQueryClientProvider } from './components/commons/ReactQueryClientProvider'
 import './globals.css'
@@ -19,6 +20,7 @@ export default function RootLayout({
             <html lang="en">
                 <body suppressHydrationWarning={true}>
                     <ChangeLocationModal />
+                    <Toaster />
                     <div className="h-full bg-white grid">
                         <div className="w-[100%] lg:w-[25%] xl:w-[28%] h-full justify-self-center bg-white border-x-[1px] border-gray-100 shadow-sm">
                             {children}
