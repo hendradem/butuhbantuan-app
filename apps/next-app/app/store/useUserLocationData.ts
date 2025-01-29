@@ -43,7 +43,6 @@ const useUserLocationData = create<State & Action>()((set) => ({
     },
 
     updateRegionalData: (regionalData) => {
-        console.log(regionalData)
         set(() => ({ regionalData: regionalData }))
         localStorage.setItem('subdisctrict', regionalData.subdistrict)
         localStorage.setItem('regency', regionalData.regency)

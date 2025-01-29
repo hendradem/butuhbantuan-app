@@ -1,8 +1,6 @@
 'use client'
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import useSWR from 'swr'
-import { fetcher } from '@/app/libs/fetcher'
 import useUserLocation from '@/app/hooks/useUserLocation'
 import config from '@/app/config'
 import useUserLocationData from '@/app/store/useUserLocationData'
@@ -18,8 +16,8 @@ import {
     FaMagnifyingGlass,
     FaXmark,
 } from 'react-icons/fa6'
-import { useQuery } from '@tanstack/react-query'
-import useGeolocation from '@/app/store/api/useGeolocation'
+import useLocationApi from '@/app/store/api/useLocationApi'
+import useAddressInfoApi from '@/app/store/api/useAddressInfoApi'
 
 const mapsData = [
     {
@@ -94,7 +92,6 @@ type LocationState = {
 }
 
 const Maps: React.FC<MapsProps> = ({ mapComponentType }) => {
-    const geolocationAPI: any = useGeolocation()
     const serchParams = useSearchParams()
     const emergencyType = serchParams.get('type')
     const { setUserLocation } = useUserLocation()
@@ -121,40 +118,32 @@ const Maps: React.FC<MapsProps> = ({ mapComponentType }) => {
     const [startLongitude, setStartLongitude] = useState(110.3450278)
 
     // ==== DATA FETCHING =====
-    const { data, error } = useSWR(
-        // get address based on user coordinates
-        geolocationAPI.getAddressInfo(
-            userLongitudeFromGeolocation,
-            userLatitudeFromGeolocation
-        ),
-        fetcher,
-        {}
+
+    const { addressData, addressError } = useAddressInfoApi(
+        userLongitudeFromGeolocation,
+        userLatitudeFromGeolocation
     )
 
-    if (data) console.log(data)
-    if (error) console.log(error)
+    if (addressData) {
+        const data = addressData
 
-    // if (userAddressInformationData) {
-    //     console.log('dapet')
-    //     const data = userAddressInformationData
+        const resLatitude = data?.features[0]?.center[1]
+        const resLongitude = data?.features[0]?.center[0]
+        const address = data?.features[0]?.place_name
+        const urbanVillage = data?.features[0]?.context[0].text
 
-    //     const resLatitude = data?.features[0]?.center[1]
-    //     const resLongitude = data?.features[0]?.center[0]
-    //     const address = data?.features[0]?.place_name
-    //     const urbanVillage = data?.features[0]?.context[0].text
+        updateRegionalData({
+            subdistrict: data?.features[0]?.context[2]?.text,
+            regency: data?.features[0]?.context[3]?.text,
+            province: data?.features[0]?.context[4]?.text,
+        })
+        updateCoordinate({
+            long: data?.features[0]?.center[0],
+            lat: data?.features[0]?.center[1],
+        })
 
-    //     updateRegionalData({
-    //         subdistrict: data?.features[0]?.context[2]?.text,
-    //         regency: data?.features[0]?.context[3]?.text,
-    //         province: data?.features[0]?.context[4]?.text,
-    //     })
-    //     updateCoordinate({
-    //         long: data?.features[0]?.center[0],
-    //         lat: data?.features[0]?.center[1],
-    //     })
-
-    //     setUserLocation(resLatitude, resLongitude, address, urbanVillage)
-    // }
+        setUserLocation(resLatitude, resLongitude, address, urbanVillage)
+    }
 
     // ==== END DATA FETCHING ====
 
@@ -167,46 +156,34 @@ const Maps: React.FC<MapsProps> = ({ mapComponentType }) => {
         // handle value changes from debounce func
         setLocationValue(e.target.value)
     }
+    const { locationData, locationError } = useLocationApi(
+        locationValue,
+        isLoading
+    )
 
-    // const {
-    //     data: locationData,
-    //     error,
-    //     refetch: refetchLocationData,
-    // } = useQuery({
-    //     queryKey: ['todos'],
-    //     queryFn: geolocationAPI.getLocation(locationValue),
-    // })
-
-    // if (locationData) console.log(locationData)
+    if (locationData) {
+        let temp: any = []
+        locationData?.features.map((item: any) => {
+            const data = {
+                name: item?.properties?.name,
+                address: item?.properties?.formatted,
+                lat: item?.properties?.lat,
+                long: item?.properties?.lon,
+                district: item?.properties?.district,
+                place_name: item?.properties?.name,
+                urban_village: item?.properties?.suburb,
+            }
+            temp.push(data)
+        })
+        setLocationResult(temp)
+        setIsLoading(false)
+    }
+    if (locationError) console.log(locationError)
 
     const searchData = () => {
         setIsLoading(true)
     }
 
-    const mapLocationResultData = () => {
-        let temp: any = []
-        // result?.features.map((item: any) => {
-        //     const data = {
-        //         name: item?.properties?.name,
-        //         address: item?.properties?.formatted,
-        //         lat: item?.properties?.lat,
-        //         long: item?.properties?.lon,
-        //         district: item?.properties?.district,
-        //         place_name: item?.properties?.name,
-        //         urban_village: item?.properties?.suburb,
-        //     }
-        //     temp.push(data)
-        // })
-        // setLocationResult(temp)
-        // setIsLoading(false)
-    }
-    /*************  ✨ Codeium Command ⭐  *************/
-    /**
-     * This function is used to handle the selected address from the search box results.
-     * It will update the user location state and set the map to the selected address.
-     * @param {any} address - The selected address object from the search box results.
-     */
-    /******  c122b78a-d7f2-4296-b84e-e43a499caf8a  *******/
     const handleSelectedAddress = (address: any): void => {
         setUserLatitudeFromGeolocation(address.lat)
         setUserLongitudeFromGeolocation(address.long)
@@ -305,12 +282,14 @@ const Maps: React.FC<MapsProps> = ({ mapComponentType }) => {
 
     const handleSearchInputChange = (e: any): void => {
         setCurrentUserAddress(e.target.value)
-        debouncedResult(e)
-        setIsLoading(true)
+        const debouncingSearchLocation = debouncedResult(e)
+        if (debouncingSearchLocation && locationValue) {
+            setIsLoading(true)
+        }
     }
 
     const handleOnGeolocate = (e: any): void => {
-        console.log(geolocationControl)
+        console.log('clicked')
         geolocationControl.trigger()
     }
 

@@ -172,50 +172,6 @@ const Page = () => {
     return (
         <div className="h-full text-gray-700">
             <div>
-                <div
-                    className={`${bottomSheet.isOpen ? '' : 'z-10'} detail-navbar fixed w-full bg-white px-3 border-b border-gray-50 shadow-sm flex justify-between items-center"`}
-                >
-                    {/* <div className="flex items-center">
-                        <Link href="/">
-                            <button className="p-3 rounded-full hover:bg-gray-100">
-                                <FaArrowLeft className="text-[18px] text-gray-600" />
-                            </button>
-                        </Link>
-
-                        <div className="hidden md:block bg-red-100 rounded-xl ml-1 p-3">
-                            {emergencyType == 'ambulance' && (
-                                <FaTruckMedical
-                                    size={18}
-                                    className="text-red-500"
-                                />
-                            )}
-                            {emergencyType == 'pemadam' && (
-                                <FaFire size={18} className="text-red-500" />
-                            )}
-                            {emergencyType == 'polisi' && (
-                                <FaCarOn size={18} className="text-red-500" />
-                            )}
-                        </div>
-
-                        <div className="ml-2.5 flex flex-col space-y-0 leading-tight">
-                            <p className="text-[13px] text-gray-500">
-                                Kamu di sekitar
-                            </p>
-                            <h2 className="text-[14px] font-medium">
-                                {userAddress?.substring(0, 35)}
-                            </h2>
-                        </div>
-                    </div> */}
-
-                    {/* <button
-                        onClick={() => updateChangeLocationModal(true)}
-                        type="button"
-                        className="py-1.5 px-3 text-sm font-medium text-gray-900 focus:outline-none bg-white rounded-full border border-gray-200 hover:bg-gray-100 hover:text-gray-700 focus:z-10 focus:ring-0"
-                    >
-                        Ubah lokasi
-                    </button> */}
-                </div>
-
                 <main>
                     <div className="w-full h-[450px] rounded-xl">
                         <Maps mapHeight="450px" mapComponentType="detail" />
