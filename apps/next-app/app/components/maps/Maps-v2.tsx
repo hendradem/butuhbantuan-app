@@ -6,9 +6,8 @@ import config from '@/app/config'
 import toast from 'react-hot-toast'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
-import useAddressInfoApi from '@/app/store/api/useAddressInfoApi'
-import { useQuery } from '@tanstack/react-query'
-import axios from 'axios'
+import { useAddressInformation } from '@/app/store/api/location.api'
+import useUserLocationData from '@/app/store/useUserLocationData'
 
 type MapsProps = {
     mapHeight: string
@@ -17,47 +16,49 @@ type MapsProps = {
 const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     let mapContainer: any
     const mapWrapper = useRef<any>()
-    const [startLatitude, setStartLatitude] = useState(-7.7063721)
-    const [startLongitude, setStartLongitude] = useState(110.3450278)
     const [userLatitudeAfterGeolocated, setUserLatitudeAfterGeolocated] =
         useState<number>(0)
     const [userLongitudeAfterGeolocated, setUserLongitudeAfterGeolocated] =
         useState<number>(0)
-
     const [isGeolocating, setIsGeolocating] = useState<boolean>(false)
     const [geolocationControl, setGeolocationControl] = useState<any>(null)
 
-    const [isFetching, setIsFetching] = useState<boolean>(false)
-
-    const { addressData, addressError } = useAddressInfoApi(
-        userLongitudeAfterGeolocated,
-        userLatitudeAfterGeolocated
+    // global state
+    const userLatitudeFromGlobalStore = useUserLocationData(
+        (state) => state.lat
+    )
+    const userLongitudeFromGlobalStore = useUserLocationData(
+        (state) => state.long
     )
 
-    const retrievePosts = async () => {
-        const response = await axios.get(
-            'https://jsonplaceholder.typicode.com/posts'
+    const updateCoordinate = useUserLocationData(
+        (state) => state.updateCoordinate
+    )
+    const updateFullAddress = useUserLocationData(
+        (state) => state.updateFullAddress
+    )
+
+    const { data: addressInfo, refetch: refetchAddressInfo } =
+        useAddressInformation(
+            userLongitudeAfterGeolocated ? userLongitudeAfterGeolocated : 0,
+            userLatitudeAfterGeolocated ? userLatitudeAfterGeolocated : 0
         )
-        return response.data
+
+    if (addressInfo) {
+        const resLatitude = addressInfo[0]?.center[1]
+        const resLongitude = addressInfo[0]?.center[0]
+        const address = addressInfo[0]?.place_name
+
+        // updating global state
+        updateCoordinate(resLatitude, resLongitude)
+        updateFullAddress(address)
     }
-
-    const {
-        data: posts,
-        error,
-        isLoading,
-    } = useQuery(['postsData'], retrievePosts, {
-        enabled: isFetching,
-    })
-
-    if (isLoading) console.log(isLoading)
-    if (error) console.log(error)
-    console.log(posts)
 
     const buildTheMap = async () => {
         mapContainer = new mapboxgl.Map({
             container: mapWrapper.current,
             style: 'mapbox://styles/mapbox/streets-v10',
-            center: [startLongitude, startLatitude],
+            center: [110.3450278, -7.7063721],
             zoom: 12,
             accessToken: config.MAPBOX_API_KEY,
         })
@@ -74,6 +75,16 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             geolocateContainer.trigger()
             setGeolocationControl(geolocateContainer)
             setIsGeolocating(true)
+            setInterval(function () {
+                if (
+                    isGeolocating &&
+                    !userLatitudeAfterGeolocated &&
+                    !userLongitudeAfterGeolocated
+                ) {
+                    toast.dismiss()
+                    toast.error('Failed to get your location')
+                }
+            }, 3000)
         })
         mapContainer.on('click', () => {
             console.log('map container clicked')
@@ -83,7 +94,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             const longitude = e.coords.longitude
 
             if (latitude && longitude) {
-                setIsFetching(true)
+                refetchAddressInfo()
                 setIsGeolocating(false)
                 setUserLatitudeAfterGeolocated(latitude)
                 setUserLongitudeAfterGeolocated(longitude)
@@ -113,6 +124,10 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     useEffect(() => {
         buildTheMap()
     }, [userLatitudeAfterGeolocated, userLongitudeAfterGeolocated])
+
+    useEffect(() => {
+        buildTheMap()
+    }, [userLatitudeFromGlobalStore, userLongitudeFromGlobalStore])
 
     useEffect(() => {
         if (isGeolocating) {
