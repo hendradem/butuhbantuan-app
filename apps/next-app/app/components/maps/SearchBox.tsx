@@ -10,25 +10,28 @@ import {
 import debounce from 'lodash.debounce'
 import { useAddressLocation } from '@/app/store/api/location.api'
 
-type MapsPropsType = {}
+type MapsPropsType = {
+    rebuildMap: (arg1: any, arg2: any) => void
+}
 
 type LocationStateType = {
     name: String
     address: String
 }
 
-const SearchBox: React.FC<MapsPropsType> = () => {
+const SearchBox: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     const serchParams = useSearchParams()
     const userAddress = useUserLocationData((state) => state.fullAddress)
-
     const updateCoordinate = useUserLocationData(
         (state) => state.updateCoordinate
+    )
+    const updateRebuildMap = useUserLocationData(
+        (state) => state.updateRebuildMap
     )
 
     const [isSearchBoxActive, setIsSearchBoxActive] = useState<boolean>(false)
     const [isLoading, setIsLoading] = useState<boolean>(false)
     const [locationAddressQuery, setLocationAddressQuery] = useState<string>('')
-
     const [locationResult, setLocationResult] = useState([])
     const [currentUserAddress, setCurrentUserAddress] = useState<string>('')
 
@@ -53,7 +56,10 @@ const SearchBox: React.FC<MapsPropsType> = () => {
         console.log('clicked')
     }
     const handleSelectedAddress = (address: any): void => {
+        const coordinates = { lat: address.lat, long: address.long }
         updateCoordinate(address.lat, address.long)
+        rebuildMap('rebuild', coordinates) // trigger map rebuild function at parent
+        setIsSearchBoxActive(false)
     }
     const handleSearchBoxOnFocus = (): void => {
         setIsSearchBoxActive(true)
@@ -126,7 +132,7 @@ const SearchBox: React.FC<MapsPropsType> = () => {
                     </button>
                 </div>
 
-                {locationResult?.length > 0 && (
+                {locationResult?.length > 0 && isSearchBoxActive && (
                     <div className="result bg-white p-2 rounded-b-lg">
                         <p className="text-sm mb-1 font-normal text-neutral-600">
                             Hasil pencarian untuk{' '}

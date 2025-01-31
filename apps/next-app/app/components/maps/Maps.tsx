@@ -498,3 +498,71 @@ const Maps: React.FC<MapsProps> = ({ mapComponentType }) => {
 }
 
 export default Maps
+
+// mapContainer.flyTo({
+//     center: [userLongitudeFromGlobalStore, userLatitudeFromGlobalStore],
+//     essential: true, // this animation is considered essential with respect to prefers-reduced-motion
+// })
+
+// const buildTheMap = async () => {
+//     mapContainer = new mapboxgl.Map({
+//         container: mapWrapper.current,
+//         style: 'mapbox://styles/mapbox/streets-v10',
+//         center: [110.3450278, -7.7063721],
+//         zoom: 12,
+//         accessToken: config.MAPBOX_API_KEY,
+//     })
+
+//     const geolocateContainer = new mapboxgl.GeolocateControl({
+//         positionOptions: {
+//             enableHighAccuracy: true,
+//         },
+//         trackUserLocation: true,
+//     })
+
+//     mapContainer.addControl(geolocateContainer)
+//     mapContainer.on('load', () => {
+//         geolocateContainer.trigger()
+//         setGeolocationControl(geolocateContainer)
+//         setIsGeolocating(true)
+//         setInterval(function () {
+//             if (
+//                 isGeolocating &&
+//                 !userLatitudeAfterGeolocated &&
+//                 !userLongitudeAfterGeolocated
+//             ) {
+//                 toast.dismiss()
+//                 toast.error('Failed to get your location')
+//             }
+//         }, 3000)
+//     })
+//     mapContainer.on('click', () => {
+//         console.log('map container clicked')
+//     })
+//     geolocateContainer.on('geolocate', (e: any) => {
+//         const latitude = e.coords.latitude
+//         const longitude = e.coords.longitude
+
+//         if (latitude && longitude) {
+//             refetchAddressInfo()
+//             setIsGeolocating(false)
+//             setUserLatitudeAfterGeolocated(latitude)
+//             setUserLongitudeAfterGeolocated(longitude)
+//         }
+//     })
+
+//     // Add marker to maps
+//     const el = document.createElement('div')
+//     el.className = 'marker'
+//     new mapboxgl.Marker(el)
+//         .setLngLat([
+//             userLongitudeAfterGeolocated ?? 0,
+//             userLatitudeAfterGeolocated ?? 0,
+//         ])
+//         .setPopup(
+//             new mapboxgl.Popup({ offset: 25 }).setHTML(
+//                 `<h3>Pop Up Title</h3><p>Pop Up Content</p>`
+//             )
+//         )
+//         .addTo(mapContainer)
+// }

@@ -7,6 +7,7 @@ interface State {
     regency: string
     province: string
     fullAddress: string
+    isRebuildMap: boolean
 }
  
 
@@ -18,6 +19,7 @@ type Action = {
     updateRegency: (regency: State['regency']) => void 
     updateProvince: (province: State['province']) => void
     updateFullAddress: (fullAddress: State['fullAddress']) => void
+    updateRebuildMap: (isRebuildMap: boolean) => void
 }
 
 const useUserLocationData = create<State & Action>()((set) => ({
@@ -27,6 +29,7 @@ const useUserLocationData = create<State & Action>()((set) => ({
     regency: 'null',
     province: 'null',
     fullAddress: 'null',
+    isRebuildMap: false,
     
     updateLat: (lat: number) => {
         set(() => ({ lat: lat }))
@@ -48,6 +51,9 @@ const useUserLocationData = create<State & Action>()((set) => ({
     },
     updateFullAddress: (fullAddress: string) => {
         set(() => ({ fullAddress: fullAddress }))
+    },
+    updateRebuildMap: (status: boolean) => {
+        set(() => ({ isRebuildMap: status }))
     },
 }))
 

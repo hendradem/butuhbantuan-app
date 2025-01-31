@@ -30,13 +30,13 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const userLongitudeFromGlobalStore = useUserLocationData(
         (state) => state.long
     )
-
     const updateCoordinate = useUserLocationData(
         (state) => state.updateCoordinate
     )
     const updateFullAddress = useUserLocationData(
         (state) => state.updateFullAddress
     )
+    const isRebuildMap = useUserLocationData((state) => state.isRebuildMap)
 
     const { data: addressInfo, refetch: refetchAddressInfo } =
         useAddressInformation(
@@ -54,80 +54,74 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         updateFullAddress(address)
     }
 
-    const buildTheMap = async () => {
+    const buildTheMap = (
+        buildMapType?: string,
+        coordinates?: { lat: number; long: number }
+    ) => {
         mapContainer = new mapboxgl.Map({
             container: mapWrapper.current,
             style: 'mapbox://styles/mapbox/streets-v10',
-            center: [110.3450278, -7.7063721],
+            center: coordinates
+                ? [coordinates.long, coordinates.lat]
+                : [110.3450278, -7.7063721],
             zoom: 12,
             accessToken: config.MAPBOX_API_KEY,
         })
 
-        const geolocateContainer = new mapboxgl.GeolocateControl({
-            positionOptions: {
-                enableHighAccuracy: true,
-            },
-            trackUserLocation: true,
-        })
-
-        mapContainer.addControl(geolocateContainer)
         mapContainer.on('load', () => {
-            geolocateContainer.trigger()
-            setGeolocationControl(geolocateContainer)
-            setIsGeolocating(true)
-            setInterval(function () {
-                if (
-                    isGeolocating &&
-                    !userLatitudeAfterGeolocated &&
-                    !userLongitudeAfterGeolocated
-                ) {
-                    toast.dismiss()
-                    toast.error('Failed to get your location')
-                }
-            }, 3000)
-        })
-        mapContainer.on('click', () => {
-            console.log('map container clicked')
-        })
-        geolocateContainer.on('geolocate', (e: any) => {
-            const latitude = e.coords.latitude
-            const longitude = e.coords.longitude
+            if (buildMapType === 'rebuild') {
+                console.log('rebuild the map')
+                const el = document.createElement('div')
+                el.className = 'marker'
+                new mapboxgl.Marker(el)
+                    .setLngLat([coordinates?.long ?? 0, coordinates?.lat ?? 0])
+                    .setPopup(
+                        new mapboxgl.Popup({ offset: 25 }).setHTML(
+                            `<h3>Pop Up Title</h3><p>Pop Up Content</p>`
+                        )
+                    )
+                    .addTo(mapContainer)
 
-            if (latitude && longitude) {
-                refetchAddressInfo()
-                setIsGeolocating(false)
-                setUserLatitudeAfterGeolocated(latitude)
-                setUserLongitudeAfterGeolocated(longitude)
+                mapContainer.flyTo({
+                    center: [coordinates?.long, coordinates?.lat],
+                    essential: true, // this animation is considered essential with respect to prefers-reduced-motion
+                })
+            } else {
+                setIsGeolocating(true)
+                navigator.geolocation.watchPosition((position) => {
+                    const userLatitude = position?.coords?.latitude
+                    const userLongitude = position?.coords?.longitude
+
+                    if (userLatitude && userLongitude) {
+                        refetchAddressInfo()
+                        setIsGeolocating(false)
+                        setUserLatitudeAfterGeolocated(userLatitude)
+                        setUserLongitudeAfterGeolocated(userLongitude)
+
+                        const el = document.createElement('div')
+                        el.className = 'marker'
+                        new mapboxgl.Marker(el)
+                            .setLngLat([userLongitude ?? 0, userLatitude ?? 0])
+                            .setPopup(
+                                new mapboxgl.Popup({ offset: 25 }).setHTML(
+                                    `<h3>Pop Up Title</h3><p>Pop Up Content</p>`
+                                )
+                            )
+                            .addTo(mapContainer)
+
+                        mapContainer.flyTo({
+                            center: [userLongitude, userLatitude],
+                            essential: true, // this animation is considered essential with respect to prefers-reduced-motion
+                        })
+                    }
+                })
             }
         })
-
-        // Add marker to maps
-        const el = document.createElement('div')
-        el.className = 'marker'
-        new mapboxgl.Marker(el)
-            .setLngLat([
-                userLongitudeAfterGeolocated ?? 0,
-                userLatitudeAfterGeolocated ?? 0,
-            ])
-            .setPopup(
-                new mapboxgl.Popup({ offset: 25 }).setHTML(
-                    `<h3>Pop Up Title</h3><p>Pop Up Content</p>`
-                )
-            )
-            .addTo(mapContainer)
     }
 
     useEffect(() => {
-        buildTheMap()
+        buildTheMap('init')
     }, [])
-
-    useEffect(() => {
-        buildTheMap()
-    }, [userLatitudeAfterGeolocated, userLongitudeAfterGeolocated])
-
-    useEffect(() => {
-        buildTheMap()
-    }, [userLatitudeFromGlobalStore, userLongitudeFromGlobalStore])
 
     useEffect(() => {
         if (isGeolocating) {
@@ -152,13 +146,14 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                     background: '#333',
                     color: '#fff',
                 },
+                duration: 500,
             })
         }
     }, [isGeolocating])
 
     return (
         <>
-            <SearchBox />
+            <SearchBox rebuildMap={buildTheMap} />
             <div
                 className="w-full"
                 style={{ height: mapHeight }}
