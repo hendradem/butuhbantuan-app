@@ -13,6 +13,36 @@ type MapsProps = {
     mapHeight: string
 }
 
+const geojson = {
+    type: 'FeatureCollection',
+    features: [
+        {
+            type: 'Feature',
+            properties: {
+                message: 'PSC SES 119',
+                imageId: 1011,
+                iconSize: [30, 30],
+            },
+            geometry: {
+                type: 'Point',
+                coordinates: [110.3539151, -7.718647],
+            },
+        },
+        {
+            type: 'Feature',
+            properties: {
+                message: 'PMI Kab. Sleman',
+                imageId: 837,
+                iconSize: [30, 30],
+            },
+            geometry: {
+                type: 'Point',
+                coordinates: [110.3450278, -7.7063721],
+            },
+        },
+    ],
+}
+
 const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     let mapContainer: any
     const mapWrapper = useRef<any>()
@@ -36,7 +66,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const updateFullAddress = useUserLocationData(
         (state) => state.updateFullAddress
     )
-    const isRebuildMap = useUserLocationData((state) => state.isRebuildMap)
 
     const { data: addressInfo, refetch: refetchAddressInfo } =
         useAddressInformation(
@@ -54,6 +83,26 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         updateFullAddress(address)
     }
 
+    const mapTheMarker = () => {
+        for (const marker of geojson.features) {
+            const el = document.createElement('div')
+            el.className = 'ambulance-marker'
+
+            el.addEventListener('click', () => {
+                window.alert(marker.properties.message)
+            })
+
+            // Add markers to the map.
+            new mapboxgl.Marker(el)
+                .setLngLat([
+                    marker.geometry.coordinates[0],
+                    marker.geometry.coordinates[1],
+                ])
+                .setPopup()
+                .addTo(mapContainer)
+        }
+    }
+
     const buildTheMap = (
         buildMapType?: string,
         coordinates?: { lat: number; long: number }
@@ -67,6 +116,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             zoom: 12,
             accessToken: config.MAPBOX_API_KEY,
         })
+
+        mapTheMarker()
 
         mapContainer.on('load', () => {
             if (buildMapType === 'rebuild') {
