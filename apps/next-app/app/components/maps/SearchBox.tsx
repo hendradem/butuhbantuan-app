@@ -1,14 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
 import useUserLocationData from '@/app/store/useUserLocationData'
-import Link from 'next/link'
-import {
-    FaLocationCrosshairs,
-    FaMagnifyingGlass,
-    FaXmark,
-} from 'react-icons/fa6'
+import { FaMagnifyingGlass, FaX } from 'react-icons/fa6'
 import debounce from 'lodash.debounce'
 import { useAddressLocation } from '@/app/store/api/location.api'
+import { FaFire } from 'react-icons/fa'
 
 type MapsPropsType = {
     rebuildMap: (arg1: any, arg2: any) => void
@@ -20,7 +15,6 @@ type LocationStateType = {
 }
 
 const SearchBox: React.FC<MapsPropsType> = ({ rebuildMap }) => {
-    const serchParams = useSearchParams()
     const userAddress = useUserLocationData((state) => state.fullAddress)
     const updateCoordinate = useUserLocationData(
         (state) => state.updateCoordinate
@@ -44,6 +38,9 @@ const SearchBox: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     const handleSearchInputChange = (e: any): void => {
         setCurrentUserAddress(e.target.value)
         debouncedResult(e)
+        if (currentUserAddress) {
+            setIsLoading(true)
+        }
     }
     const debouncedResult = useMemo(() => {
         return debounce((e: any) => searchUserLocation(e), 1000)
@@ -52,8 +49,8 @@ const SearchBox: React.FC<MapsPropsType> = ({ rebuildMap }) => {
         setLocationAddressQuery(e.target.value)
     }
 
-    const handleOnGeolocate = (e: any): void => {
-        console.log('clicked')
+    const handleRemoveSearchValue = (): void => {
+        setCurrentUserAddress('')
     }
     const handleSelectedAddress = (address: any): void => {
         const coordinates = { lat: address.lat, long: address.long }
@@ -94,8 +91,16 @@ const SearchBox: React.FC<MapsPropsType> = ({ rebuildMap }) => {
             })
 
             setLocationResult(temp)
+            setIsLoading(false)
         }
     }, [searchAddressResult])
+
+    useEffect(() => {
+        if (currentUserAddress === '') {
+            setLocationResult([])
+            setIsLoading(false)
+        }
+    }, [currentUserAddress])
 
     return (
         <form>
@@ -111,7 +116,7 @@ const SearchBox: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                     </button>
                     <input
                         type="text"
-                        defaultValue={currentUserAddress}
+                        value={currentUserAddress}
                         onChange={(e) => {
                             handleSearchInputChange(e)
                         }}
@@ -123,16 +128,75 @@ const SearchBox: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                     />
                     <button
                         type="button"
-                        onClick={(e) => {
-                            handleOnGeolocate(e)
+                        onClick={() => {
+                            handleRemoveSearchValue()
                         }}
                         className="flex items-center justify-center w-12 h-9 me-1.5 rounded-full cursor-pointer hover:bg-gray-100"
                     >
-                        <FaLocationCrosshairs className="text-gray-600 text-[17px]" />
+                        <FaX className="text-gray-600 text-[13px]" />
                     </button>
                 </div>
 
-                {locationResult?.length > 0 && isSearchBoxActive && (
+                {isSearchBoxActive &&
+                    locationResult?.length == 0 &&
+                    !isLoading && (
+                        <div className="w-full bg-white text-neutral-800 shadow border border-gray-100 rounded-xl rounded-t-none p-4">
+                            <div>
+                                <div className="default  flex items-center justify-center">
+                                    <div className="p-2 border rounded-lg border-gray-200">
+                                        <FaFire />
+                                    </div>
+                                </div>
+                                <h3 className="text-center text-[14.5px] mt-2 font-medium">
+                                    Cari lokasi terdekatmu
+                                </h3>
+                                <h3 className="text-center mx-3 text-[14px] text-neutral-500 mt-1 font-normal">
+                                    Cari lokasimu dengan nama jalan, nama desa,
+                                    atau nama tempat terdekatmu
+                                </h3>
+                            </div>
+                        </div>
+                    )}
+
+                {isLoading && (
+                    <div className="w-full bg-white text-neutral-800 shadow border border-gray-100 rounded-xl rounded-t-none p-4">
+                        <div className="flex flex-col gap-2">
+                            <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
+                            <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
+                            <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
+                            <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
+                        </div>
+                    </div>
+                )}
+
+                {!isLoading &&
+                    locationResult.length !== 0 &&
+                    isSearchBoxActive && (
+                        <div className="w-full bg-white text-neutral-800 shadow border border-gray-100 rounded-xl rounded-t-none p-4">
+                            {locationResult?.map(
+                                (item: LocationStateType, index) => {
+                                    return (
+                                        <div
+                                            key={index}
+                                            className="w-full flex items-center gap-2 text-neutral-800 text-sm hover:bg-gray-50 rounded p-2 cursor-pointer"
+                                            onClick={() => {
+                                                handleSelectedAddress(item)
+                                            }}
+                                        >
+                                            <p className="text-md">
+                                                <FaMagnifyingGlass />
+                                            </p>
+                                            <p className="font-normal w-full truncate">
+                                                {item.address}
+                                            </p>
+                                        </div>
+                                    )
+                                }
+                            )}
+                        </div>
+                    )}
+
+                {/* {isSearchBoxActive && (
                     <div className="result bg-white p-2 rounded-b-lg">
                         <p className="text-sm mb-1 font-normal text-neutral-600">
                             Hasil pencarian untuk{' '}
@@ -140,28 +204,38 @@ const SearchBox: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                 {locationAddressQuery}
                             </span>
                         </p>
-                        {locationResult?.map(
-                            (item: LocationStateType, index) => {
-                                return (
-                                    <div
-                                        key={index}
-                                        className="w-full flex items-center gap-2 text-neutral-800 text-sm hover:bg-gray-50 rounded p-2 cursor-pointer"
-                                        onClick={() => {
-                                            handleSelectedAddress(item)
-                                        }}
-                                    >
-                                        <p className="text-md">
-                                            <FaMagnifyingGlass />
-                                        </p>
-                                        <p className="font-normal w-full truncate">
-                                            {item?.name}
-                                        </p>
-                                    </div>
-                                )
-                            }
+
+                        {locationResult?.length > 0 && !isLoading ? (
+                            locationResult?.map(
+                                (item: LocationStateType, index) => {
+                                    return (
+                                        <div
+                                            key={index}
+                                            className="w-full flex items-center gap-2 text-neutral-800 text-sm hover:bg-gray-50 rounded p-2 cursor-pointer"
+                                            onClick={() => {
+                                                handleSelectedAddress(item)
+                                            }}
+                                        >
+                                            <p className="text-md">
+                                                <FaMagnifyingGlass />
+                                            </p>
+                                            <p className="font-normal w-full truncate">
+                                                {item?.name}
+                                            </p>
+                                        </div>
+                                    )
+                                }
+                            )
+                        ) : (
+                            <div className="flex flex-col gap-2">
+                                <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
+                                <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
+                                <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
+                                <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
+                            </div>
                         )}
                     </div>
-                )}
+                )} */}
 
                 {/* {isSearchBoxActive && (
                     <div className="w-full bg-white text-neutral-800 shadow border border-gray-100 rounded-xl rounded-t-none p-4">
