@@ -54,12 +54,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const [geolocationControl, setGeolocationControl] = useState<any>(null)
 
     // global state
-    const userLatitudeFromGlobalStore = useUserLocationData(
-        (state) => state.lat
-    )
-    const userLongitudeFromGlobalStore = useUserLocationData(
-        (state) => state.long
-    )
     const updateCoordinate = useUserLocationData(
         (state) => state.updateCoordinate
     )
@@ -107,6 +101,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         buildMapType?: string,
         coordinates?: { lat: number; long: number }
     ) => {
+        console.log(buildMapType)
+
         mapContainer = new mapboxgl.Map({
             container: mapWrapper.current,
             style: 'mapbox://styles/mapbox/streets-v10',
@@ -122,8 +118,10 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         mapContainer.on('load', () => {
             if (buildMapType === 'rebuild') {
                 console.log('rebuild the map')
+
                 const el = document.createElement('div')
                 el.className = 'marker'
+
                 new mapboxgl.Marker(el)
                     .setLngLat([coordinates?.long ?? 0, coordinates?.lat ?? 0])
                     .setPopup(
@@ -139,6 +137,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                 })
             } else {
                 setIsGeolocating(true)
+                console.log('init')
+
                 navigator.geolocation.watchPosition((position) => {
                     const userLatitude = position?.coords?.latitude
                     const userLongitude = position?.coords?.longitude
@@ -151,6 +151,14 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
                         const el = document.createElement('div')
                         el.className = 'marker'
+
+                        const userLocationMarker =
+                            document.getElementsByClassName('marker')
+
+                        if (userLocationMarker.length > 0) {
+                            userLocationMarker[0].remove()
+                        }
+
                         new mapboxgl.Marker(el)
                             .setLngLat([userLongitude ?? 0, userLatitude ?? 0])
                             .setPopup(
