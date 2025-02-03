@@ -4,14 +4,12 @@ interface BottomSheetStore {
     isOpen: boolean
     onOpen: () => void
     onClose: () => void
-    onTest: () => void
 }
 
-const useBottomSheet = create<BottomSheetStore>((set) => ({
-    isOpen: false,
+const useMainBottomSheet = create<BottomSheetStore>((set) => ({
+    isOpen: true,
     onOpen: () => set({ isOpen: true }),
     onClose: () => set({ isOpen: false }),
-    onTest: () => set({ isOpen: true }),
 }))
 
-export default useBottomSheet
+export default useMainBottomSheet

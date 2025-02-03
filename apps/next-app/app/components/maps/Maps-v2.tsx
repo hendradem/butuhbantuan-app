@@ -8,6 +8,7 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
 import { useAddressInformation } from '@/app/store/api/location.api'
 import useUserLocationData from '@/app/store/useUserLocationData'
+import MainBottomMenu from '../bottommenu/MainBottomMenu'
 
 type MapsProps = {
     mapHeight: string
@@ -212,12 +213,15 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
     return (
         <>
-            <SearchBox rebuildMap={buildTheMap} />
+            {/* <SearchBox rebuildMap={buildTheMap} /> */}
             <div
                 className="w-full"
                 style={{ height: mapHeight }}
                 ref={(el) => (mapWrapper.current = el)}
             ></div>
+            <div>
+                <MainBottomMenu rebuildMap={buildTheMap} />
+            </div>
         </>
     )
 }
