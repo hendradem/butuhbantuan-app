@@ -6,6 +6,7 @@ import services from '../../store/data/services.json'
 import { FaFire } from 'react-icons/fa'
 import { FaMagnifyingGlass } from 'react-icons/fa6'
 import Icon from '../ui/Icon'
+import useMainBottomSheet from '@/app/store/useMainBottomSheet'
 
 type MapsPropsType = {
     rebuildMap: (arg1: any, arg2: any) => void
@@ -23,12 +24,12 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
     searchBoxIsClicked,
     resetBottomSheet,
 }) => {
+    const mainBottomSheet = useMainBottomSheet()
+    const isFullScreen = mainBottomSheet.isFullScreen
+    const onExitFullScreen = mainBottomSheet.onExitFullScreen
     const userAddress = useUserLocationData((state) => state.fullAddress)
     const updateCoordinate = useUserLocationData(
         (state) => state.updateCoordinate
-    )
-    const updateRebuildMap = useUserLocationData(
-        (state) => state.updateRebuildMap
     )
 
     const [isSearchBoxActive, setIsSearchBoxActive] = useState<boolean>(false)
@@ -59,8 +60,10 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
 
     const handleRemoveSearchValue = (e: any): void => {
         e.preventDefault()
-        setCurrentUserAddress('')
-        resetBottomSheet()
+        // setCurrentUserAddress('')
+        // resetBottomSheet()
+        setIsSearchBoxActive(false)
+        onExitFullScreen()
     }
     const handleSelectedAddress = (address: any): void => {
         const coordinates = { lat: address.lat, long: address.long }
@@ -117,7 +120,7 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
         <form>
             <div>
                 <div
-                    className={`${isSearchBoxActive ? 'rounded-xl rounded-b-none ' : 'rounded-full'}  shadow-sm border border-gray-100 rounded-full relative gap-1 items-center bg-white  text-gray-900 text-sm focus:ring-none focus:border-1 focus:border-gray-100 focus:outline-none flex w-full p-0`}
+                    className={`gap-1 text-gray-800 flex items-center w-full p-0`}
                 >
                     <input
                         type="text"
@@ -141,7 +144,27 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
                     </button>
                 </div>
 
-                {isSearchBoxActive &&
+                {isFullScreen && locationResult?.length == 0 && !isLoading && (
+                    <div>
+                        <div className="default  flex items-center justify-center my-3">
+                            <div className="p-2 border rounded-lg border-gray-200">
+                                <Icon
+                                    name="material-symbols:search"
+                                    className="text-2xl text-gray-900"
+                                />
+                            </div>
+                        </div>
+                        <h3 className="text-center text-[14.5px] mt-2 text-neutral-600 font-medium">
+                            Cari lokasi terdekatmu
+                        </h3>
+                        <h3 className="text-center mx-3 text-[14px] text-neutral-500 font-normal">
+                            Cari lokasimu dengan nama jalan, nama desa, atau
+                            nama tempat terdekatmu
+                        </h3>
+                    </div>
+                )}
+
+                {/* {isSearchBoxActive &&
                     locationResult?.length == 0 &&
                     !isLoading && (
                         <div className="w-full bg-white text-neutral-800 shadow border border-gray-100 rounded-xl rounded-t-none p-4">
@@ -188,10 +211,10 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
                                 </div>
                             </div>
                         </div>
-                    )}
+                    )} */}
 
                 {isLoading && (
-                    <div className="w-full bg-white text-neutral-800 shadow border border-gray-100 rounded-xl rounded-t-none p-4">
+                    <div className="w-full bg-white text-neutral-800 p-2">
                         <div className="flex flex-col gap-2">
                             <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
                             <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
@@ -204,7 +227,7 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
                 {!isLoading &&
                     locationResult.length !== 0 &&
                     isSearchBoxActive && (
-                        <div className="w-full bg-white text-neutral-800 shadow border border-gray-100 rounded-xl rounded-t-none p-4">
+                        <div className="w-full bg-white text-neutral-800">
                             {locationResult?.map(
                                 (item: LocationStateType, index) => {
                                     return (

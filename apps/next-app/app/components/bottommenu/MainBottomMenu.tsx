@@ -9,6 +9,8 @@ import { MdCarCrash, MdFireTruck } from 'react-icons/md'
 import { FaTruckMedical } from 'react-icons/fa6'
 import { MdKeyboardArrowUp } from 'react-icons/md'
 import SearchBoxSecondary from '../maps/SearchBoxSecondary'
+import Icon from '../ui/Icon'
+import services from '@/app/store/data/services.json'
 
 type MapsPropsType = {
     rebuildMap: (arg1: any, arg2: any) => void
@@ -17,18 +19,33 @@ type MapsPropsType = {
 const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     const mainBottomSheet = useMainBottomSheet()
     const sheetRef = React.useRef<BottomSheetRef>(null)
-    const [isBottomSheetFullHeight, setIsBottomSheetFullHeight] =
-        useState<boolean>(false)
+    const isSheetFullscreen = mainBottomSheet.isFullScreen
+    const onFullScreen = mainBottomSheet.onFullScreen
+    const onExitFullScreen = mainBottomSheet.onExitFullScreen
 
     const handleSearchInputOnClick = () => {
         sheetRef?.current?.snapTo(({ snapPoints }) => Math.max(...snapPoints))
-        setIsBottomSheetFullHeight(true)
+        onFullScreen()
     }
 
     const handleResetBottomSheet = () => {
         sheetRef?.current?.snapTo(({ snapPoints }) => Math.min(...snapPoints))
-        setIsBottomSheetFullHeight(false)
+        onExitFullScreen()
     }
+
+    useEffect(() => {
+        console.log(isSheetFullscreen)
+
+        if (isSheetFullscreen) {
+            sheetRef?.current?.snapTo(({ snapPoints }) =>
+                Math.max(...snapPoints)
+            )
+        } else {
+            sheetRef?.current?.snapTo(({ snapPoints }) =>
+                Math.min(...snapPoints)
+            )
+        }
+    }, [isSheetFullscreen])
 
     return (
         <div>
@@ -36,10 +53,10 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                 <BottomSheet
                     open={mainBottomSheet.isOpen}
                     ref={sheetRef}
-                    snapPoints={({ maxHeight }) => [
+                    snapPoints={({ maxHeight, minHeight }) => [
                         maxHeight - maxHeight / 10,
                         // maxHeight / 8,
-                        maxHeight * 0.2,
+                        minHeight + 2,
                     ]}
                     blocking={false}
                 >
@@ -52,7 +69,35 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                             />
                         </div>
                         <div className="service-menu my-3">
-                            <div className="w-full overflow-x-scroll">
+                            <div className="mt-5 grid grid-cols-4 items-start">
+                                {services?.map(
+                                    (service: any, index: number) => (
+                                        <div
+                                            key={index}
+                                            onClick={() => {
+                                                alert(index)
+                                            }}
+                                            className="flex flex-col cursor-pointer items-center justify-center"
+                                        >
+                                            <div
+                                                className={`p-2 border-none rounded-lg bg-${service?.colorSecondary}`}
+                                            >
+                                                <Icon
+                                                    name={service?.icon}
+                                                    className={`text-${service?.colorMain} text-[32px]`}
+                                                />
+                                            </div>
+                                            <div className="mx-3">
+                                                <h3 className="text-center text-[11px] mt-1 text-neutral-600 font-medium leading-[1.3]">
+                                                    {service?.name}
+                                                </h3>
+                                            </div>
+                                        </div>
+                                    )
+                                )}
+                            </div>
+
+                            {/* <div className="w-full overflow-x-scroll">
                                 <div className="flex items-center gap-2">
                                     <div className="flex-shrink-0  rounded hover:cursor-pointer flex gap-1.5 items-center">
                                         <div className="p-1.5 flex items-center justify-center bg-blue-50 rounded-md">
@@ -95,7 +140,7 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                         </h3>
                                     </div>
                                 </div>
-                            </div>
+                            </div> */}
                         </div>
                     </div>
                 </BottomSheet>
