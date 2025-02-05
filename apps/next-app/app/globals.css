@@ -89,7 +89,7 @@ body {
 /* maps */
 .marker {
     background-image: url('../public/assets/icons/location-circle.svg');
-    padding: 10px; 
+    padding: 10px;
     background-size: contain;
     background-repeat: no-repeat;
     width: 100px;
@@ -101,7 +101,9 @@ body {
 .ambulance-marker {
     background-image: url('../public/assets/icons/ambulance-logo.svg');
     background-color: #f59e0b;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    box-shadow:
+        0 4px 6px -1px rgb(0 0 0 / 0.1),
+        0 2px 4px -2px rgb(0 0 0 / 0.1);
     background-size: 20px 20px;
     background-position: center;
     background-repeat: no-repeat;
@@ -123,6 +125,10 @@ body {
 /* .mapboxgl-ctrl-top-right {
     display: none;
 } */
+
+.mapboxgl-ctrl {
+    display: none !important;
+}
 
 .mapboxgl-ctrl-top-right {
     width: 100% !important;
@@ -160,7 +166,7 @@ body {
 }
 
 /* Chrome, Edge, and Safari */
-*::-webkit-scrollbar {
+/* *::-webkit-scrollbar {
     width: 0px;
 }
 
@@ -172,4 +178,26 @@ body {
     background-color: #e0e0e0;
     border-radius: 10px;
     border: 3px solid #ffffff;
+} */
+
+/* ===== Scrollbar CSS ===== */
+/* Firefox */
+* {
+    scrollbar-width: auto;
+    scrollbar-color: #ffffff #ffffff;
+}
+
+/* Chrome, Edge, and Safari */
+*::-webkit-scrollbar {
+    width: 2px;
+}
+
+*::-webkit-scrollbar-track {
+    background: #ffffff;
+}
+
+*::-webkit-scrollbar-thumb {
+    background-color: #ffffff;
+    border-radius: 10px;
+    border: 3px none #ffffff;
 }
