@@ -29,13 +29,11 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     }
 
     const handleResetBottomSheet = () => {
+        console.log('bottomsheet reset')
         sheetRef?.current?.snapTo(({ snapPoints }) => Math.min(...snapPoints))
-        onExitFullScreen()
     }
 
     useEffect(() => {
-        console.log(isSheetFullscreen)
-
         if (isSheetFullscreen) {
             sheetRef?.current?.snapTo(({ snapPoints }) =>
                 Math.max(...snapPoints)
@@ -96,51 +94,6 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                     )
                                 )}
                             </div>
-
-                            {/* <div className="w-full overflow-x-scroll">
-                                <div className="flex items-center gap-2">
-                                    <div className="flex-shrink-0  rounded hover:cursor-pointer flex gap-1.5 items-center">
-                                        <div className="p-1.5 flex items-center justify-center bg-blue-50 rounded-md">
-                                            <FaTruckMedical className="text-blue-400 text-sm m-0" />
-                                        </div>
-                                        <h3 className="font-semibold text-[13px] text-neutral-500">
-                                            Ambulance
-                                        </h3>
-                                    </div>
-                                    <div className="flex-shrink-0  rounded hover:cursor-pointer flex gap-1.5 items-center">
-                                        <div className="p-1.5 flex items-center justify-center bg-red-50 rounded-md">
-                                            <MdFireTruck className="text-red-400 text-sm m-0" />
-                                        </div>
-                                        <h3 className="font-semibold text-[13px] text-neutral-500">
-                                            Pemadam Kebakaran
-                                        </h3>
-                                    </div>
-                                    <div className="flex-shrink-0  rounded hover:cursor-pointer flex gap-1.5 items-center">
-                                        <div className="p-1.5 flex items-center justify-center bg-orange-50 rounded-md">
-                                            <FaCarCrash className="text-orange-400 text-sm m-0" />
-                                        </div>
-                                        <h3 className="font-semibold text-[13px] text-neutral-500">
-                                            Tim SAR
-                                        </h3>
-                                    </div>
-                                    <div className="flex-shrink-0  rounded hover:cursor-pointer flex gap-1.5 items-center">
-                                        <div className="p-1.5 flex items-center justify-center bg-green-50 rounded-md">
-                                            <MdCarCrash className="text-green-400 text-sm m-0" />
-                                        </div>
-                                        <h3 className="font-semibold text-[13px] text-neutral-500">
-                                            Bengkel
-                                        </h3>
-                                    </div>
-                                    <div className="flex-shrink-0  rounded hover:cursor-pointer flex gap-1.5 items-center">
-                                        <div className="p-1.5 flex items-center justify-center bg-red-50 rounded-md">
-                                            <MdCarCrash className="text-red-400 text-sm m-0" />
-                                        </div>
-                                        <h3 className="font-semibold text-[13px] text-neutral-500">
-                                            Tambal Ban
-                                        </h3>
-                                    </div>
-                                </div>
-                            </div> */}
                         </div>
                     </div>
                 </BottomSheet>

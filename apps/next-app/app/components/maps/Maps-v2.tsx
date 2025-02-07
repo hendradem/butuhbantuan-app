@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
-import SearchBox from './SearchBox'
 import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder'
+import { getCurrentLocation } from '@/app/utils/getCurrentLocation'
 import config from '@/app/config'
 import toast from 'react-hot-toast'
 import 'mapbox-gl/dist/mapbox-gl.css'
@@ -53,6 +53,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         useState<number>(0)
     const [isGeolocating, setIsGeolocating] = useState<boolean>(false)
     const [geolocationControl, setGeolocationControl] = useState<any>(null)
+    const [currentMarker, setCurrentMarker] = useState<any>(null)
+    // let currentMarker: mapboxgl.Marker | null = null // Store the current marker
 
     // global state
     const updateCoordinate = useUserLocationData(
@@ -98,12 +100,40 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         }
     }
 
+    const drawCurrentMarkerLocation = (longitude: number, latitude: number) => {
+        if (currentMarker) {
+            currentMarker.remove()
+        }
+
+        const userLocationMarker = document.getElementsByClassName('marker')
+        const el = document.createElement('div')
+        el.className = 'marker'
+
+        if (userLocationMarker.length > 0) {
+            userLocationMarker[0].remove()
+        }
+
+        let current = new mapboxgl.Marker(el)
+            .setLngLat([longitude, latitude])
+            .setPopup(
+                new mapboxgl.Popup({ offset: 25 }).setHTML(
+                    `<h3>Pop Up Title</h3><p>Pop Up Content</p>`
+                )
+            )
+            .addTo(mapContainer)
+
+        setCurrentMarker(current)
+
+        mapContainer.flyTo({
+            center: [longitude, latitude],
+            essential: true, // this animation is considered essential with respect to prefers-reduced-motion
+        })
+    }
+
     const buildTheMap = (
         buildMapType?: string,
         coordinates?: { lat: number; long: number }
     ) => {
-        console.log(buildMapType)
-
         mapContainer = new mapboxgl.Map({
             container: mapWrapper.current,
             style: 'mapbox://styles/mapbox/streets-v10',
@@ -119,69 +149,42 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         mapContainer.on('load', () => {
             if (buildMapType === 'rebuild') {
                 console.log('rebuild the map')
-
-                const el = document.createElement('div')
-                el.className = 'marker'
-
-                new mapboxgl.Marker(el)
-                    .setLngLat([coordinates?.long ?? 0, coordinates?.lat ?? 0])
-                    .setPopup(
-                        new mapboxgl.Popup({ offset: 25 }).setHTML(
-                            `<h3>Pop Up Title</h3><p>Pop Up Content</p>`
-                        )
-                    )
-                    .addTo(mapContainer)
-
-                mapContainer.flyTo({
-                    center: [coordinates?.long, coordinates?.lat],
-                    essential: true, // this animation is considered essential with respect to prefers-reduced-motion
-                })
+                drawCurrentMarkerLocation(
+                    coordinates?.long ?? 0,
+                    coordinates?.lat ?? 0
+                )
             } else {
                 setIsGeolocating(true)
                 console.log('init')
 
-                navigator.geolocation.watchPosition((position) => {
-                    const userLatitude = position?.coords?.latitude
-                    const userLongitude = position?.coords?.longitude
+                getCurrentLocation((location: any) => {
+                    const userLatitude = location.lat
+                    const userLongitude = location.lng
 
                     if (userLatitude && userLongitude) {
                         refetchAddressInfo()
                         setIsGeolocating(false)
                         setUserLatitudeAfterGeolocated(userLatitude)
                         setUserLongitudeAfterGeolocated(userLongitude)
-
-                        const el = document.createElement('div')
-                        el.className = 'marker'
-
-                        const userLocationMarker =
-                            document.getElementsByClassName('marker')
-
-                        if (userLocationMarker.length > 0) {
-                            userLocationMarker[0].remove()
-                        }
-
-                        new mapboxgl.Marker(el)
-                            .setLngLat([userLongitude ?? 0, userLatitude ?? 0])
-                            .setPopup(
-                                new mapboxgl.Popup({ offset: 25 }).setHTML(
-                                    `<h3>Pop Up Title</h3><p>Pop Up Content</p>`
-                                )
-                            )
-                            .addTo(mapContainer)
-
-                        mapContainer.flyTo({
-                            center: [userLongitude, userLatitude],
-                            essential: true, // this animation is considered essential with respect to prefers-reduced-motion
-                        })
+                        drawCurrentMarkerLocation(userLongitude, userLatitude)
                     }
                 })
             }
+        })
+
+        mapContainer.on('click', (e: any) => {
+            const { lng, lat } = e.lngLat
+            drawCurrentMarkerLocation(lng, lat)
         })
     }
 
     useEffect(() => {
         buildTheMap('init')
     }, [])
+
+    useEffect(() => {
+        console.log(currentMarker)
+    }, [currentMarker])
 
     useEffect(() => {
         if (isGeolocating) {
@@ -213,7 +216,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
     return (
         <>
-            {/* <SearchBox rebuildMap={buildTheMap} /> */}
             <div
                 className="w-full"
                 style={{ height: mapHeight }}

@@ -17,6 +17,17 @@ type MapsPropsType = {
 type LocationStateType = {
     name: String
     address: String
+    lat: number
+    long: number
+    urban_village: String
+    subdistrict: String
+    regency: String
+    province: String
+    district: String
+    county: String
+    city: string
+    state: string
+    formatted_city: string
 }
 
 const SearchBoxSecondary: React.FC<MapsPropsType> = ({
@@ -26,8 +37,8 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
 }) => {
     const mainBottomSheet = useMainBottomSheet()
     const isFullScreen = mainBottomSheet.isFullScreen
-    const onExitFullScreen = mainBottomSheet.onExitFullScreen
     const userAddress = useUserLocationData((state) => state.fullAddress)
+    const onExitFullScreen = mainBottomSheet.onExitFullScreen
     const updateCoordinate = useUserLocationData(
         (state) => state.updateCoordinate
     )
@@ -60,16 +71,34 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
 
     const handleRemoveSearchValue = (e: any): void => {
         e.preventDefault()
-        // setCurrentUserAddress('')
-        // resetBottomSheet()
+        setIsSearchBoxActive(false)
+        setCurrentUserAddress('')
+    }
+
+    const handleResetBottomSheet = (e: any): void => {
+        e.preventDefault()
+        resetBottomSheet()
         setIsSearchBoxActive(false)
         onExitFullScreen()
+        // setLocationResult([])
     }
-    const handleSelectedAddress = (address: any): void => {
+
+    const handleGetCurrentLocation = (e: any): void => {
+        e.preventDefault()
+        console.log('clicked')
+    }
+
+    const handleSelectedAddress = (address: any, e: any): void => {
+        console.log('handle selected address')
+        e.preventDefault()
+        resetBottomSheet()
+        setIsSearchBoxActive(false)
+        setCurrentUserAddress(address.address)
         const coordinates = { lat: address.lat, long: address.long }
         updateCoordinate(address.lat, address.long)
-        rebuildMap('rebuild', coordinates) // trigger map rebuild function at parent
-        setIsSearchBoxActive(false)
+        rebuildMap('rebuild', coordinates) // trigger map rebuild function at parent component
+        onExitFullScreen()
+        // setLocationResult([])
     }
     const handleSearchBoxOnFocus = (): void => {
         setIsSearchBoxActive(true)
@@ -92,6 +121,16 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
         if (!searchAddressLoading) {
             let temp: any = []
             searchAddressResult?.features?.map((item: any) => {
+                const district = item.properties?.district
+                    ? item.properties?.district
+                    : item.properties?.city
+
+                const city = item.properties?.state
+                    ? item.properties?.state
+                    : ''
+
+                const formattedArea = `${district}, ${city}`
+
                 const data = {
                     name: item?.properties?.name,
                     address: item?.properties?.formatted,
@@ -100,6 +139,8 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
                     district: item?.properties?.district,
                     place_name: item?.properties?.name,
                     urban_village: item?.properties?.suburb,
+                    county: item?.properties?.county,
+                    formatted_city: formattedArea,
                 }
                 temp.push(data)
             })
@@ -118,30 +159,60 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
 
     return (
         <form>
-            <div>
+            <div className="px-1.5">
                 <div
                     className={`gap-1 text-gray-800 flex items-center w-full p-0`}
                 >
-                    <input
-                        type="text"
-                        value={currentUserAddress}
-                        onChange={(e) => {
-                            handleSearchInputChange(e)
-                        }}
-                        onClick={() => {
-                            handleSearchBoxOnFocus()
-                        }}
-                        className={`  text-gray-900 bg-gray-100 rounded-[10px] p-2 text-sm px-3 border-none focus:ring-none focus:border-none focus:outline-none block w-full `}
-                        placeholder="Cari lokasi, desa atau daerah terdekat"
-                    />
-                    <button
-                        onClick={(e) => {
-                            handleRemoveSearchValue(e)
-                        }}
-                        className="p-2 py-2.5 bg-gray-100 rounded-md"
-                    >
-                        <Icon name="material-symbols:close-rounded" />
-                    </button>
+                    <div className="flex gap-1 input-wrapper text-gray-900 bg-gray-100 rounded-[10px] p-2 text-sm px-3 border-none focus:ring-none focus:border-none focus:outline-none w-full">
+                        <input
+                            type="text"
+                            value={currentUserAddress}
+                            onChange={(e) => {
+                                handleSearchInputChange(e)
+                            }}
+                            onClick={() => {
+                                handleSearchBoxOnFocus()
+                            }}
+                            className="p-0 w-full bg-gray-100 focus:border-none focus:ring-none focus:outline-none"
+                            placeholder="Cari lokasi, desa atau daerah terdekat"
+                        />
+                        {isFullScreen && (
+                            <button
+                                onClick={(e) => {
+                                    handleRemoveSearchValue(e)
+                                }}
+                                className="p-1 ml-1 bg-gray-200 rounded-full"
+                            >
+                                <Icon name="material-symbols:close-rounded" />
+                            </button>
+                        )}
+                    </div>
+                    {isFullScreen && (
+                        <button
+                            onClick={(e) => {
+                                handleResetBottomSheet(e)
+                            }}
+                            className="p-1 py-[5px] bg-gray-100 rounded-xl"
+                        >
+                            <Icon
+                                name="material-symbols:keyboard-arrow-down-rounded"
+                                className="text-2xl text-gray-700"
+                            />
+                        </button>
+                    )}
+                    {!isFullScreen && (
+                        <button
+                            onClick={(e) => {
+                                handleGetCurrentLocation(e)
+                            }}
+                            className="p-1 py-[7px] bg-gray-100 rounded-md"
+                        >
+                            <Icon
+                                name="iconamoon:location-fill"
+                                className="text-2xl"
+                            />
+                        </button>
+                    )}
                 </div>
 
                 {isFullScreen && locationResult?.length == 0 && !isLoading && (
@@ -164,57 +235,8 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
                     </div>
                 )}
 
-                {/* {isSearchBoxActive &&
-                    locationResult?.length == 0 &&
-                    !isLoading && (
-                        <div className="w-full bg-white text-neutral-800 shadow border border-gray-100 rounded-xl rounded-t-none p-4">
-                            <div>
-                                <div className="default  flex items-center justify-center">
-                                    <div className="p-2 border rounded-lg border-gray-200">
-                                        <FaFire />
-                                    </div>
-                                </div>
-                                <h3 className="text-center text-[14.5px] mt-2 font-medium">
-                                    Cari lokasi terdekatmu
-                                </h3>
-                                <h3 className="text-center mx-3 text-[14px] text-neutral-500 mt-1 font-normal">
-                                    Cari lokasimu dengan nama jalan, nama desa,
-                                    atau nama tempat terdekatmu
-                                </h3>
-
-                                <div className="mt-5 grid grid-cols-4 items-start">
-                                    {services?.map(
-                                        (service: any, index: number) => (
-                                            <div
-                                                key={index}
-                                                onClick={() => {
-                                                    alert(index)
-                                                }}
-                                                className="flex flex-col cursor-pointer items-center justify-center"
-                                            >
-                                                <div
-                                                    className={`p-2 border-none rounded-lg bg-${service?.colorSecondary}`}
-                                                >
-                                                    <Icon
-                                                        name={service?.icon}
-                                                        className={`text-${service?.colorMain} text-[28px]`}
-                                                    />
-                                                </div>
-                                                <div className="mx-3">
-                                                    <h3 className="text-center text-[11px] mt-1 text-neutral-600 font-medium leading-[1.3]">
-                                                        {service?.name}
-                                                    </h3>
-                                                </div>
-                                            </div>
-                                        )
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )} */}
-
                 {isLoading && (
-                    <div className="w-full bg-white text-neutral-800 p-2">
+                    <div className="w-full mt-2 text-neutral-800 py-2">
                         <div className="flex flex-col gap-2">
                             <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
                             <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
@@ -227,23 +249,28 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
                 {!isLoading &&
                     locationResult.length !== 0 &&
                     isSearchBoxActive && (
-                        <div className="w-full bg-white text-neutral-800">
+                        <div className="w-full mt-4 bg-white text-neutral-800">
                             {locationResult?.map(
                                 (item: LocationStateType, index) => {
                                     return (
                                         <div
                                             key={index}
-                                            className="w-full flex items-center gap-2 text-neutral-800 text-sm hover:bg-gray-50 rounded p-2 cursor-pointer"
-                                            onClick={() => {
-                                                handleSelectedAddress(item)
+                                            className="w-full flex items-center gap-3 text-neutral-800 text-sm hover:bg-gray-50 rounded p-2 cursor-pointer"
+                                            onClick={(e) => {
+                                                handleSelectedAddress(item, e)
                                             }}
                                         >
                                             <p className="text-md">
                                                 <FaMagnifyingGlass />
                                             </p>
-                                            <p className="font-normal w-full truncate">
-                                                {item.address}
-                                            </p>
+                                            <div className="w-full truncate">
+                                                <p className="font-normal text-[14.5px] leading-none m-0 p-0 w-full truncate">
+                                                    {item?.name}
+                                                </p>
+                                                <p className="m-0 p-0 leading-none mt-1 text-[13px] w-full truncate text-neutral-400">
+                                                    {item?.formatted_city}
+                                                </p>
+                                            </div>
                                         </div>
                                     )
                                 }
