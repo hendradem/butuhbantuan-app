@@ -7,6 +7,7 @@ import { FaFire } from 'react-icons/fa'
 import { FaMagnifyingGlass } from 'react-icons/fa6'
 import Icon from '../ui/Icon'
 import useMainBottomSheet from '@/app/store/useMainBottomSheet'
+import { getCurrentLocation } from '@/app/utils/getCurrentLocation'
 
 type MapsPropsType = {
     rebuildMap: (arg1: any, arg2: any) => void
@@ -85,7 +86,14 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
 
     const handleGetCurrentLocation = (e: any): void => {
         e.preventDefault()
-        console.log('clicked')
+        getCurrentLocation((location: any) => {
+            const coordinates = {
+                lat: location.lat,
+                long: location.lng,
+            }
+            updateCoordinate(location.lat, location.lng)
+            rebuildMap('rebuild', coordinates) // trigger map rebuild function at parent component
+        })
     }
 
     const handleSelectedAddress = (address: any, e: any): void => {
@@ -205,11 +213,11 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
                             onClick={(e) => {
                                 handleGetCurrentLocation(e)
                             }}
-                            className="p-1 py-[7px] bg-gray-100 rounded-md"
+                            className="p-1 py-[8px] bg-gray-100 rounded-md"
                         >
                             <Icon
-                                name="iconamoon:location-fill"
-                                className="text-2xl"
+                                name="iconamoon:location-bold"
+                                className="text-xl"
                             />
                         </button>
                     )}

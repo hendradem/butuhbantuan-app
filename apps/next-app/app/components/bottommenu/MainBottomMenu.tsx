@@ -78,11 +78,11 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                             className="flex flex-col cursor-pointer items-center justify-center"
                                         >
                                             <div
-                                                className={`p-2 border-none rounded-lg bg-${service?.colorSecondary}`}
+                                                className={`p-2 border-none rounded-lg bg-red-50 shadow-sm`}
                                             >
                                                 <Icon
                                                     name={service?.icon}
-                                                    className={`text-${service?.colorMain} text-[32px]`}
+                                                    className={`text-red-500 text-[32px]`}
                                                 />
                                             </div>
                                             <div className="mx-3">
