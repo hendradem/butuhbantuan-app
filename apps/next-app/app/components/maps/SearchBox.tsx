@@ -159,7 +159,7 @@ const SearchBox: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                     )}
 
                 {isLoading && (
-                    <div className="w-full bg-white text-neutral-800 shadow border border-gray-100 rounded-xl rounded-t-none p-4">
+                    <div className="w-full bg-white mt-5 text-neutral-800 shadow border border-gray-100 rounded-xl rounded-t-none px-2 py-4">
                         <div className="flex flex-col gap-2">
                             <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
                             <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
@@ -172,13 +172,13 @@ const SearchBox: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                 {!isLoading &&
                     locationResult.length !== 0 &&
                     isSearchBoxActive && (
-                        <div className="w-full bg-white text-neutral-800 shadow border border-gray-100 rounded-xl rounded-t-none p-4">
+                        <div className="w-full bg-white mt-4 text-neutral-800 shadow border border-gray-100 rounded-xl rounded-t-none p-4">
                             {locationResult?.map(
                                 (item: LocationStateType, index) => {
                                     return (
                                         <div
                                             key={index}
-                                            className="w-full flex items-center gap-2 text-neutral-800 text-sm hover:bg-gray-50 rounded p-2 cursor-pointer"
+                                            className="w-full mt-4 flex items-center gap-2 text-neutral-800 text-sm hover:bg-gray-50 rounded p-2 cursor-pointer"
                                             onClick={() => {
                                                 handleSelectedAddress(item)
                                             }}
