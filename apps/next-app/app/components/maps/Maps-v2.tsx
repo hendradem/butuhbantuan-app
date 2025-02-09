@@ -17,8 +17,12 @@ type MapsProps = {
     mapHeight: string
 }
 
-interface LocationWithDistance extends Location {
-    duration?: number
+interface LocationWithDistance {
+    id: string
+    name: string
+    coordinates: number[]
+    address: string
+    distance: number
 }
 
 const geojson = {
@@ -48,21 +52,49 @@ const geojson = {
                 coordinates: [110.3450278, -7.7063721],
             },
         },
+        {
+            type: 'Feature',
+            properties: {
+                message: 'RSA UGM',
+                imageId: 837,
+                iconSize: [30, 30],
+            },
+            geometry: {
+                type: 'Point',
+                coordinates: [110.3479091, -7.743761],
+            },
+        },
     ],
 }
 
-const SAMPLE_LOCATIONS: Location[] = [
+const SAMPLE_LOCATIONS: any[] = [
     {
         id: '1',
         name: 'PSC SES',
         coordinates: [110.3539, -7.7186],
         address: 'Sleman',
+        distance: 0,
     },
     {
         id: '2',
         name: 'PMI Sleman',
         coordinates: [110.345, -7.7063],
         address: 'Sleman',
+        distance: 0,
+    },
+    {
+        id: '3',
+        name: 'RSA UGM',
+        coordinates: [110.3479, -7.7437],
+        address: 'Sleman',
+        distance: 0,
+    },
+    {
+        id: '4',
+        name: 'MPD Peduli',
+        coordinates: [110.3741967, -7.7607825],
+        address: 'Pogung Dalangan, Sinduadi',
+        distance: 0,
     },
 ]
 
@@ -73,13 +105,17 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         useState<number>(0)
     const [userLongitudeAfterGeolocated, setUserLongitudeAfterGeolocated] =
         useState<number>(0)
+    const isRefetchMatrix = useUserLocationData(
+        (state) => state.isRefetchMatrix
+    )
+    const longitudeState = useUserLocationData((state) => state.long)
+    const latitudeState = useUserLocationData((state) => state.lat)
+
     const [isGeolocating, setIsGeolocating] = useState<boolean>(false)
     const [currentMarker, setCurrentMarker] = useState<any>(null)
 
-    const [stakeholders, setStakeHolders] = useState<any>(null)
-
-    const [locations, setLocations] =
-        useState<LocationWithDistance[]>(SAMPLE_LOCATIONS)
+    const [locations, setLocations] = useState(SAMPLE_LOCATIONS)
+    // const [convertedLocations, setConvertedLocations] = useState<any>([])
 
     // global state
     const updateCoordinate = useUserLocationData(
@@ -105,31 +141,51 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         updateFullAddress(address)
     }
 
-    const mapTheMarker = () => {
-        for (const marker of geojson.features) {
-            const el = document.createElement('div')
-            el.className = 'ambulance-marker'
+    const mapTheMarker = (type: string) => {
+        const currentLocationMarker =
+            document.getElementsByClassName('ambulance-marker')
 
-            el.addEventListener('click', () => {
-                window.alert(marker.properties.message)
-            })
+        console.log(currentLocationMarker.length)
 
-            // Add markers to the map.
-            new mapboxgl.Marker(el)
-                .setLngLat([
-                    marker.geometry.coordinates[0],
-                    marker.geometry.coordinates[1],
-                ])
-                .setPopup()
-                .addTo(mapContainer)
+        if (type === 'init') {
+            console.log('init marker')
+            for (const marker of locations) {
+                const el = document.createElement('div')
+                el.className = 'ambulance-marker'
+
+                el.addEventListener('click', () => {
+                    window.alert(marker.address)
+                })
+
+                // Add markers to the map.
+                new mapboxgl.Marker(el)
+                    .setLngLat([marker.coordinates[0], marker.coordinates[1]])
+                    .setPopup()
+                    .addTo(mapContainer)
+            }
+        } else {
+            console.log('update marker')
+            for (let i = 0; i < currentLocationMarker.length; i++) {
+                currentLocationMarker[i].innerHTML =
+                    `<h3>${locations[i].name}</h3><p>Distance: ${locations[i].distance} km</p><p>Duration: ${locations[i].duration} min</p>`
+            }
+        }
+    }
+
+    const updateMarkerInformation = (data: any) => {
+        console.log(data)
+
+        const currentAmbulanceMarker =
+            document.getElementsByClassName('ambulance-marker')
+
+        for (let i = 0; i < currentAmbulanceMarker.length; i++) {
+            currentAmbulanceMarker[i].innerHTML =
+                `<h3>${data[i].name}</h3><p>Distance: ${data[i].distance} km</p><p>Duration: ${data[i].duration} min</p>`
         }
     }
 
     const drawCurrentMarkerLocation = (longitude: number, latitude: number) => {
-        if (currentMarker) {
-            currentMarker.remove()
-        }
-
+        console.log('draw current marker')
         const userLocationMarker = document.getElementsByClassName('marker')
         const el = document.createElement('div')
         el.className = 'marker'
@@ -151,6 +207,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             .addTo(mapContainer)
 
         setCurrentMarker(current)
+        getMatrixOfLocations(longitude, latitude)
 
         mapContainer.flyTo({
             center: [longitude, latitude],
@@ -161,7 +218,16 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const getMatrixOfLocations = (longitude: number, latitude: number) => {
         getDistanceMatrix([longitude ?? 0, latitude ?? 0], locations).then(
             (res) => {
-                console.log(res)
+                const transformedLocations = res.map((location) => {
+                    return {
+                        id: location.location.id,
+                        name: location.location.name,
+                        coordinates: location.location.coordinates,
+                        distance: location.distance,
+                        duration: location.duration,
+                    }
+                })
+                updateMarkerInformation(transformedLocations)
             }
         )
     }
@@ -180,11 +246,9 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             accessToken: config.MAPBOX_API_KEY,
         })
 
-        mapTheMarker()
-
         mapContainer.on('load', () => {
             if (buildMapType === 'rebuild') {
-                console.log('rebuild the map')
+                console.log('rebuild')
                 drawCurrentMarkerLocation(
                     coordinates?.long ?? 0,
                     coordinates?.lat ?? 0
@@ -196,9 +260,10 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                     coordinates?.long ?? 0,
                     coordinates?.lat ?? 0
                 )
+                mapTheMarker('update')
             } else {
-                setIsGeolocating(true)
                 console.log('init')
+                setIsGeolocating(true)
 
                 getCurrentLocation((location: any) => {
                     const userLatitude = location?.lat
@@ -210,8 +275,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                         setUserLatitudeAfterGeolocated(userLatitude)
                         setUserLongitudeAfterGeolocated(userLongitude)
                         drawCurrentMarkerLocation(userLongitude, userLatitude)
-
                         getMatrixOfLocations(userLongitude, userLatitude)
+                        mapTheMarker('init')
                     }
                 })
             }
@@ -226,6 +291,17 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     useEffect(() => {
         buildTheMap('init')
     }, [])
+
+    useEffect(() => {
+        console.log('any updates')
+
+        // if (isRefetchMatrix === true) {
+        //     console.log(isRefetchMatrix)
+        //     drawCurrentMarkerLocation(longitudeState ?? 0, latitudeState ?? 0)
+        // } else {
+        //     console.log(isRefetchMatrix)
+        // }
+    }, [isRefetchMatrix])
 
     useEffect(() => {
         refetchAddressInfo()
