@@ -18,10 +18,6 @@ export const getDistanceMatrix = async (
         .map((coord) => coord.join(','))
         .join(';')
 
-    // const coordinates = [origin, ...destinations]
-    //     .map((coord) => `${coord.lng},${coord.lat}`)
-    //     .join(';')
-
     const url = `${config.MAPBOX_URL}/directions-matrix/v1/mapbox/driving/${coordinates}?access_token=${config.MAPBOX_API_KEY}&annotations=distance,duration`
 
     try {
@@ -37,9 +33,11 @@ export const getDistanceMatrix = async (
         const distances = data.distances[0].slice(1)
 
         return destinations.map((location, index) => ({
-            location,
-            duration: formatTheTime(durations[index]),
-            distance: formatDistance(distances[index]), // data.distances,
+            ...location,
+            matrix: {
+                duration: formatTheTime(durations[index]),
+                distance: formatDistance(distances[index]),
+            },
         }))
     } catch (error) {
         console.error('Error fetching distance matrix:', error)

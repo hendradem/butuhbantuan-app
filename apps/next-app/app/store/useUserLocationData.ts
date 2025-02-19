@@ -20,7 +20,7 @@ type Action = {
     updateProvince: (province: State['province']) => void
     updateFullAddress: (fullAddress: State['fullAddress']) => void
     updateRebuildMap: (isRebuildMap: boolean) => void
-    updateRefetchMatrix: (isRefetchMatrix: boolean) => void
+    updateRefetchMatrix: () => void
 }
 
 const useUserLocationData = create<State & Action>()((set) => ({
@@ -57,8 +57,8 @@ const useUserLocationData = create<State & Action>()((set) => ({
     updateRebuildMap: (status: boolean) => {
         set(() => ({ isRebuildMap: status }))
     },
-    updateRefetchMatrix: (status: boolean) => {
-        set(() => ({ isRefetchMatrix: status }))
+    updateRefetchMatrix: () => {
+        set((state) => ({ isRefetchMatrix: !state.isRefetchMatrix }))
     },
 }))
 

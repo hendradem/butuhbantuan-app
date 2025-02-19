@@ -106,10 +106,8 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
         setCurrentUserAddress(address.address)
         const coordinates = { lat: address.lat, long: address.long }
         updateCoordinate(address.lat, address.long)
-        updateRefetchMatrix(true)
+        updateRefetchMatrix()
         onExitFullScreen()
-        // rebuildMap('rebuild', coordinates) // trigger map rebuild function at parent component
-        // setLocationResult([])
     }
     const handleSearchBoxOnFocus = (): void => {
         setIsSearchBoxActive(true)

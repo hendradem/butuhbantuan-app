@@ -1,27 +1,25 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
 import { BottomSheet, BottomSheetRef } from 'react-spring-bottom-sheet'
 import useMainBottomSheet from '@/app/store/useMainBottomSheet'
-import BottomSheetMain from '../bottomsheet/Bottomsheet'
-import { RiMessage3Line } from 'react-icons/ri'
-import { HiMiniPhone } from 'react-icons/hi2'
-import { FaCarCrash } from 'react-icons/fa'
-import { MdCarCrash, MdFireTruck } from 'react-icons/md'
-import { FaTruckMedical } from 'react-icons/fa6'
-import { MdKeyboardArrowUp } from 'react-icons/md'
+import useResultSheet from '@/app/store/useResultSheet'
+import services from '@/app/store/data/services.json'
+import useEmergencyData from '@/app/store/useEmergencyData'
 import SearchBoxSecondary from '../maps/SearchBoxSecondary'
 import Icon from '../ui/Icon'
-import services from '@/app/store/data/services.json'
 
 type MapsPropsType = {
     rebuildMap: (arg1: any, arg2: any) => void
 }
 
 const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
+    const updateSelectedEmergencyData = useEmergencyData(
+        (action) => action.updateSelectedEmergencyData
+    )
+    const resultSheet = useResultSheet()
     const mainBottomSheet = useMainBottomSheet()
     const sheetRef = React.useRef<BottomSheetRef>(null)
     const isSheetFullscreen = mainBottomSheet.isFullScreen
     const onFullScreen = mainBottomSheet.onFullScreen
-    const onExitFullScreen = mainBottomSheet.onExitFullScreen
 
     const handleSearchInputOnClick = () => {
         sheetRef?.current?.snapTo(({ snapPoints }) => Math.max(...snapPoints))
@@ -29,8 +27,12 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     }
 
     const handleResetBottomSheet = () => {
-        console.log('bottomsheet reset')
         sheetRef?.current?.snapTo(({ snapPoints }) => Math.min(...snapPoints))
+    }
+
+    const handleServiceClick = (service: any) => {
+        updateSelectedEmergencyData(service)
+        resultSheet.setOpen(true)
     }
 
     useEffect(() => {
@@ -73,7 +75,7 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                         <div
                                             key={index}
                                             onClick={() => {
-                                                alert(index)
+                                                handleServiceClick(service)
                                             }}
                                             className="flex flex-col cursor-pointer items-center justify-center"
                                         >
