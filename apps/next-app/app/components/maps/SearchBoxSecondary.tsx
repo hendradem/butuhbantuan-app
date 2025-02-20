@@ -43,6 +43,9 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
     const updateCoordinate = useUserLocationData(
         (state) => state.updateCoordinate
     )
+    const updateRefetchMatrix = useUserLocationData(
+        (state) => state.updateRefetchMatrix
+    )
 
     const [isSearchBoxActive, setIsSearchBoxActive] = useState<boolean>(false)
     const [isLoading, setIsLoading] = useState<boolean>(false)
@@ -97,16 +100,14 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
     }
 
     const handleSelectedAddress = (address: any, e: any): void => {
-        console.log('handle selected address')
         e.preventDefault()
         resetBottomSheet()
         setIsSearchBoxActive(false)
         setCurrentUserAddress(address.address)
         const coordinates = { lat: address.lat, long: address.long }
         updateCoordinate(address.lat, address.long)
-        rebuildMap('rebuild', coordinates) // trigger map rebuild function at parent component
+        updateRefetchMatrix()
         onExitFullScreen()
-        // setLocationResult([])
     }
     const handleSearchBoxOnFocus = (): void => {
         setIsSearchBoxActive(true)

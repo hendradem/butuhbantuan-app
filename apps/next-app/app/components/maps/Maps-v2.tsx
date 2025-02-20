@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
-import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder'
 import { getCurrentLocation } from '@/app/utils/getCurrentLocation'
 import config from '@/app/config'
 import toast from 'react-hot-toast'
@@ -10,76 +9,37 @@ import { useAddressInformation } from '@/app/store/api/location.api'
 import useUserLocationData from '@/app/store/useUserLocationData'
 import MainBottomMenu from '../bottommenu/MainBottomMenu'
 import { getDistanceMatrix } from '@/app/utils/mapboxMatrix'
-
-import { Location } from '@/app/utils/mapboxMatrix'
+import Resultsheet from '../bottomsheet/Resultsheet'
+import useEmergencyData from '@/app/store/useEmergencyData'
 
 type MapsProps = {
     mapHeight: string
+    updateLatestLocation?: () => void
 }
-
-interface LocationWithDistance extends Location {
-    duration?: number
-}
-
-const geojson = {
-    type: 'FeatureCollection',
-    features: [
-        {
-            type: 'Feature',
-            properties: {
-                message: 'PSC SES 119',
-                imageId: 1011,
-                iconSize: [30, 30],
-            },
-            geometry: {
-                type: 'Point',
-                coordinates: [110.3539151, -7.718647],
-            },
-        },
-        {
-            type: 'Feature',
-            properties: {
-                message: 'PMI Kab. Sleman',
-                imageId: 837,
-                iconSize: [30, 30],
-            },
-            geometry: {
-                type: 'Point',
-                coordinates: [110.3450278, -7.7063721],
-            },
-        },
-    ],
-}
-
-const SAMPLE_LOCATIONS: Location[] = [
-    {
-        id: '1',
-        name: 'PSC SES',
-        coordinates: [110.3539, -7.7186],
-        address: 'Sleman',
-    },
-    {
-        id: '2',
-        name: 'PMI Sleman',
-        coordinates: [110.345, -7.7063],
-        address: 'Sleman',
-    },
-]
 
 const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     let mapContainer: any
+    const emergencyData = useEmergencyData((state) => state.emergencyData)
+    const updateEmergencyData = useEmergencyData(
+        (action) => action.updateEmergencyData
+    )
+    const [mapContainerState, setMapContainerState] = useState<any>(null)
     const mapWrapper = useRef<any>()
     const [userLatitudeAfterGeolocated, setUserLatitudeAfterGeolocated] =
         useState<number>(0)
     const [userLongitudeAfterGeolocated, setUserLongitudeAfterGeolocated] =
         useState<number>(0)
+    const isRefetchMatrix = useUserLocationData(
+        (state) => state.isRefetchMatrix
+    )
+    const longitudeState = useUserLocationData((state) => state.long)
+    const latitudeState = useUserLocationData((state) => state.lat)
+
     const [isGeolocating, setIsGeolocating] = useState<boolean>(false)
     const [currentMarker, setCurrentMarker] = useState<any>(null)
 
-    const [stakeholders, setStakeHolders] = useState<any>(null)
-
-    const [locations, setLocations] =
-        useState<LocationWithDistance[]>(SAMPLE_LOCATIONS)
+    const [locations, setLocations] = useState(emergencyData)
+    // const [convertedLocations, setConvertedLocations] = useState<any>([])
 
     // global state
     const updateCoordinate = useUserLocationData(
@@ -105,30 +65,81 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         updateFullAddress(address)
     }
 
-    const mapTheMarker = () => {
-        for (const marker of geojson.features) {
-            const el = document.createElement('div')
-            el.className = 'ambulance-marker'
+    const mapTheMarker = (type: string) => {
+        const currentLocationMarker =
+            document.getElementsByClassName('ambulance-marker')
 
-            el.addEventListener('click', () => {
-                window.alert(marker.properties.message)
-            })
+        if (type === 'init') {
+            console.log('init the marker')
 
-            // Add markers to the map.
-            new mapboxgl.Marker(el)
-                .setLngLat([
-                    marker.geometry.coordinates[0],
-                    marker.geometry.coordinates[1],
-                ])
-                .setPopup()
-                .addTo(mapContainer)
+            for (const marker of locations) {
+                const el = document.createElement('div')
+                el.className = 'ambulance-marker'
+
+                // label
+                const label = document.createElement('div')
+                label.className = 'marker-label'
+                label.style.position = 'absolute'
+                label.style.background = 'white'
+                label.style.width = '100px'
+                label.style.padding = '5px'
+                label.style.borderRadius = '8px'
+                label.style.fontSize = '11px'
+                label.style.marginTop = '-15px'
+                label.style.marginLeft = '30px'
+                label.style.boxShadow = '0 1px 2px 0 rgb(0 0 0 / 0.05)'
+
+                el.appendChild(label)
+
+                el.addEventListener('click', () => {
+                    window.alert(marker.address)
+                })
+
+                // Add markers to the map.
+                new mapboxgl.Marker(el)
+                    .setLngLat([marker.coordinates[0], marker.coordinates[1]])
+                    .setPopup()
+                    .addTo(mapContainer)
+            }
+        } else {
+            console.log('update the marker')
+            // const currentAmbulanceMarkerLabel =
+            //     document.getElementsByClassName('marker-label')
+            // for (let i = 0; i < currentAmbulanceMarkerLabel.length; i++) {
+            //     currentAmbulanceMarkerLabel[i].innerHTML =
+            //         `<h3 className=''>${locations[i].name}</h3><p> ${locations[i].distance} km</p> - <p> ${locations[i].duration} min</p>`
+            // }
+            const currentAmbulanceMarkerLabel =
+                document.getElementsByClassName('marker-label')
+            // if (currentAmbulanceMarkerLabel.length > 0) {
+            //     currentAmbulanceMarkerLabel[0].remove()
+            // }
+            for (let i = 0; i < currentAmbulanceMarkerLabel.length; i++) {
+                // console.log(locations[i].name)
+                currentAmbulanceMarkerLabel[i].innerHTML = '123'
+                // `<h3 className=''>${locations[i].name}</h3><p> ${locations[i].distance} km</p> - <p> ${locations[i].duration} min</p>`
+            }
+        }
+    }
+
+    const updateMarkerInformation = (data: any) => {
+        const currentAmbulanceMarkerLabel =
+            document.querySelectorAll('.marker-label')
+
+        if (data) {
+            if (currentAmbulanceMarkerLabel.length > locations.length) {
+                currentAmbulanceMarkerLabel.forEach((el) => el.remove())
+            } else {
+                for (let i = 0; i < currentAmbulanceMarkerLabel.length; i++) {
+                    currentAmbulanceMarkerLabel[i].innerHTML =
+                        `<h3 className='text-orange-200'>${data[i]?.name}</h3><p> <p> ${data[i]?.duration} min</p>`
+                }
+            }
         }
     }
 
     const drawCurrentMarkerLocation = (longitude: number, latitude: number) => {
-        if (currentMarker) {
-            currentMarker.remove()
-        }
+        mapContainer = mapContainer ? mapContainer : mapContainerState
 
         const userLocationMarker = document.getElementsByClassName('marker')
         const el = document.createElement('div')
@@ -138,8 +149,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             userLocationMarker[0].remove()
         }
 
-        setUserLatitudeAfterGeolocated(latitude)
-        setUserLongitudeAfterGeolocated(longitude)
+        // setUserLatitudeAfterGeolocated(latitude)
+        // setUserLongitudeAfterGeolocated(longitude)
 
         let current = new mapboxgl.Marker(el)
             .setLngLat([longitude, latitude])
@@ -151,6 +162,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             .addTo(mapContainer)
 
         setCurrentMarker(current)
+        getMatrixOfLocations(longitude, latitude)
 
         mapContainer.flyTo({
             center: [longitude, latitude],
@@ -161,7 +173,17 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const getMatrixOfLocations = (longitude: number, latitude: number) => {
         getDistanceMatrix([longitude ?? 0, latitude ?? 0], locations).then(
             (res) => {
-                console.log(res)
+                const transformedLocations = res.map((location) => {
+                    return {
+                        id: location?.id,
+                        name: location?.name,
+                        coordinates: location?.coordinates,
+                        distance: location.matrix.distance,
+                        duration: location.matrix.duration,
+                    }
+                })
+                updateMarkerInformation(transformedLocations)
+                updateEmergencyData(res)
             }
         )
     }
@@ -180,11 +202,11 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             accessToken: config.MAPBOX_API_KEY,
         })
 
-        mapTheMarker()
+        setMapContainerState(mapContainer)
 
         mapContainer.on('load', () => {
             if (buildMapType === 'rebuild') {
-                console.log('rebuild the map')
+                console.log('rebuild')
                 drawCurrentMarkerLocation(
                     coordinates?.long ?? 0,
                     coordinates?.lat ?? 0
@@ -196,9 +218,10 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                     coordinates?.long ?? 0,
                     coordinates?.lat ?? 0
                 )
+                mapTheMarker('update')
             } else {
-                setIsGeolocating(true)
                 console.log('init')
+                setIsGeolocating(true)
 
                 getCurrentLocation((location: any) => {
                     const userLatitude = location?.lat
@@ -210,8 +233,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                         setUserLatitudeAfterGeolocated(userLatitude)
                         setUserLongitudeAfterGeolocated(userLongitude)
                         drawCurrentMarkerLocation(userLongitude, userLatitude)
-
                         getMatrixOfLocations(userLongitude, userLatitude)
+                        mapTheMarker('init')
                     }
                 })
             }
@@ -226,6 +249,12 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     useEffect(() => {
         buildTheMap('init')
     }, [])
+
+    useEffect(() => {
+        if (mapContainerState && longitudeState && latitudeState) {
+            drawCurrentMarkerLocation(longitudeState, latitudeState)
+        }
+    }, [isRefetchMatrix])
 
     useEffect(() => {
         refetchAddressInfo()
@@ -268,6 +297,13 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             ></div>
             <div>
                 <MainBottomMenu rebuildMap={buildTheMap} />
+                <Resultsheet
+                    emergencyType={{
+                        name: 'asdas',
+                        icon: 'test',
+                        color: 'red',
+                    }}
+                />
             </div>
         </>
     )

@@ -100,18 +100,21 @@ body {
 
 .ambulance-marker {
     background-image: url('../public/assets/icons/ambulance-logo.svg');
-    background-color: #f59e0b;
+    background-color: #1e1e1e;
+    color: black;
     box-shadow:
         0 4px 6px -1px rgb(0 0 0 / 0.1),
         0 2px 4px -2px rgb(0 0 0 / 0.1);
-    background-size: 20px 20px;
+    background-size: 18px 18px;
     background-position: center;
     background-repeat: no-repeat;
     width: 35px;
     height: 35px;
-    border-radius: 50%;
+    border-radius: 10px;
     cursor: pointer;
 }
+ 
+
 
 .mapboxgl-popup {
     max-width: 200px;
