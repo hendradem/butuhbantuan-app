@@ -88,12 +88,12 @@ body {
 
 /* maps */
 .marker {
-    background-image: url('../public/assets/icons/location-circle.svg');
+    background-image: url('../public/assets/icons/current-location-blue.svg');
     padding: 10px;
     background-size: contain;
     background-repeat: no-repeat;
-    width: 100px;
-    height: 100px;
+    width: 25px;
+    height: 25px;
     border-radius: 50%;
     cursor: pointer;
 }
@@ -105,25 +105,40 @@ body {
     box-shadow:
         0 4px 6px -1px rgb(0 0 0 / 0.1),
         0 2px 4px -2px rgb(0 0 0 / 0.1);
-    background-size: 18px 18px;
+    background-size: 12px 12px;
     background-position: center;
     background-repeat: no-repeat;
-    width: 35px;
-    height: 35px;
-    border-radius: 10px;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
     cursor: pointer;
 }
- 
-
 
 .mapboxgl-popup {
     max-width: 200px;
+} 
+
+.mapboxgl-popup {
+    margin-top: 5px !important;
 }
 
 .mapboxgl-popup-content {
-    text-align: center;
-    font-family: 'Open Sans', sans-serif;
+    background: white !important; /* Make background transparent */
+    color: black !important; /* Ensure text is visible */
+    box-shadow: none !important; /* Remove shadow */
+    border: none !important; /* Remove any default borders */
+    padding: 0px !important;
+    margin: none !important;
+    margin-top: 20px !important;
+    border-radius: 12px !important;
 }
+.mapboxgl-popup-tip {
+    border-top-color: white !important; /* Change arrow color */
+}
+.mapboxgl-popup-close-button {
+    margin: 10px !important;
+}
+
 
 /* .mapboxgl-ctrl-top-right {
     display: none;

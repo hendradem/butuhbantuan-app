@@ -69,6 +69,7 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
     const debouncedResult = useMemo(() => {
         return debounce((e: any) => searchUserLocation(e), 1000)
     }, [])
+
     const searchUserLocation = (e: any) => {
         setLocationAddressQuery(e.target.value)
     }
@@ -84,7 +85,6 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
         resetBottomSheet()
         setIsSearchBoxActive(false)
         onExitFullScreen()
-        // setLocationResult([])
     }
 
     const handleGetCurrentLocation = (e: any): void => {
