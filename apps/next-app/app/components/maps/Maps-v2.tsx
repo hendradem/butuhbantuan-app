@@ -12,6 +12,7 @@ import MainBottomMenu from '../bottommenu/MainBottomMenu'
 import { getDistanceMatrix, getDirectionsRoute } from '@/app/utils/mapboxMatrix'
 import Resultsheet from '../bottomsheet/Resultsheet'
 import useEmergencyData from '@/app/store/useEmergencyData'
+import services from '@/app/store/data/services.json'
 
 type MapsProps = {
     mapHeight: string
@@ -25,7 +26,13 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const updateEmergencyData = useEmergencyData(
         (action) => action.updateEmergencyData
     )
+    const updateSelectedEmergencyData = useEmergencyData(
+        (action) => action.updateSelectedEmergencyData
+    )
     const directionRoute = useMapBox((state) => state.directionRoute)
+    const updateDirectionRoute = useMapBox(
+        (action) => action.updateDirectionRoute
+    )
 
     const [mapContainerState, setMapContainerState] = useState<any>(null)
     const [userLatitudeAfterGeolocated, setUserLatitudeAfterGeolocated] =
@@ -39,6 +46,9 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const latitudeState = useUserLocationData((state) => state.lat)
     const [isGeolocating, setIsGeolocating] = useState<boolean>(false)
     const [currentMarker, setCurrentMarker] = useState<any>(null)
+
+    const [selectedEmergencyCoordinates, setSelectedEmergencyCoordinates] =
+        useState<[number, number]>([0, 0])
 
     const [locations, setLocations] = useState(emergencyData)
     // const [convertedLocations, setConvertedLocations] = useState<any>([])
@@ -62,19 +72,17 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         const resLongitude = addressInfo[0]?.center[0]
         const address = addressInfo[0]?.place_name
 
-        // updating global state
+        // updating state
         // updateCoordinate(resLatitude, resLongitude)
+        // setUserLongitudeAfterGeolocated(resLongitude)
+        // setUserLatitudeAfterGeolocated(resLatitude)
         updateFullAddress(address)
     }
 
     const mapTheMarker = (type: string) => {
-        const currentLocationMarker =
-            document.getElementsByClassName('ambulance-marker')
-
+        const emergencyMarker = document.querySelectorAll('.ambulance-marker')
         if (type === 'init') {
-            console.log('init the marker')
-
-            for (const marker of locations) {
+            locations.map((marker: any, markerIndex: number) => {
                 const el = document.createElement('div')
                 el.className = 'ambulance-marker'
 
@@ -90,26 +98,21 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                 label.style.marginTop = '-15px'
                 label.style.marginLeft = '30px'
                 label.style.boxShadow = '0 1px 2px 0 rgb(0 0 0 / 0.05)'
-
+                label.style.display = 'none'
                 el.appendChild(label)
 
                 const popupContent = `
-                <div class="rounded-lg p-3 bg-white shadow-sm text-neutral-900 emergency-popup">
-                    <div class="flex items-center space-x-2">
-                        <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 2a6 6 0 00-6 6c0 4.418 6 10 6 10s6-5.582 6-10a6 6 0 00-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z" clip-rule="evenodd" />
-                        </svg>
-                        <h3 class="font-semibold">MSW Warehouse</h3>
+                    <div class="rounded-lg p-3 bg-white shadow-sm text-neutral-900 emergency-popup">
+                        <div class="flex items-center space-x-2">
+                            <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 2a6 6 0 00-6 6c0 4.418 6 10 6 10s6-5.582 6-10a6 6 0 00-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z" clip-rule="evenodd" />
+                            </svg>
+                            <h3 class="font-semibold">MSW Warehouse</h3>
+                        </div>
+                        <p class="text-sm">741 Nicolette Freeway, Utah</p>
+                        <p class="text-xs mt-1">15:32 · GMT +7</p>
                     </div>
-                    <p class="text-sm">741 Nicolette Freeway, Utah</p>
-                    <p class="text-xs mt-1">15:32 · GMT +7</p>
-                </div>
-                `
-
-                // const popup = new mapboxgl.Popup({ offset: 0 }).setHTML(
-                //     popupContent
-                // )
-
+                    `
                 // Add markers to the map.
                 new mapboxgl.Marker(el)
                     .setLngLat([marker.coordinates[0], marker.coordinates[1]])
@@ -118,16 +121,40 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                     )
                     .addTo(mapContainer)
 
-                el.addEventListener('click', () => {
-                    console.log(marker)
+                el.addEventListener('click', async (e: any) => {
+                    e.stopPropagation()
+
+                    setSelectedEmergencyCoordinates([
+                        marker.coordinates[0],
+                        marker.coordinates[1],
+                    ])
+
+                    // update global emergency state to trigger action in another component
+                    updateSelectedEmergencyData({
+                        selectedEmergencyData: marker,
+                        selectedEmergencyType: services[0],
+                    })
+
+                    // get directions from marker location to user location
+                    const directions = await getDirectionsRoute(
+                        [marker.coordinates[0], marker.coordinates[1]], // origin coordinate (emergency location)
+                        [
+                            longitudeState
+                                ? longitudeState
+                                : userLongitudeAfterGeolocated,
+                            latitudeState
+                                ? latitudeState
+                                : userLatitudeAfterGeolocated,
+                        ] // user location coordinate
+                    )
+                    updateDirectionRoute(directions)
                 })
-            }
+            })
         } else {
             console.log('update the marker')
             const currentAmbulanceMarkerLabel =
                 document.getElementsByClassName('marker-label')
             for (let i = 0; i < currentAmbulanceMarkerLabel.length; i++) {
-                // console.log(locations[i].name)
                 currentAmbulanceMarkerLabel[i].innerHTML = '123'
                 // `<h3 className=''>${locations[i].name}</h3><p> ${locations[i].distance} km</p> - <p> ${locations[i].duration} min</p>`
             }
@@ -137,10 +164,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const updateMarkerInformation = (data: any) => {
         const currentAmbulanceMarkerLabel =
             document.querySelectorAll('.marker-label')
-
-        const popUp = document.querySelectorAll('.emergency-popup')
-
-        console.log(popUp)
 
         if (data) {
             if (currentAmbulanceMarkerLabel.length > locations.length) {
@@ -186,7 +209,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             .setLngLat([longitude, latitude])
             .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(popupContent))
             .addTo(mapContainer)
-
         setCurrentMarker(current)
         getMatrixOfLocations(longitude, latitude)
 
@@ -214,21 +236,10 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         )
     }
 
-    const removeCurrentDirectionLine = () => {
+    const drawDirectionLine = (route: any): void => {
         if (mapContainerState.getLayer('route')) {
             mapContainerState.removeLayer('route') // Remove the line layer
         }
-
-        if (mapContainerState.getSource('route')) {
-            mapContainerState.removeSource('route') // Remove the data source
-        }
-    }
-
-    const drawDirectionLine = (route: any) => {
-        if (mapContainerState.getLayer('route')) {
-            mapContainerState.removeLayer('route') // Remove the line layer
-        }
-
         if (mapContainerState.getSource('route')) {
             mapContainerState.removeSource('route') // Remove the data source
         }
@@ -260,6 +271,11 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                 'circle-color': '#f30',
             },
         })
+
+        // mapContainer.flyTo({
+        //     center: [route[0][0], route[0][1]],
+        //     essential: true, // this animation is considered essential with respect to prefers-reduced-motion
+        // })
     }
 
     const buildTheMap = (
@@ -318,6 +334,17 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         mapContainer.on('click', (e: any) => {
             const { lng, lat } = e.lngLat
             drawCurrentMarkerLocation(lng, lat)
+
+            // get directions from marker location to user location
+            const directions = getDirectionsRoute(
+                [
+                    selectedEmergencyCoordinates[0],
+                    selectedEmergencyCoordinates[1],
+                ], // origin coordinate (emergency location)
+                [longitudeState, latitudeState] // user location coordinate
+            )
+
+            updateDirectionRoute(directions)
         })
     }
 
@@ -374,7 +401,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         <>
             <div
                 className="w-full"
-                style={{ height: mapHeight }}
+                style={{ height: 550 }}
                 ref={(el) => (mapWrapper.current = el)}
             ></div>
             <div>
