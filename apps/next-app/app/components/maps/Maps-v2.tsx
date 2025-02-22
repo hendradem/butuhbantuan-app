@@ -1,14 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
-import { getCurrentLocation } from '@/app/utils/getCurrentLocation'
 import config from '@/app/config'
 import toast from 'react-hot-toast'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
+import { getCurrentLocation } from '@/app/utils/getCurrentLocation'
 import { useAddressInformation } from '@/app/store/api/location.api'
+import useMapBox from '@/app/store/useMapBox'
 import useUserLocationData from '@/app/store/useUserLocationData'
 import MainBottomMenu from '../bottommenu/MainBottomMenu'
-import { getDistanceMatrix } from '@/app/utils/mapboxMatrix'
+import { getDistanceMatrix, getDirectionsRoute } from '@/app/utils/mapboxMatrix'
 import Resultsheet from '../bottomsheet/Resultsheet'
 import useEmergencyData from '@/app/store/useEmergencyData'
 
@@ -19,12 +20,14 @@ type MapsProps = {
 
 const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     let mapContainer: any
+    const mapWrapper = useRef<any>()
     const emergencyData = useEmergencyData((state) => state.emergencyData)
     const updateEmergencyData = useEmergencyData(
         (action) => action.updateEmergencyData
     )
+    const directionRoute = useMapBox((state) => state.directionRoute)
+
     const [mapContainerState, setMapContainerState] = useState<any>(null)
-    const mapWrapper = useRef<any>()
     const [userLatitudeAfterGeolocated, setUserLatitudeAfterGeolocated] =
         useState<number>(0)
     const [userLongitudeAfterGeolocated, setUserLongitudeAfterGeolocated] =
@@ -34,7 +37,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     )
     const longitudeState = useUserLocationData((state) => state.long)
     const latitudeState = useUserLocationData((state) => state.lat)
-
     const [isGeolocating, setIsGeolocating] = useState<boolean>(false)
     const [currentMarker, setCurrentMarker] = useState<any>(null)
 
@@ -61,7 +63,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         const address = addressInfo[0]?.place_name
 
         // updating global state
-        updateCoordinate(resLatitude, resLongitude)
+        // updateCoordinate(resLatitude, resLongitude)
         updateFullAddress(address)
     }
 
@@ -91,29 +93,39 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
                 el.appendChild(label)
 
-                el.addEventListener('click', () => {
-                    window.alert(marker.address)
-                })
+                const popupContent = `
+                <div class="rounded-lg p-3 bg-white shadow-sm text-neutral-900 emergency-popup">
+                    <div class="flex items-center space-x-2">
+                        <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 2a6 6 0 00-6 6c0 4.418 6 10 6 10s6-5.582 6-10a6 6 0 00-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z" clip-rule="evenodd" />
+                        </svg>
+                        <h3 class="font-semibold">MSW Warehouse</h3>
+                    </div>
+                    <p class="text-sm">741 Nicolette Freeway, Utah</p>
+                    <p class="text-xs mt-1">15:32 · GMT +7</p>
+                </div>
+                `
+
+                // const popup = new mapboxgl.Popup({ offset: 0 }).setHTML(
+                //     popupContent
+                // )
 
                 // Add markers to the map.
                 new mapboxgl.Marker(el)
                     .setLngLat([marker.coordinates[0], marker.coordinates[1]])
-                    .setPopup()
+                    .setPopup(
+                        new mapboxgl.Popup({ offset: 25 }).setHTML(popupContent)
+                    )
                     .addTo(mapContainer)
+
+                el.addEventListener('click', () => {
+                    console.log(marker)
+                })
             }
         } else {
             console.log('update the marker')
-            // const currentAmbulanceMarkerLabel =
-            //     document.getElementsByClassName('marker-label')
-            // for (let i = 0; i < currentAmbulanceMarkerLabel.length; i++) {
-            //     currentAmbulanceMarkerLabel[i].innerHTML =
-            //         `<h3 className=''>${locations[i].name}</h3><p> ${locations[i].distance} km</p> - <p> ${locations[i].duration} min</p>`
-            // }
             const currentAmbulanceMarkerLabel =
                 document.getElementsByClassName('marker-label')
-            // if (currentAmbulanceMarkerLabel.length > 0) {
-            //     currentAmbulanceMarkerLabel[0].remove()
-            // }
             for (let i = 0; i < currentAmbulanceMarkerLabel.length; i++) {
                 // console.log(locations[i].name)
                 currentAmbulanceMarkerLabel[i].innerHTML = '123'
@@ -125,6 +137,10 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const updateMarkerInformation = (data: any) => {
         const currentAmbulanceMarkerLabel =
             document.querySelectorAll('.marker-label')
+
+        const popUp = document.querySelectorAll('.emergency-popup')
+
+        console.log(popUp)
 
         if (data) {
             if (currentAmbulanceMarkerLabel.length > locations.length) {
@@ -139,6 +155,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     }
 
     const drawCurrentMarkerLocation = (longitude: number, latitude: number) => {
+        updateCoordinate(latitude, longitude)
+
         mapContainer = mapContainer ? mapContainer : mapContainerState
 
         const userLocationMarker = document.getElementsByClassName('marker')
@@ -149,16 +167,24 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             userLocationMarker[0].remove()
         }
 
-        // setUserLatitudeAfterGeolocated(latitude)
-        // setUserLongitudeAfterGeolocated(longitude)
+        const popupContent = `
+            <div class="p-3">
+                <div class="flex items-center space-x-2">
+                    <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 2a6 6 0 00-6 6c0 4.418 6 10 6 10s6-5.582 6-10a6 6 0 00-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z" clip-rule="evenodd" />
+                    </svg>
+                    <h3 class="text-white font-semibold">MSW Warehouse</h3>
+                </div>
+                <p class="text-gray-300 text-sm">741 Nicolette Freeway, Utah</p>
+                <p class="text-gray-400 text-xs mt-1">15:32 · GMT +7</p>
+            </div>
+        `
+
+        // const popup = new mapboxgl.Popup({ offset: 15 }).setHTML(popupContent)
 
         let current = new mapboxgl.Marker(el)
             .setLngLat([longitude, latitude])
-            .setPopup(
-                new mapboxgl.Popup({ offset: 25 }).setHTML(
-                    `<h3>Pop Up Title</h3><p>Pop Up Content</p>`
-                )
-            )
+            .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(popupContent))
             .addTo(mapContainer)
 
         setCurrentMarker(current)
@@ -186,6 +212,54 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                 updateEmergencyData(res)
             }
         )
+    }
+
+    const removeCurrentDirectionLine = () => {
+        if (mapContainerState.getLayer('route')) {
+            mapContainerState.removeLayer('route') // Remove the line layer
+        }
+
+        if (mapContainerState.getSource('route')) {
+            mapContainerState.removeSource('route') // Remove the data source
+        }
+    }
+
+    const drawDirectionLine = (route: any) => {
+        if (mapContainerState.getLayer('route')) {
+            mapContainerState.removeLayer('route') // Remove the line layer
+        }
+
+        if (mapContainerState.getSource('route')) {
+            mapContainerState.removeSource('route') // Remove the data source
+        }
+
+        const geojson = {
+            type: 'Feature',
+            properties: {},
+            geometry: {
+                type: 'LineString',
+                coordinates: route,
+            },
+        }
+
+        mapContainerState.addLayer({
+            id: 'route',
+            type: 'line',
+            source: {
+                type: 'geojson',
+                data: geojson,
+            },
+            layout: {
+                'line-join': 'round',
+                'line-cap': 'round',
+            },
+            paint: {
+                'line-color': '#3b82f6',
+                'line-width': 5,
+                'circle-radius': 10,
+                'circle-color': '#f30',
+            },
+        })
     }
 
     const buildTheMap = (
@@ -218,6 +292,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                     coordinates?.long ?? 0,
                     coordinates?.lat ?? 0
                 )
+
                 mapTheMarker('update')
             } else {
                 console.log('init')
@@ -261,6 +336,13 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     }, [userLatitudeAfterGeolocated, userLongitudeAfterGeolocated])
 
     useEffect(() => {
+        console.log(directionRoute)
+        if (directionRoute.length > 0) {
+            drawDirectionLine(directionRoute)
+        }
+    }, [directionRoute])
+
+    useEffect(() => {
         if (isGeolocating) {
             toast.loading('Getting your location', {
                 style: {
@@ -297,13 +379,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             ></div>
             <div>
                 <MainBottomMenu rebuildMap={buildTheMap} />
-                <Resultsheet
-                    emergencyType={{
-                        name: 'asdas',
-                        icon: 'test',
-                        color: 'red',
-                    }}
-                />
+                <Resultsheet />
             </div>
         </>
     )

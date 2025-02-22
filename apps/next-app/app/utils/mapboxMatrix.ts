@@ -1,10 +1,26 @@
 import config from '../config'
+import { fetcher } from '../libs/fetcher'
 
 export interface Location {
     id: string
     name: string
     coordinates: [number, number]
     address?: string
+}
+
+export const getDirectionsRoute = async (
+    origin: [number, number],
+    destination: [number, number]
+) => {
+    const url = `${config.MAPBOX_URL}/directions/v5/mapbox/driving/${origin[0]},${origin[1]};${destination[0]},${destination[1]}?geometries=geojson&access_token=${config.MAPBOX_API_KEY}`
+
+    try {
+        const data = await fetcher(url)
+        return data.routes[0].geometry.coordinates
+    } catch (error) {
+        console.error('Error fetching route path:', error)
+        throw error
+    }
 }
 
 export const getDistanceMatrix = async (
@@ -21,8 +37,7 @@ export const getDistanceMatrix = async (
     const url = `${config.MAPBOX_URL}/directions-matrix/v1/mapbox/driving/${coordinates}?access_token=${config.MAPBOX_API_KEY}&annotations=distance,duration`
 
     try {
-        const response = await fetch(url)
-        const data = await response.json()
+        const data = await fetcher(url)
 
         if (data.code !== 'Ok') {
             throw new Error('Failed to get distance matrix')

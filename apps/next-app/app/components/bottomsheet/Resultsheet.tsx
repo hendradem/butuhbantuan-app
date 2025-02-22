@@ -1,54 +1,89 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { ReactHTMLElement, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import Icon from '../ui/Icon'
 import { BottomSheet, BottomSheetRef } from 'react-spring-bottom-sheet'
 import useResultSheet from '@/app/store/useResultSheet'
 import useEmergencyData from '@/app/store/useEmergencyData'
+import { getDirectionsRoute } from '@/app/utils/mapboxMatrix'
+import useMapBox from '@/app/store/useMapBox'
+import useUserLocationData from '@/app/store/useUserLocationData'
+import useMainBottomSheet from '@/app/store/useMainBottomSheet'
 import { HiCheckBadge, HiClock, HiMapPin, HiMiniPhone } from 'react-icons/hi2'
 import { RiMessage3Line } from 'react-icons/ri'
 
-type ResultSheetPropsType = {
-    emergencyType: {
-        name: string
-        icon: string
-        color: string
-    }
-}
-
-const Resultsheet: React.FC<ResultSheetPropsType> = ({ emergencyType }) => {
+const Resultsheet = () => {
     const resultSheet = useResultSheet()
+    const mainBottomSheet = useMainBottomSheet()
     const selectedEmergencyData = useEmergencyData(
         (state) => state.selectedEmergencyData
     )
+    const updateDirectionRoute = useMapBox(
+        (action) => action.updateDirectionRoute
+    )
     const sheetRef = React.useRef<BottomSheetRef>(null)
     const emergencyData = useEmergencyData((state) => state.emergencyData)
+    const userLocationLatitude = useUserLocationData((state) => state.lat)
+    const userLocationLongitude = useUserLocationData((state) => state.long)
     const [selectedEmergency, setSelectedEmergency] = useState<string>('')
+    const [orderedEmergencyData, setOrderedEmergencyData] = useState<[]>([])
 
-    const handleSelectedEmergency = (name: string) => {
-        setSelectedEmergency(name)
+    const handleSelectedEmergency = async (emergency: any) => {
+        setSelectedEmergency(emergency.name)
+
+        const directions = await getDirectionsRoute(
+            [emergency.coordinates[0], emergency.coordinates[1]], // origin coordinate (emergency location)
+            [userLocationLongitude, userLocationLatitude] // user location coordinate
+        )
+
+        updateDirectionRoute(directions)
     }
 
     const orderByDuration = (): void => {
-        return emergencyData?.sort(
+        setSelectedEmergency('')
+        const orderedData = emergencyData?.sort(
             (a: any, b: any) => a?.matrix?.duration - b?.matrix?.duration
+        )
+
+        setOrderedEmergencyData(orderedData)
+    }
+
+    const parseResponseTime = (duration: number): JSX.Element => {
+        const maxResponseTime: number = 25
+
+        return (
+            <>
+                {duration <= maxResponseTime ? (
+                    <div className="flex items-center">
+                        <HiClock className="mr-1" />
+                        <span> {Math.floor(+duration)} </span>
+                        <span className="ml-1">menit</span>
+                    </div>
+                ) : (
+                    <span>Di luar jangkauan</span>
+                )}
+            </>
         )
     }
 
-    const colorByDuration = (duration: number): string => {
-        if (duration <= 10) {
-            return 'blue-500'
-        } else if (duration > 10 && duration <= 15) {
-            return 'orange-500'
-        } else if (duration > 10 && duration <= 20) {
-            return 'red-500'
+    const badgeClassesByDuration = (duration: number): string => {
+        if (duration <= 15) {
+            return 'bg-green-100 text-green-800'
+        } else if (duration >= 15 && duration <= 20) {
+            return 'bg-orange-100 text-orange-800'
+        } else if (duration > 20 && duration <= 25) {
+            return 'bg-red-100 text-red-800'
         } else {
-            return 'red-500'
+            return 'bg-black text-white'
         }
+    }
+
+    const handleChangeLocationOnClick = (): void => {
+        console.log('clicked')
+        mainBottomSheet.onFullScreen()
     }
 
     useEffect(() => {
         orderByDuration()
-        console.log('any updates')
     }, [emergencyData])
 
     return (
@@ -78,7 +113,15 @@ const Resultsheet: React.FC<ResultSheetPropsType> = ({ emergencyType }) => {
                                     {selectedEmergencyData?.name}
                                 </h1>
                                 <p className="m-0 text-[14px] text-neutral-500">
-                                    {emergencyData?.length} hasil ditemukan
+                                    {emergencyData?.length} hasil ditemukan.
+                                    <span
+                                        className="text-blue-500 ml-1 font-medium cursor-pointer"
+                                        onClick={() =>
+                                            handleChangeLocationOnClick()
+                                        }
+                                    >
+                                        Ganti lokasi
+                                    </span>
                                 </p>
                             </div>
                         </div>
@@ -93,10 +136,10 @@ const Resultsheet: React.FC<ResultSheetPropsType> = ({ emergencyType }) => {
                             />
                         </button>
                     </div>
-                    <div className="service-menu my-2">
+                    <div className="search-result-wrapper max-h-[300px] overflow-y-scroll">
                         <div className="mt-5">
-                            {emergencyData &&
-                                emergencyData?.map(
+                            {orderedEmergencyData &&
+                                orderedEmergencyData?.map(
                                     (
                                         emergency: any,
                                         emergencyIndex: number
@@ -104,10 +147,10 @@ const Resultsheet: React.FC<ResultSheetPropsType> = ({ emergencyType }) => {
                                         return (
                                             <ul
                                                 key={emergency.id}
-                                                className={`list-wrapper cursor-pointer border-neutral-100 ${emergencyIndex == 0 ? 'border-t' : 'border-b'} `}
+                                                className={`list-wrapper py-2 cursor-pointer border-neutral-100 ${emergencyIndex == 0 ? 'border-t border-b' : 'border-b'} `}
                                                 onClick={() => {
                                                     handleSelectedEmergency(
-                                                        emergency.name
+                                                        emergency
                                                     )
                                                 }}
                                             >
@@ -142,23 +185,13 @@ const Resultsheet: React.FC<ResultSheetPropsType> = ({ emergencyType }) => {
                                                         <div className="space-x-1">
                                                             <div>
                                                                 <span
-                                                                    className={` badge mb-1 text-[10px] badge-icon bg-neutral-50 border-0 shadow-none text-${colorByDuration(emergency?.matrix?.duration)}`}
+                                                                    className={` badge text-[10px] badge-icon border-0 shadow-none ${badgeClassesByDuration(emergency?.matrix?.duration)}`}
                                                                 >
-                                                                    <HiClock className="mr-1" />
-                                                                    {
+                                                                    {parseResponseTime(
                                                                         emergency
                                                                             ?.matrix
                                                                             ?.duration
-                                                                    }
-                                                                    <span className="ml-1">
-                                                                        min
-                                                                    </span>
-                                                                </span>
-                                                                <span className="badge text-[10px] badge-icon bg-neutral-50 text-neutral-600 border-0 shadow-none">
-                                                                    <HiMapPin className="mr-1" />
-                                                                    {
-                                                                        emergency?.type
-                                                                    }
+                                                                    )}
                                                                 </span>
                                                             </div>
                                                         </div>
