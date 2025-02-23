@@ -8,7 +8,10 @@ const SAMPLE_LOCATIONS: any[] = [
         organization: 'Dinkes Kab. Sleman',
         logo: 'https://res.cloudinary.com/djzrlqubf/image/upload/v1705743489/butuhbantuan/p6ldfcxxrjmxvnwjwkin.jpg',
         coordinates: [110.3539, -7.7186],
-        address: 'Sleman',
+        address: {
+            fullAddress: 'Tridadi, Kec. Sleman, Kabupaten Sleman',
+            regency: 'Sleman',
+        },
         contact: {
             whatsapp: '087808885333',
             telp: '02748609000',
@@ -21,7 +24,10 @@ const SAMPLE_LOCATIONS: any[] = [
         organization: 'Palang Merah Indonesia',
         logo: 'https://res.cloudinary.com/djzrlqubf/image/upload/v1705744061/butuhbantuan/xteksibif5uschl27nbe.png',
         coordinates: [110.345, -7.7063],
-        address: 'Sleman',
+        address: {
+            fullAddress: 'Tridadi, Kec. Sleman, Kabupaten Sleman',
+            regency: 'Sleman',
+        },
         contact: {
             whatsapp: '087808885333',
             telp: '0274868900',
@@ -34,7 +40,10 @@ const SAMPLE_LOCATIONS: any[] = [
         organization: 'Rumah Sakit Akademik UGM',
         logo: 'https://res.cloudinary.com/djzrlqubf/image/upload/v1705744168/butuhbantuan/uvthle5jxewt0hrt9gtg.webp',
         coordinates: [110.3479, -7.7437],
-        address: 'Sleman',
+        address: {
+            fullAddress: 'Tridadi, Kec. Sleman, Kabupaten Sleman',
+            regency: 'Sleman',
+        },
         contact: {
             whatsapp: '087808885333',
             telp: '0274868900',
@@ -47,7 +56,10 @@ const SAMPLE_LOCATIONS: any[] = [
         organization: 'Yayasan MPD Peduli',
         logo: 'https://res.cloudinary.com/djzrlqubf/image/upload/v1705744433/butuhbantuan/iicqfihmm4uocius8cbe.png',
         coordinates: [110.3741967, -7.7607825],
-        address: 'Pogung Dalangan, Sinduadi',
+        address: {
+            fullAddress: 'Pogung, Kec. Sleman, Kabupaten Sleman',
+            regency: 'Sleman',
+        },
         contact: {
             whatsapp: '087808885333',
             telp: null,
@@ -55,9 +67,14 @@ const SAMPLE_LOCATIONS: any[] = [
     },
 ]
 
+type selectedEmergencyDataType = {
+    selectedEmergencyData?: any
+    selectedEmergencyType?: any
+}
+
 type State = {
     emergencyData: any
-    selectedEmergencyData: any
+    selectedEmergencyData: selectedEmergencyDataType
 }
 
 type Action = {
