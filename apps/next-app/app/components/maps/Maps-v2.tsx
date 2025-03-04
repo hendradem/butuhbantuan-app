@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import config from '@/app/config'
 import toast from 'react-hot-toast'
@@ -46,11 +46,14 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const latitudeState = useUserLocationData((state) => state.lat)
     const [isGeolocating, setIsGeolocating] = useState<boolean>(false)
     const [currentMarker, setCurrentMarker] = useState<any>(null)
+    const [currentRegency, setCurrentRegency] = useState<any>('')
 
     const [selectedEmergencyCoordinates, setSelectedEmergencyCoordinates] =
         useState<[number, number]>([0, 0])
 
     const [locations, setLocations] = useState(emergencyData)
+    const [filteredLocations, setFilteredLocations] = useState(null)
+
     // const [convertedLocations, setConvertedLocations] = useState<any>([])
 
     // global state
@@ -71,12 +74,31 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         const resLatitude = addressInfo[0]?.center[1]
         const resLongitude = addressInfo[0]?.center[0]
         const address = addressInfo[0]?.place_name
+        const regency = addressInfo[2]?.text
 
         // updating state
         // updateCoordinate(resLatitude, resLongitude)
         // setUserLongitudeAfterGeolocated(resLongitude)
         // setUserLatitudeAfterGeolocated(resLatitude)
         updateFullAddress(address)
+    }
+
+    const filteredEmergencyDataByLocation = useMemo(() => {
+        locations.filter(
+            (location: any) => parseInt(location.responseTime.duration) <= 25
+        )
+    }, [])
+
+    const filterEmergencyDataByLocation = (regency?: string) => {
+        const filtered = locations.filter(
+            (location: any) =>
+                parseInt(location.responseTime.duration) <= 25 &&
+                location.address.regency === regency
+        )
+
+        // setFilteredLocations(filtered)
+        console.log(filtered)
+        console.log(locations)
     }
 
     const mapTheMarker = (type: string) => {
@@ -123,6 +145,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
                 el.addEventListener('click', async (e: any) => {
                     e.stopPropagation()
+
+                    filterEmergencyDataByLocation()
 
                     setSelectedEmergencyCoordinates([
                         marker.coordinates[0],
@@ -221,7 +245,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const getMatrixOfLocations = (longitude: number, latitude: number) => {
         getDistanceMatrix([longitude ?? 0, latitude ?? 0], locations).then(
             (res) => {
-                const transformedLocations = res.map((location) => {
+                const transformedLocations = res.map((location: any) => {
                     return {
                         id: location?.id,
                         name: location?.name,
@@ -230,6 +254,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                         duration: location.matrix.duration,
                     }
                 })
+
                 updateMarkerInformation(transformedLocations)
                 updateEmergencyData(res)
             }
@@ -345,11 +370,13 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             )
 
             updateDirectionRoute(directions)
+            refetchAddressInfo()
         })
     }
 
     useEffect(() => {
         buildTheMap('init')
+        filterEmergencyDataByLocation()
     }, [])
 
     useEffect(() => {
@@ -401,7 +428,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         <>
             <div
                 className="w-full"
-                style={{ height: 550 }}
+                style={{ height: '100vh' }}
                 ref={(el) => (mapWrapper.current = el)}
             ></div>
             <div>

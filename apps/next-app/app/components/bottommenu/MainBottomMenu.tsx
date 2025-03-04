@@ -10,6 +10,7 @@ import { getDirectionsRoute } from '@/app/utils/mapboxMatrix'
 import useMapBox from '@/app/store/useMapBox'
 import useUserLocationData from '@/app/store/useUserLocationData'
 import { HiClock } from 'react-icons/hi2'
+import { convertPhoneNumber } from '@/app/utils/covertPhoneNumber'
 
 type MapsPropsType = {
     rebuildMap: (arg1: any, arg2: any) => void
@@ -64,10 +65,10 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
 
     // details
     const handleSelectedEmergency = async (emergency: any) => {
-        setSelectedEmergencyName(emergency.name)
+        setSelectedEmergencyName(emergency?.name)
 
         const directions = await getDirectionsRoute(
-            [emergency.coordinates[0], emergency.coordinates[1]], // origin coordinate (emergency location)
+            [emergency?.coordinates[0], emergency?.coordinates[1]], // origin coordinate (emergency location)
             [userLocationLongitude, userLocationLatitude] // user location coordinate
         )
         updateDirectionRoute(directions)
@@ -109,6 +110,20 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
             return 'bg-red-100 text-red-800'
         } else {
             return 'bg-black text-white'
+        }
+    }
+
+    const onContactClick = (type: string, contactNumber: any, e: any): void => {
+        e.stopPropagation() // Prevent the event from propagating to the parent element
+        const convertedPhoneNumber = convertPhoneNumber(contactNumber)
+
+        switch (type) {
+            case 'whatsapp':
+                window.open(`https://wa.me/${convertedPhoneNumber}`, '_blank')
+                break
+            case 'phone':
+                window.open(`tel:${contactNumber}`, '_blank')
+                break
         }
     }
 
@@ -294,6 +309,17 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                                                         <div className="card-footer">
                                                                             <div className="flex gap-2 mt-3">
                                                                                 <button
+                                                                                    onClick={(
+                                                                                        e
+                                                                                    ) => {
+                                                                                        onContactClick(
+                                                                                            'phone',
+                                                                                            emergency
+                                                                                                .contact
+                                                                                                .phone,
+                                                                                            e
+                                                                                        )
+                                                                                    }}
                                                                                     disabled={
                                                                                         emergency
                                                                                             ?.contact
@@ -308,7 +334,20 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                                                                     />
                                                                                     Telephone
                                                                                 </button>
-                                                                                <button className="flex text-[15px] w-full p-2 items-center justify-center border border-gray-100 text-neutral-600 font-medium rounded-lg shadow-sm hover:bg-gray-50 transition">
+                                                                                <button
+                                                                                    onClick={(
+                                                                                        e
+                                                                                    ) => {
+                                                                                        onContactClick(
+                                                                                            'whatsapp',
+                                                                                            emergency
+                                                                                                .contact
+                                                                                                .whatsapp,
+                                                                                            e
+                                                                                        )
+                                                                                    }}
+                                                                                    className="flex text-[15px] w-full p-2 items-center justify-center border border-gray-100 text-neutral-600 font-medium rounded-lg shadow-sm hover:bg-gray-50 transition"
+                                                                                >
                                                                                     <Icon
                                                                                         name="mingcute:chat-1-fill"
                                                                                         className="w-5 h-5 mr-2"

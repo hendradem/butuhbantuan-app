@@ -26,7 +26,7 @@ export const getDirectionsRoute = async (
 export const getDistanceMatrix = async (
     origin: [number, number],
     destinations: any[]
-) => {
+): Promise<any> => {
     const coordinates = [
         origin,
         ...destinations.map((dest) => dest.coordinates),
@@ -46,6 +46,16 @@ export const getDistanceMatrix = async (
         // First row contains durations from origin to all destinations
         const durations = data.durations[0].slice(1) // Skip first element (distance to self)
         const distances = data.distances[0].slice(1)
+
+        destinations.forEach((location, index) => {
+            destinations[index].responseTime.duration = formatTheTime(
+                durations[index]
+            )
+
+            destinations[index].responseTime.distance = formatDistance(
+                distances[index]
+            )
+        })
 
         return destinations.map((location, index) => ({
             ...location,
