@@ -14,7 +14,7 @@ import { RiMessage3Line } from 'react-icons/ri'
 const Resultsheet = () => {
     const resultSheet = useResultSheet()
     const mainBottomSheet = useMainBottomSheet()
-    const selectedEmergencyData = useEmergencyData(
+    const selectedEmergencyData: any = useEmergencyData(
         (state) => state.selectedEmergencyData
     )
     const updateDirectionRoute = useMapBox(
@@ -78,7 +78,6 @@ const Resultsheet = () => {
     }
 
     const handleChangeLocationOnClick = (): void => {
-        console.log('clicked')
         mainBottomSheet.onFullScreen()
     }
 
@@ -101,7 +100,7 @@ const Resultsheet = () => {
                     <div className="sheet-header border-b p-2 px-3 border-neutral-200 flex justify-between">
                         <div className="flex gap-2 items-center">
                             <div
-                                className={`flex items-center justify-center w-10 h-10 rounded-full bg-${selectedEmergencyData.colorSecondary} `}
+                                className={`flex items-center justify-center w-10 h-10 rounded-full bg-${selectedEmergencyData?.colorSecondary} `}
                             >
                                 <Icon
                                     name={selectedEmergencyData?.icon}

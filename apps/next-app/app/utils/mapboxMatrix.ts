@@ -38,7 +38,6 @@ export const getDistanceMatrix = async (
 
     try {
         const data = await fetcher(url)
-
         if (data.code !== 'Ok') {
             throw new Error('Failed to get distance matrix')
         }
@@ -48,22 +47,25 @@ export const getDistanceMatrix = async (
         const distances = data.distances[0].slice(1)
 
         destinations.forEach((location, index) => {
-            destinations[index].responseTime.duration = formatTheTime(
-                durations[index]
-            )
-
-            destinations[index].responseTime.distance = formatDistance(
-                distances[index]
-            )
-        })
-
-        return destinations.map((location, index) => ({
-            ...location,
-            matrix: {
+            location.responseTime = {
                 duration: formatTheTime(durations[index]),
                 distance: formatDistance(distances[index]),
-            },
-        }))
+            }
+        })
+
+        return destinations
+            .filter(
+                ({ responseTime }) =>
+                    Math.floor(parseInt(responseTime.duration)) <= 30
+            )
+            .sort((a, b) => a.responseTime.duration - b.responseTime.duration)
+            .map((location, index) => ({
+                ...location,
+                matrix: {
+                    duration: formatTheTime(durations[index]),
+                    distance: formatDistance(distances[index]),
+                },
+            })) 
     } catch (error) {
         console.error('Error fetching distance matrix:', error)
         throw error

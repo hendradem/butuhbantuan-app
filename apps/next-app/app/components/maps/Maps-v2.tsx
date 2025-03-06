@@ -5,7 +5,10 @@ import toast from 'react-hot-toast'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
 import { getCurrentLocation } from '@/app/utils/getCurrentLocation'
-import { useAddressInformation } from '@/app/store/api/location.api'
+import {
+    getAddressInfo,
+    useAddressInformation,
+} from '@/app/store/api/location.api'
 import useMapBox from '@/app/store/useMapBox'
 import useUserLocationData from '@/app/store/useUserLocationData'
 import MainBottomMenu from '../bottommenu/MainBottomMenu'
@@ -52,7 +55,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         useState<[number, number]>([0, 0])
 
     const [locations, setLocations] = useState(emergencyData)
-    const [filteredLocations, setFilteredLocations] = useState(null)
+    const [filteredLocations, setFilteredLocations] = useState<[]>([])
 
     // const [convertedLocations, setConvertedLocations] = useState<any>([])
 
@@ -70,41 +73,26 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             userLatitudeAfterGeolocated ? userLatitudeAfterGeolocated : 0
         )
 
-    if (addressInfo) {
-        const resLatitude = addressInfo[0]?.center[1]
-        const resLongitude = addressInfo[0]?.center[0]
-        const address = addressInfo[0]?.place_name
-        const regency = addressInfo[2]?.text
+    // const filterEmergencyDataByLocation = (regency: string) => {
+    //     if (regency) {
+    //         setFilteredLocations([])
 
-        // updating state
-        // updateCoordinate(resLatitude, resLongitude)
-        // setUserLongitudeAfterGeolocated(resLongitude)
-        // setUserLatitudeAfterGeolocated(resLatitude)
-        updateFullAddress(address)
-    }
+    //         var filteredLocations = locations.filter((location: any) => {
+    //             return (
+    //                 Math.floor(parseInt(location.responseTime.duration)) <= 22
+    //             )
+    //         })
+    //         setFilteredLocations(filteredLocations)
+    //     }
+    // }
+    const mapTheMarker = (): void => {
+        if (filteredLocations.length > 0) {
+            // Clear existing markers if needed
+            document
+                .querySelectorAll('.ambulance-marker')
+                .forEach((marker) => marker.remove())
 
-    const filteredEmergencyDataByLocation = useMemo(() => {
-        locations.filter(
-            (location: any) => parseInt(location.responseTime.duration) <= 25
-        )
-    }, [])
-
-    const filterEmergencyDataByLocation = (regency?: string) => {
-        const filtered = locations.filter(
-            (location: any) =>
-                parseInt(location.responseTime.duration) <= 25 &&
-                location.address.regency === regency
-        )
-
-        // setFilteredLocations(filtered)
-        console.log(filtered)
-        console.log(locations)
-    }
-
-    const mapTheMarker = (type: string) => {
-        const emergencyMarker = document.querySelectorAll('.ambulance-marker')
-        if (type === 'init') {
-            locations.map((marker: any, markerIndex: number) => {
+            filteredLocations.map((marker: any, markerIndex: number) => {
                 const el = document.createElement('div')
                 el.className = 'ambulance-marker'
 
@@ -141,12 +129,10 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                     .setPopup(
                         new mapboxgl.Popup({ offset: 25 }).setHTML(popupContent)
                     )
-                    .addTo(mapContainer)
+                    .addTo(mapContainer ? mapContainer : mapContainerState)
 
                 el.addEventListener('click', async (e: any) => {
                     e.stopPropagation()
-
-                    filterEmergencyDataByLocation()
 
                     setSelectedEmergencyCoordinates([
                         marker.coordinates[0],
@@ -175,13 +161,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                 })
             })
         } else {
-            console.log('update the marker')
-            const currentAmbulanceMarkerLabel =
-                document.getElementsByClassName('marker-label')
-            for (let i = 0; i < currentAmbulanceMarkerLabel.length; i++) {
-                currentAmbulanceMarkerLabel[i].innerHTML = '123'
-                // `<h3 className=''>${locations[i].name}</h3><p> ${locations[i].distance} km</p> - <p> ${locations[i].duration} min</p>`
-            }
+            console.log('no location found')
         }
     }
 
@@ -257,6 +237,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
                 updateMarkerInformation(transformedLocations)
                 updateEmergencyData(res)
+                setFilteredLocations(res)
             }
         )
     }
@@ -333,8 +314,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                     coordinates?.long ?? 0,
                     coordinates?.lat ?? 0
                 )
-
-                mapTheMarker('update')
             } else {
                 console.log('init')
                 setIsGeolocating(true)
@@ -350,7 +329,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                         setUserLongitudeAfterGeolocated(userLongitude)
                         drawCurrentMarkerLocation(userLongitude, userLatitude)
                         getMatrixOfLocations(userLongitude, userLatitude)
-                        mapTheMarker('init')
                     }
                 })
             }
@@ -359,6 +337,22 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         mapContainer.on('click', (e: any) => {
             const { lng, lat } = e.lngLat
             drawCurrentMarkerLocation(lng, lat)
+
+            // get address info to update address and filter emergency data
+            getAddressInfo(lng, lat).then((res) => {
+                const regency = res[3]?.text
+                const address = res[0]?.place_name
+                setCurrentRegency(regency)
+                updateFullAddress(address)
+
+                // filterEmergencyDataByLocation(regency)
+            })
+
+            // remove existing route layer
+            mapContainerState.removeLayer('route') // Remove the line layer
+            mapContainer.removeLayer('route') // Remove the line layer
+            mapContainerState.removeSource('route') // Remove the data source
+            mapContainer.removeSource('route') // Remove the data source
 
             // get directions from marker location to user location
             const directions = getDirectionsRoute(
@@ -375,8 +369,23 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     }
 
     useEffect(() => {
-        buildTheMap('init')
-        filterEmergencyDataByLocation()
+        if (addressInfo) {
+            const regency = addressInfo[3]?.text
+            const address = addressInfo[0]?.place_name
+            setCurrentRegency(regency)
+            updateFullAddress(address)
+
+            // filterEmergencyDataByLocation(regency)
+        }
+    }, [addressInfo])
+
+    useEffect(() => {
+        mapTheMarker()
+        console.log(filteredLocations)
+    }, [filteredLocations])
+
+    useEffect(() => {
+        buildTheMap()
     }, [])
 
     useEffect(() => {
@@ -390,7 +399,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     }, [userLatitudeAfterGeolocated, userLongitudeAfterGeolocated])
 
     useEffect(() => {
-        console.log(directionRoute)
         if (directionRoute.length > 0) {
             drawDirectionLine(directionRoute)
         }

@@ -1,3 +1,4 @@
+import useSwr from 'swr'
 import { useQuery } from '@tanstack/react-query'
 import { fetcher } from '@/app/libs/fetcher'
 import config from '@/app/config'
@@ -44,5 +45,15 @@ export const useAddressInformation = (
         {
             enabled: false,
         }
+    )
+}
+
+export const useAddressInformationWithSwr = (
+    longitude: number | string,
+    latitude: number | string
+) => {
+    return useSwr(
+        `${config.MAPBOX_URL}/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${config.MAPBOX_API_KEY}`,
+        fetcher
     )
 }

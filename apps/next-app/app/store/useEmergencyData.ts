@@ -166,7 +166,7 @@ const SAMPLE_LOCATIONS: any[] = [
         },
     },
     {
-        id: '8',
+        id: '9',
         name: 'PMI Kota Yogyakarta',
         type: ['Emergency', 'Transport'],
         organization: 'Palang Merah Indonesia',
