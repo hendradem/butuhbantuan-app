@@ -161,6 +161,9 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                 })
             })
         } else {
+            document
+                .querySelectorAll('.ambulance-marker')
+                .forEach((marker) => marker.remove())
             console.log('no location found')
         }
     }
@@ -230,14 +233,16 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                         id: location?.id,
                         name: location?.name,
                         coordinates: location?.coordinates,
-                        distance: location.matrix.distance,
-                        duration: location.matrix.duration,
+                        distance: location.responseTime.distance,
+                        duration: location.responseTime.duration,
                     }
                 })
 
                 updateMarkerInformation(transformedLocations)
-                updateEmergencyData(res)
-                setFilteredLocations(res)
+                updateEmergencyData(res) // update global emergency state
+                setFilteredLocations(res) // update emergency state
+
+                console.log(res)
             }
         )
     }
@@ -381,7 +386,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
     useEffect(() => {
         mapTheMarker()
-        console.log(filteredLocations)
     }, [filteredLocations])
 
     useEffect(() => {
@@ -441,7 +445,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             ></div>
             <div>
                 <MainBottomMenu rebuildMap={buildTheMap} />
-                <Resultsheet />
+                {/* <Resultsheet /> */}
             </div>
         </>
     )

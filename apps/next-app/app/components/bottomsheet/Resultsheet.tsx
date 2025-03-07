@@ -27,6 +27,8 @@ const Resultsheet = () => {
     const [selectedEmergency, setSelectedEmergency] = useState<string>('')
     const [orderedEmergencyData, setOrderedEmergencyData] = useState<[]>([])
 
+    console.log(emergencyData)
+
     const handleSelectedEmergency = async (emergency: any) => {
         setSelectedEmergency(emergency.name)
 
@@ -41,7 +43,8 @@ const Resultsheet = () => {
     const orderByDuration = (): void => {
         setSelectedEmergency('')
         const orderedData = emergencyData?.sort(
-            (a: any, b: any) => a?.matrix?.duration - b?.matrix?.duration
+            (a: any, b: any) =>
+                a?.responseTime?.duration - b?.responseTime?.duration
         )
 
         setOrderedEmergencyData(orderedData)
@@ -59,21 +62,25 @@ const Resultsheet = () => {
                         <span className="ml-1">menit</span>
                     </div>
                 ) : (
-                    <span>Di luar jangkauan</span>
+                    <span> {duration} </span>
                 )}
             </>
         )
     }
 
     const badgeClassesByDuration = (duration: number): string => {
-        if (duration <= 15) {
-            return 'bg-green-100 text-green-800'
-        } else if (duration >= 15 && duration <= 20) {
-            return 'bg-orange-100 text-orange-800'
-        } else if (duration > 20 && duration <= 25) {
-            return 'bg-red-100 text-red-800'
+        if (duration !== 0) {
+            if (duration <= 15) {
+                return 'bg-green-100 text-green-800'
+            } else if (duration >= 15 && duration <= 20) {
+                return 'bg-orange-100 text-orange-800'
+            } else if (duration > 20 && duration <= 25) {
+                return 'bg-red-100 text-red-800'
+            } else {
+                return 'bg-black text-white'
+            }
         } else {
-            return 'bg-black text-white'
+            return ''
         }
     }
 
@@ -81,9 +88,9 @@ const Resultsheet = () => {
         mainBottomSheet.onFullScreen()
     }
 
-    useEffect(() => {
-        orderByDuration()
-    }, [emergencyData])
+    // useEffect(() => {
+    //     orderByDuration()
+    // }, [emergencyData])
 
     return (
         <div className="bottom-sheet">
@@ -137,8 +144,8 @@ const Resultsheet = () => {
                     </div>
                     <div className="search-result-wrapper max-h-[300px] overflow-y-scroll">
                         <div className="mt-5">
-                            {orderedEmergencyData &&
-                                orderedEmergencyData?.map(
+                            {emergencyData &&
+                                emergencyData?.map(
                                     (
                                         emergency: any,
                                         emergencyIndex: number
@@ -184,11 +191,11 @@ const Resultsheet = () => {
                                                         <div className="space-x-1">
                                                             <div>
                                                                 <span
-                                                                    className={` badge text-[10px] badge-icon border-0 shadow-none ${badgeClassesByDuration(emergency?.matrix?.duration)}`}
+                                                                    className={` badge text-[10px] badge-icon border-0 shadow-none ${badgeClassesByDuration(emergency?.responseTime?.duration)}`}
                                                                 >
                                                                     {parseResponseTime(
                                                                         emergency
-                                                                            ?.matrix
+                                                                            ?.responseTime
                                                                             ?.duration
                                                                     )}
                                                                 </span>

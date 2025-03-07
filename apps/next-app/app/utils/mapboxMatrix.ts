@@ -61,23 +61,19 @@ export const getDistanceMatrix = async (
             .sort((a, b) => a.responseTime.duration - b.responseTime.duration)
             .map((location, index) => ({
                 ...location,
-                matrix: {
-                    duration: formatTheTime(durations[index]),
-                    distance: formatDistance(distances[index]),
-                },
-            })) 
+            }))
     } catch (error) {
         console.error('Error fetching distance matrix:', error)
         throw error
     }
 }
 
-const formatDistance = (distance: any): string => {
-    const fixed = (distance / 1000).toFixed(2)
-    return fixed
+const formatDistance = (distance: number) => {
+    const fixed = Math.floor(distance / 1000)
+    return parseFloat(fixed.toFixed(2))
 }
 
-const formatTheTime = (time: any): string => {
-    const fixed = (time / 60).toFixed(2)
-    return fixed
+const formatTheTime = (time: number) => {
+    const fixed = Math.floor(time / 60)
+    return parseFloat(fixed.toFixed(2))
 }

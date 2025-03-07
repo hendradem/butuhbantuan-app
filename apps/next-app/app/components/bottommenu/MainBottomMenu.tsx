@@ -74,15 +74,6 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
         updateDirectionRoute(directions)
     }
 
-    const orderByDuration = (): void => {
-        setSelectedEmergencyName('')
-        const orderedData = emergencyData?.sort(
-            (a: any, b: any) => a?.matrix?.duration - b?.matrix?.duration
-        )
-
-        setOrderedEmergencyData(orderedData)
-    }
-
     const parseResponseTime = (duration: number): JSX.Element => {
         const maxResponseTime: number = 25
 
@@ -126,10 +117,6 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                 break
         }
     }
-
-    useEffect(() => {
-        orderByDuration()
-    }, [emergencyData])
 
     useEffect(() => {
         if (selectedEmergencyDataState) {
@@ -216,8 +203,8 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                     </div>
                                     <div className="sheet-body search-result-wrapper max-h-[300px] overflow-y-scroll">
                                         <div className="mt-5">
-                                            {orderedEmergencyData &&
-                                                orderedEmergencyData?.map(
+                                            {emergencyData &&
+                                                emergencyData?.map(
                                                     (
                                                         emergency: any,
                                                         emergencyIndex: number
@@ -269,11 +256,11 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                                                                     </div>
                                                                                     <div>
                                                                                         <span
-                                                                                            className={` badge text-[10px] badge-icon border-0 shadow-none ${badgeClassesByDuration(emergency?.matrix?.duration)}`}
+                                                                                            className={` badge text-[10px] badge-icon border-0 shadow-none ${badgeClassesByDuration(emergency?.responseTime?.duration)}`}
                                                                                         >
                                                                                             {parseResponseTime(
                                                                                                 emergency
-                                                                                                    ?.matrix
+                                                                                                    ?.responseTime
                                                                                                     ?.duration
                                                                                             )}
                                                                                         </span>
