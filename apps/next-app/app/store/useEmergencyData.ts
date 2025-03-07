@@ -188,9 +188,12 @@ const SAMPLE_LOCATIONS: any[] = [
     },
 ]
 
+// type selectedEmergencyDataType = any
+
 type selectedEmergencyDataType = {
-    selectedEmergencyData?: any
+    selectedEmergencyData: any
     selectedEmergencyType?: any
+    selectedEmergencySource: 'map' | 'detail'
 }
 
 type State = {
@@ -207,7 +210,7 @@ type Action = {
 
 const useEmergencyData = create<State & Action>()((set) => ({
     emergencyData: SAMPLE_LOCATIONS,
-    selectedEmergencyData: {},
+    selectedEmergencyData: {} as selectedEmergencyDataType,
     updateEmergencyData: (emergencyData) => {
         set(() => ({ emergencyData: emergencyData }))
     },

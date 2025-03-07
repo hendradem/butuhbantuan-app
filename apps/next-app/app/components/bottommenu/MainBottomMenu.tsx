@@ -32,7 +32,9 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     const selectedEmergencyDataState = useEmergencyData(
         (state) => state.selectedEmergencyData
     )
-
+    const updateSelectedEmergencyData = useEmergencyData(
+        (action) => action.updateSelectedEmergencyData
+    )
     const [selectedEmergencyData, setSelectedEmergencyData] =
         useState<emergencyDataType>()
     const [isDetail, setIsDetail] = useState(false)
@@ -61,12 +63,14 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     const userLocationLongitude = useUserLocationData((state) => state.long)
     const [selectedEmergencyName, setSelectedEmergencyName] =
         useState<string>('')
-    const [orderedEmergencyData, setOrderedEmergencyData] = useState<[]>([])
 
     // details
     const handleSelectedEmergency = async (emergency: any) => {
         setSelectedEmergencyName(emergency?.name)
-
+        updateSelectedEmergencyData({
+            selectedEmergencyData: emergency,
+            selectedEmergencySource: 'detail',
+        })
         const directions = await getDirectionsRoute(
             [emergency?.coordinates[0], emergency?.coordinates[1]], // origin coordinate (emergency location)
             [userLocationLongitude, userLocationLatitude] // user location coordinate
@@ -119,14 +123,15 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     }
 
     useEffect(() => {
-        if (selectedEmergencyDataState) {
+        if (
+            selectedEmergencyDataState &&
+            selectedEmergencyDataState.selectedEmergencySource == 'map'
+        ) {
             handleServiceClick(selectedEmergencyDataState.selectedEmergencyType)
             handleSelectedEmergency(
                 selectedEmergencyDataState.selectedEmergencyData
             )
         }
-
-        console.log(selectedEmergencyDataState)
     }, [selectedEmergencyDataState])
 
     useEffect(() => {

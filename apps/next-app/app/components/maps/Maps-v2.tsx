@@ -32,6 +32,11 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const updateSelectedEmergencyData = useEmergencyData(
         (action) => action.updateSelectedEmergencyData
     )
+
+    const selectedEmergencyDataState = useEmergencyData(
+        (state) => state.selectedEmergencyData
+    )
+
     const directionRoute = useMapBox((state) => state.directionRoute)
     const updateDirectionRoute = useMapBox(
         (action) => action.updateDirectionRoute
@@ -73,18 +78,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             userLatitudeAfterGeolocated ? userLatitudeAfterGeolocated : 0
         )
 
-    // const filterEmergencyDataByLocation = (regency: string) => {
-    //     if (regency) {
-    //         setFilteredLocations([])
-
-    //         var filteredLocations = locations.filter((location: any) => {
-    //             return (
-    //                 Math.floor(parseInt(location.responseTime.duration)) <= 22
-    //             )
-    //         })
-    //         setFilteredLocations(filteredLocations)
-    //     }
-    // }
     const mapTheMarker = (): void => {
         if (filteredLocations.length > 0) {
             // Clear existing markers if needed
@@ -143,6 +136,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                     updateSelectedEmergencyData({
                         selectedEmergencyData: marker,
                         selectedEmergencyType: services[0],
+                        selectedEmergencySource: 'map',
                     })
 
                     // get directions from marker location to user location
@@ -157,14 +151,27 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                                 : userLatitudeAfterGeolocated,
                         ] // user location coordinate
                     )
+
                     updateDirectionRoute(directions)
+
+                    zoomMapIntoSpecificArea(
+                        [marker.coordinates[0], marker.coordinates[1]],
+                        [longitudeState, latitudeState]
+                    )
                 })
             })
         } else {
             document
                 .querySelectorAll('.ambulance-marker')
                 .forEach((marker) => marker.remove())
-            console.log('no location found')
+
+            toast.error('No location found', {
+                style: {
+                    borderRadius: '20px',
+                    background: '#333',
+                    color: '#fff',
+                },
+            })
         }
     }
 
@@ -186,7 +193,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
     const drawCurrentMarkerLocation = (longitude: number, latitude: number) => {
         updateCoordinate(latitude, longitude)
-
         mapContainer = mapContainer ? mapContainer : mapContainerState
 
         const userLocationMarker = document.getElementsByClassName('marker')
@@ -210,12 +216,11 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             </div>
         `
 
-        // const popup = new mapboxgl.Popup({ offset: 15 }).setHTML(popupContent)
-
         let current = new mapboxgl.Marker(el)
             .setLngLat([longitude, latitude])
             .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(popupContent))
             .addTo(mapContainer)
+
         setCurrentMarker(current)
         getMatrixOfLocations(longitude, latitude)
 
@@ -241,8 +246,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                 updateMarkerInformation(transformedLocations)
                 updateEmergencyData(res) // update global emergency state
                 setFilteredLocations(res) // update emergency state
-
-                console.log(res)
             }
         )
     }
@@ -282,11 +285,23 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                 'circle-color': '#f30',
             },
         })
+    }
 
-        // mapContainer.flyTo({
-        //     center: [route[0][0], route[0][1]],
-        //     essential: true, // this animation is considered essential with respect to prefers-reduced-motion
-        // })
+    const zoomMapIntoSpecificArea = (
+        origin: [number, number],
+        destination: [number, number]
+    ) => {
+        mapContainerState.fitBounds(
+            [
+                [origin[0], origin[1]],
+                [destination[0], destination[1]],
+            ],
+            {
+                padding: { top: 50, bottom: 400, left: 50, right: 50 },
+                maxZoom: 13, // Prevents excessive zoom
+                duration: 1000, // Smooth animation (1s)
+            }
+        )
     }
 
     const buildTheMap = (
@@ -303,7 +318,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             accessToken: config.MAPBOX_API_KEY,
         })
 
-        setMapContainerState(mapContainer)
+        setMapContainerState(mapContainer) // set mapContainer state to gobal state
 
         mapContainer.on('load', () => {
             if (buildMapType === 'rebuild') {
@@ -349,15 +364,13 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                 const address = res[0]?.place_name
                 setCurrentRegency(regency)
                 updateFullAddress(address)
-
-                // filterEmergencyDataByLocation(regency)
             })
 
             // remove existing route layer
-            mapContainerState.removeLayer('route') // Remove the line layer
-            mapContainer.removeLayer('route') // Remove the line layer
-            mapContainerState.removeSource('route') // Remove the data source
-            mapContainer.removeSource('route') // Remove the data source
+            mapContainer.getSource('route').setData({
+                type: 'FeatureCollection',
+                features: [],
+            })
 
             // get directions from marker location to user location
             const directions = getDirectionsRoute(
@@ -379,8 +392,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             const address = addressInfo[0]?.place_name
             setCurrentRegency(regency)
             updateFullAddress(address)
-
-            // filterEmergencyDataByLocation(regency)
         }
     }, [addressInfo])
 
@@ -407,6 +418,23 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             drawDirectionLine(directionRoute)
         }
     }, [directionRoute])
+
+    useEffect(() => {
+        if (
+            selectedEmergencyDataState &&
+            selectedEmergencyDataState.selectedEmergencySource == 'detail'
+        ) {
+            zoomMapIntoSpecificArea(
+                [
+                    selectedEmergencyDataState?.selectedEmergencyData
+                        .coordinates[0],
+                    selectedEmergencyDataState?.selectedEmergencyData
+                        .coordinates[1],
+                ],
+                [longitudeState, latitudeState]
+            )
+        }
+    }, [selectedEmergencyDataState])
 
     useEffect(() => {
         if (isGeolocating) {
