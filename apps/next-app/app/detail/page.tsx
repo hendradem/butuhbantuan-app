@@ -22,7 +22,6 @@ import Modal from '@/app/components/commons/Modal'
 import useModal from '@/app/store/useModal'
 import Image from 'next/image'
 import ambulanceData from '@/app/store/data/ambulancedata.json'
-import useCalculateDistance from '@/app/hooks/useCalculate'
 import useCalculateDuration from '@/app/hooks/useCalculateDuration'
 
 const Page = () => {

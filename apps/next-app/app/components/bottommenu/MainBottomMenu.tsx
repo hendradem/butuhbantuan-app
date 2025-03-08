@@ -66,7 +66,7 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
 
     // details
     const handleSelectedEmergency = async (emergency: any) => {
-        setSelectedEmergencyName(emergency?.name)
+        setSelectedEmergencyName(emergency?.name) // to trigger focus on list component.
         updateSelectedEmergencyData({
             selectedEmergencyData: emergency,
             selectedEmergencySource: 'detail',
@@ -145,6 +145,10 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
             )
         }
     }, [isSheetFullscreen])
+
+    useEffect(() => {
+        setSelectedEmergencyName('')
+    }, [emergencyData])
 
     return (
         <div>

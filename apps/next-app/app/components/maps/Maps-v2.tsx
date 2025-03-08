@@ -164,14 +164,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             document
                 .querySelectorAll('.ambulance-marker')
                 .forEach((marker) => marker.remove())
-
-            toast.error('No location found', {
-                style: {
-                    borderRadius: '20px',
-                    background: '#333',
-                    color: '#fff',
-                },
-            })
         }
     }
 
@@ -287,6 +279,14 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         })
     }
 
+    const removeExistingDirectionLine = () => {
+        let map = mapContainer ? mapContainer : mapContainerState
+        map.getSource('route').setData({
+            type: 'FeatureCollection',
+            features: [],
+        })
+    }
+
     const zoomMapIntoSpecificArea = (
         origin: [number, number],
         destination: [number, number]
@@ -367,10 +367,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             })
 
             // remove existing route layer
-            mapContainer.getSource('route').setData({
-                type: 'FeatureCollection',
-                features: [],
-            })
+            removeExistingDirectionLine()
 
             // get directions from marker location to user location
             const directions = getDirectionsRoute(
@@ -405,6 +402,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
     useEffect(() => {
         if (mapContainerState && longitudeState && latitudeState) {
+            removeExistingDirectionLine()
             drawCurrentMarkerLocation(longitudeState, latitudeState)
         }
     }, [isRefetchMatrix])
