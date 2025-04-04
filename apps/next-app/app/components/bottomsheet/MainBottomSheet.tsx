@@ -76,6 +76,7 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
             [userLocationLongitude, userLocationLatitude] // user location coordinate
         )
         updateDirectionRoute(directions)
+        scrollToTop()
     }
 
     const parseResponseTime = (duration: number): JSX.Element => {
@@ -122,6 +123,10 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
         }
     }
 
+    const scrollToTop = () => {
+        console.log('scroll to top')
+    }
+
     useEffect(() => {
         if (
             selectedEmergencyDataState &&
@@ -131,6 +136,7 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
             handleSelectedEmergency(
                 selectedEmergencyDataState.selectedEmergencyData
             )
+            scrollToTop()
         }
     }, [selectedEmergencyDataState])
 
@@ -210,8 +216,27 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                             />
                                         </button>
                                     </div>
-                                    <div className="sheet-body search-result-wrapper max-h-[300px] overflow-y-scroll">
+                                    <div className="sheet-body search-result-wrapper bg-neutral-50 max-h-[300px] overflow-y-scroll">
                                         <div className="mt-5">
+                                            {emergencyData?.length == 0 && (
+                                                <div className="mx-3 mb-3 text-center text-slate-900">
+                                                    Data emergency tidak
+                                                    ditemukan
+                                                    <div>
+                                                        <button
+                                                            onClick={() =>
+                                                                handleChangeLocationOnClick()
+                                                            }
+                                                            type="button"
+                                                            className="border focus:outline-none  focus:ring-4 font-medium rounded-lg text-sm mt-2 px-4 py-2 me-2 mb-2 bg-gray-800 text-white border-gray-600 hover:bg-gray-700 hover:border-gray-600 focus:ring-gray-700"
+                                                        >
+                                                            Ubah Lokasi
+                                                            Pencarian
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {emergencyData &&
                                                 emergencyData?.map(
                                                     (
@@ -231,7 +256,7 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                                                 }}
                                                             >
                                                                 <div
-                                                                    className={`p-3 border border-neutral-100 rounded-lg shadow-sm bg-white w-full ${selectedEmergencyName == emergency.name ? 'ring-1 ring-neutral-200' : ''}`}
+                                                                    className={`p-3 border border-neutral-100 shadow-sm rounded-[10px] bg-white w-full ${selectedEmergencyName == emergency.name ? ' border border-neutral-200' : ''}`}
                                                                 >
                                                                     <div className="">
                                                                         <div className="flex items-start space-x-3">
@@ -302,34 +327,8 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                                                     </div>
                                                                     {selectedEmergencyName ===
                                                                         emergency?.name && (
-                                                                        <div className="card-footer">
-                                                                            <div className="flex gap-2 mt-3">
-                                                                                <button
-                                                                                    onClick={(
-                                                                                        e
-                                                                                    ) => {
-                                                                                        onContactClick(
-                                                                                            'phone',
-                                                                                            emergency
-                                                                                                .contact
-                                                                                                .phone,
-                                                                                            e
-                                                                                        )
-                                                                                    }}
-                                                                                    disabled={
-                                                                                        emergency
-                                                                                            ?.contact
-                                                                                            .telp ==
-                                                                                        null
-                                                                                    }
-                                                                                    className={`flex text-[15px] items-center w-full p-2 justify-center bg-green-600 text-white font-medium rounded-lg shadow-sm transition ${emergency?.contact.telp == null ? 'opacity-80 cursor-not-allowed' : 'hover:bg-green-700'}`}
-                                                                                >
-                                                                                    <Icon
-                                                                                        name="mdi:phone"
-                                                                                        className="w-5 h-5 mr-2"
-                                                                                    />
-                                                                                    Telephone
-                                                                                </button>
+                                                                        <div className="card-footer mt-4">
+                                                                            <div className="flex gap-2">
                                                                                 <button
                                                                                     onClick={(
                                                                                         e
@@ -342,13 +341,45 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                                                                             e
                                                                                         )
                                                                                     }}
-                                                                                    className="flex text-[15px] w-full p-2 items-center justify-center border border-gray-100 text-neutral-600 font-medium rounded-lg shadow-sm hover:bg-gray-50 transition"
+                                                                                    disabled={
+                                                                                        emergency
+                                                                                            ?.contact
+                                                                                            .whatsapp ==
+                                                                                        null
+                                                                                    }
+                                                                                    className={`flex text-[15px] items-center w-full p-2 justify-center bg-green-600 text-white font-medium rounded-lg shadow-sm transition ${emergency?.contact.whatsapp == null ? 'opacity-80 cursor-not-allowed' : 'hover:bg-green-700'}`}
                                                                                 >
                                                                                     <Icon
                                                                                         name="mingcute:chat-1-fill"
                                                                                         className="w-5 h-5 mr-2"
                                                                                     />
                                                                                     Whatsapp
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={(
+                                                                                        e
+                                                                                    ) => {
+                                                                                        onContactClick(
+                                                                                            'phone',
+                                                                                            emergency
+                                                                                                .contact
+                                                                                                .telp,
+                                                                                            e
+                                                                                        )
+                                                                                    }}
+                                                                                    disabled={
+                                                                                        emergency
+                                                                                            ?.contact
+                                                                                            .telp ==
+                                                                                        null
+                                                                                    }
+                                                                                    className={`flex text-[15px] w-full p-2 items-center justify-center bg-white border border-gray-100 text-neutral-600 font-medium rounded-lg shadow-sm hover:bg-gray-50 transition ${emergency?.contact.telp == null ? 'opacity-80 cursor-not-allowed' : ''}`}
+                                                                                >
+                                                                                    <Icon
+                                                                                        name="mdi:phone"
+                                                                                        className="w-5 h-5 mr-2"
+                                                                                    />
+                                                                                    Telephone
                                                                                 </button>
                                                                             </div>
                                                                         </div>

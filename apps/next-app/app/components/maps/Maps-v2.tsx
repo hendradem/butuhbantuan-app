@@ -11,9 +11,8 @@ import {
 } from '@/app/store/api/location.api'
 import useMapBox from '@/app/store/useMapBox'
 import useUserLocationData from '@/app/store/useUserLocationData'
-import MainBottomMenu from '../bottommenu/MainBottomMenu'
+import MainBottomMenu from '../bottomsheet/MainBottomSheet'
 import { getDistanceMatrix, getDirectionsRoute } from '@/app/utils/mapboxMatrix'
-import Resultsheet from '../bottomsheet/Resultsheet'
 import useEmergencyData from '@/app/store/useEmergencyData'
 import services from '@/app/store/data/services.json'
 
@@ -281,10 +280,14 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
     const removeExistingDirectionLine = () => {
         let map = mapContainer ? mapContainer : mapContainerState
-        map.getSource('route').setData({
-            type: 'FeatureCollection',
-            features: [],
-        })
+        const routeSource = map.getSource('route')
+
+        if (routeSource) {
+            routeSource.setData({
+                type: 'FeatureCollection',
+                features: [],
+            })
+        }
     }
 
     const zoomMapIntoSpecificArea = (

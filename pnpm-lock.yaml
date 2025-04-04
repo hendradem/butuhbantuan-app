@@ -233,7 +233,7 @@ importers:
         specifier: ^6.1.0
         version: 6.1.0(react@19.0.0-rc-66855b96-20241106)
       react-hot-toast:
-        specifier: ^2.4.1
+        specifier: ^2.5.1
         version: 2.5.1(react-dom@19.0.0-rc-66855b96-20241106(react@19.0.0-rc-66855b96-20241106))(react@19.0.0-rc-66855b96-20241106)
       react-icons:
         specifier: ^4.10.1

@@ -16,7 +16,7 @@ export const getDirectionsRoute = async (
 
     try {
         const data = await fetcher(url)
-        return data.routes[0].geometry.coordinates
+        return data?.routes[0]?.geometry?.coordinates
     } catch (error) {
         console.error('Error fetching route path:', error)
         throw error

@@ -19,7 +19,7 @@ export default function RootLayout({
                 <div className="flex h-screen">
                     <Sidebar />
                     <Navbar />
-                    <main className="mx-auto h-screen p-5 pt-[80px] w-full">
+                    <main className="bg-white h-screen p-5 pt-[80px] w-full">
                         {children}
                     </main>
                 </div>

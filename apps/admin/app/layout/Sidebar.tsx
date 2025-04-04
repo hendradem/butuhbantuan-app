@@ -30,16 +30,16 @@ const Sidebar = () => {
             className="z-40 w-64 h-screen border-r border-gray-100 transition-transform -translate-x-full sm:translate-x-0"
             aria-label="Sidebar"
         >
-            <div className="h-full pt-[80px] px-3 py-4 overflow-y-auto bg-white dark:bg-gray-800">
+            <div className="h-full pt-[80px] px-3 py-4 overflow-y-auto bg-white">
                 <ul className="space-y-2 font-medium">
                     {menu.map((item, index) => (
                         <li key={index}>
                             <Link
                                 href={item.link}
-                                className="flex items-center p-2 text-gray-900 transition duration-75 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white group"
+                                className="flex items-center p-2 text-gray-900 transition duration-75 rounded-lg hover:bg-gray-100 group"
                             >
                                 <svg
-                                    className="w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white"
+                                    className="w-5 h-5 text-gray-500 transition duration-75 group-hover:text-gray-900"
                                     aria-hidden="true"
                                     xmlns="http://www.w3.org/2000/svg"
                                     fill="currentColor"
@@ -52,14 +52,14 @@ const Sidebar = () => {
                         </li>
                     ))}
                 </ul>
-                <ul className="pt-4 mt-4 space-y-2 font-medium border-t border-gray-200 dark:border-gray-700">
+                <ul className="pt-4 mt-4 space-y-2 font-medium border-t border-gray-200">
                     <li>
                         <a
                             href="#"
-                            className="flex items-center p-2 text-gray-900 transition duration-75 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white group"
+                            className="flex items-center p-2 text-gray-900 transition duration-75 rounded-lg hover:bg-gray-100 group"
                         >
                             <svg
-                                className="shrink-0 w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white"
+                                className="shrink-0 w-5 h-5 text-gray-500 transition duration-75  group-hover:text-gray-900"
                                 aria-hidden="true"
                                 xmlns="http://www.w3.org/2000/svg"
                                 fill="currentColor"
@@ -73,10 +73,10 @@ const Sidebar = () => {
                     <li>
                         <a
                             href="#"
-                            className="flex items-center p-2 text-gray-900 transition duration-75 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white group"
+                            className="flex items-center p-2 text-gray-900 transition duration-75 rounded-lg hover:bg-gray-100 group"
                         >
                             <svg
-                                className="shrink-0 w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white"
+                                className="shrink-0 w-5 h-5 text-gray-500 transition duration-75 group-hover:text-gray-900"
                                 aria-hidden="true"
                                 xmlns="http://www.w3.org/2000/svg"
                                 fill="currentColor"

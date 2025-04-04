@@ -1,6 +1,5 @@
 'use client'
 import React from 'react'
-import BottomMenu from './components/bottommenu/BottomMenu'
 import Maps from './components/maps/Maps-v2'
 
 export default function Home() {
@@ -9,16 +8,6 @@ export default function Home() {
             <div className="w-full h-100vh bottom-0">
                 <Maps mapHeight="100vh" />
             </div>
-            {/* <div className="absolute w-full h-auto shadow-[0px_-6px_39px_-30px_#cbd5e0] rounded-t-[15px] bg-white bottom-0">
-                <div className="sheet-body p-4">
-                    <div className="sheet-header border-gray-100">
-                        <h2 className="text-center font-medium text-[22px] text-gray-700">
-                            Butuh bantuan apa?
-                        </h2>
-                    </div>
-                    <BottomMenu />
-                </div>
-            </div> */}
         </main>
     )
 }
