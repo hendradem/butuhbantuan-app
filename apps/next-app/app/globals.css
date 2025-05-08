@@ -1,0 +1,221 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --foreground-rgb: 0, 0, 0;
+    --background-start-rgb: 214, 219, 220;
+    --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --foreground-rgb: 255, 255, 255;
+        --background-start-rgb: 0, 0, 0;
+        --background-end-rgb: 0, 0, 0;
+    }
+}
+
+body {
+    color: rgb(var(--foreground-rgb));
+    background: linear-gradient(
+            to bottom,
+            transparent,
+            rgb(var(--background-end-rgb))
+        )
+        rgb(var(--background-start-rgb));
+}
+
+/* bottom sheet */
+@media (min-width: 600px) {
+    :root {
+        --rsbs-max-w: 28%;
+        --rsbs-ml: auto;
+        --rsbs-mr: auto;
+    }
+
+    .detail-navbar {
+        max-width: 28%;
+    }
+}
+
+@media (max-width: 1022px) {
+    :root {
+        --rsbs-max-w: 100%;
+        --rsbs-ml: auto;
+        --rsbs-mr: auto;
+    }
+
+    .detail-navbar {
+        max-width: 100%;
+    }
+}
+
+/* reusable tailwind classes */
+@layer components {
+    .badge {
+        @apply bg-white text-gray-800 border border-gray-100 rounded-full text-xs font-medium px-1.5 pr-2 py-1;
+    }
+
+    .badge-icon {
+        @apply flex items-center;
+    }
+
+    .button {
+        @apply text-gray-900 bg-white border border-gray-100 sm:px-1 sm:py-1 focus:outline-none hover:bg-gray-50 focus:ring-0 font-medium rounded-lg text-sm px-4 py-2.5;
+    }
+
+    .button-icon-default {
+        @apply w-auto grow-0 bg-gray-50 text-gray-800 text-xs font-medium inline-flex items-center px-3 py-1 rounded-full border border-gray-100;
+    }
+
+    .success {
+        @apply bg-green-50 border border-green-100 text-green-700 !important;
+    }
+
+    .blue {
+        @apply bg-blue-50 border border-blue-100 text-blue-700 !important;
+    }
+
+    .warning {
+        @apply bg-orange-50 border border-orange-100 text-orange-700 !important;
+    }
+
+    .modal {
+        @apply fixed z-20 bg-black bg-opacity-20 w-full h-screen backdrop-blur-sm flex items-center justify-center;
+    }
+}
+
+/* maps */
+.marker {
+    background-image: url('../public/assets/icons/current-location-blue.svg');
+    padding: 10px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.ambulance-marker {
+    background-image: url('../public/assets/icons/ambulance-logo.svg');
+    background-color: #1e1e1e;
+    color: black;
+    box-shadow:
+        0 4px 6px -1px rgb(0 0 0 / 0.1),
+        0 2px 4px -2px rgb(0 0 0 / 0.1);
+    background-size: 12px 12px;
+    background-position: center;
+    background-repeat: no-repeat;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.mapboxgl-popup {
+    max-width: 200px;
+} 
+
+.mapboxgl-popup {
+    margin-top: 5px !important;
+}
+
+.mapboxgl-popup-content {
+    background: white !important; /* Make background transparent */
+    color: black !important; /* Ensure text is visible */
+    box-shadow: none !important; /* Remove shadow */
+    border: none !important; /* Remove any default borders */
+    padding: 0px !important;
+    margin: none !important;
+    margin-top: 20px !important;
+    border-radius: 12px !important;
+}
+.mapboxgl-popup-tip {
+    border-top-color: white !important; /* Change arrow color */
+}
+.mapboxgl-popup-close-button {
+    margin: 10px !important;
+}
+
+
+/* .mapboxgl-ctrl-top-right {
+    display: none;
+} */
+
+.mapboxgl-ctrl {
+    display: none !important;
+}
+
+.mapboxgl-ctrl-top-right {
+    width: 100% !important;
+    padding: 10px 10px;
+}
+
+.mapboxgl-ctrl-geocoder {
+    margin: 0px !important;
+}
+
+.mapboxgl-ctrl-geocoder--input {
+    background-color: white !important;
+    border-radius: 10px !important;
+    width: 100% !important;
+    height: 40px !important;
+    font-size: 17px !important;
+    margin: 0px !important;
+}
+.mapboxgl-ctrl-geocoder--icon-search {
+    margin-top: -3px !important;
+}
+.mapboxgl-ctrl-geocoder--button {
+    margin-top: -3px !important;
+}
+
+.mapboxgl-ctrl-geocoder {
+    display: none !important;
+}
+
+/* ===== Scrollbar CSS ===== */
+/* Firefox */
+* {
+    scrollbar-width: auto;
+    scrollbar-color: #e0e0e0 #ffffff;
+}
+
+/* Chrome, Edge, and Safari */
+/* *::-webkit-scrollbar {
+    width: 0px;
+}
+
+*::-webkit-scrollbar-track {
+    background: #ffffff;
+}
+
+*::-webkit-scrollbar-thumb {
+    background-color: #e0e0e0;
+    border-radius: 10px;
+    border: 3px solid #ffffff;
+} */
+
+/* ===== Scrollbar CSS ===== */
+/* Firefox */
+* {
+    scrollbar-width: auto;
+    scrollbar-color: #ffffff #ffffff;
+}
+
+/* Chrome, Edge, and Safari */
+*::-webkit-scrollbar {
+    width: 2px;
+}
+
+*::-webkit-scrollbar-track {
+    background: #ffffff;
+}
+
+*::-webkit-scrollbar-thumb {
+    background-color: #ffffff;
+    border-radius: 10px;
+    border: 3px none #ffffff;
+}

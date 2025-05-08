@@ -1,0 +1,9 @@
+const config = {
+    API_HOST: process.env.NEXT_PUBLIC_API_HOST,
+    MAPBOX_URL: process.env.NEXT_PUBLIC_MAPBOX_URL,
+    MAPBOX_API_KEY: process.env.NEXT_PUBLIC_MAPBOX_API_KEY,
+    GEOAPIFY_API_KEY: process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY,
+    GEOLOCATION_BASE_URL: process.env.NEXT_PUBLIC_GEOLOCATION_BASE_URL,
+}
+
+export default config
