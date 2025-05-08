@@ -1,6 +1,10 @@
 import type { PlopTypes } from "@turbo/gen";
 
+<<<<<<< HEAD
 // Learn more about Turborepo Generators at https://turbo.build/repo/docs/core-concepts/monorepos/code-generation
+=======
+// Learn more about Turborepo Generators at https://turborepo.com/docs/guides/generating-code
+>>>>>>> main
 
 export default function generator(plop: PlopTypes.NodePlopAPI): void {
   // A simple generator to add a new React component to the internal UI library

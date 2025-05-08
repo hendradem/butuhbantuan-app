@@ -3,9 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "exports": {
+<<<<<<< HEAD
     "./button": "./src/button.tsx",
     "./card": "./src/card.tsx",
     "./code": "./src/code.tsx"
+=======
+    "./*": "./src/*.tsx"
+>>>>>>> main
   },
   "scripts": {
     "lint": "eslint . --max-warnings 0",
@@ -15,6 +19,7 @@
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
+<<<<<<< HEAD
     "@turbo/gen": "^1.12.4",
     "@types/eslint": "^8.56.5",
     "@types/node": "^20.11.24",
@@ -27,5 +32,17 @@
     "@iconify/react": "^5.2.0",
     "react": "19.0.0-rc-5c56b873-20241107",
     "react-dom": "19.0.0-rc-5c56b873-20241107"
+=======
+    "@turbo/gen": "^2.5.0",
+    "@types/node": "^22.15.3",
+    "@types/react": "19.1.0",
+    "@types/react-dom": "19.1.1",
+    "eslint": "^9.26.0",
+    "typescript": "5.8.2"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+>>>>>>> main
   }
 }
