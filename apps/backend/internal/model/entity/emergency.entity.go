@@ -39,7 +39,20 @@ func (e *Emergency) BeforeCreate(tx *gorm.DB) (err error) {
 }
 
 type EmergencyType struct {
-	ID   uint      `json:"id" gorm:"primaryKey"`
-	UUID uuid.UUID `json:"uuid" gorm:"type:char(36); uniqueIndex; not null"`
-	Name string    `json:"name"`
+	ID          uint           `json:"id" gorm:"primaryKey"`
+	UUID        uuid.UUID      `json:"uuid" gorm:"type:char(36); uniqueIndex; not null"`
+	Name        string         `json:"name" gorm:"type:varchar(255)"`
+	Description string         `json:"description" gorm:"type:varchar(255)"`
+	IsActive    bool           `json:"is_active" gorm:"type:tinyint(1); default:0"`
+	Icon        string         `json:"icon" gorm:"type:varchar(255)"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"deleted_at"`
+}
+
+func (e *EmergencyType) BeforeCreate(tx *gorm.DB) (err error) {
+	if e.UUID == uuid.Nil {
+		e.UUID = uuid.New()
+	}
+	return
 }

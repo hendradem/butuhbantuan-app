@@ -18,3 +18,10 @@ type EmergencyCreate struct {
 	FullAddress      string `json:"full_address" validate:"required"`
 	TypeOfService    string `json:"type_of_service" validate:"required"`
 }
+
+type EmergencyTypeCreate struct {
+	Name        string `json:"name" validate:"required"`
+	Description string `json:"description" validate:"required"`
+	IsActive    bool   `json:"is_active"`
+	Icon        string `json:"icon" validate:"required"`
+}
