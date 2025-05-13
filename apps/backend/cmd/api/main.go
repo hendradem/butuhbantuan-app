@@ -14,6 +14,7 @@ import (
 func main() {
 	var PORT string = ":8080"
 	app := fiber.New()
+	app.Use(cors.New())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     "http://localhost:3000",
 		AllowHeaders:     "Access-Control-Allow-Origin, Origin, Content-Type, Accept, Authorization",

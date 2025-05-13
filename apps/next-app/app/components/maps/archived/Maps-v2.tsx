@@ -29,9 +29,13 @@ type MapsProps = {
 const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
   let mapContainer: any;
   const mapWrapper = useRef<any>();
+  const { emergencyData, refetchEmergencyData } = useEmergencyApi();
+
   // const emergencyData = useEmergencyData((state) => state.emergencyData);
 
-  const { emergencyData, refetchEmergencyData } = useEmergencyApi();
+  if (emergencyData) {
+    console.log(emergencyData);
+  }
 
   const updateEmergencyData = useEmergencyData(
     (action) => action.updateEmergencyData
@@ -65,8 +69,10 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
   const [selectedEmergencyCoordinates, setSelectedEmergencyCoordinates] =
     useState<[number, number]>([0, 0]);
 
-  // const [locations, setLocations] = useState(emergencyData?.data);
+  const [locations, setLocations] = useState(emergencyData?.data);
   const [filteredLocations, setFilteredLocations] = useState<[]>([]);
+
+  // const [convertedLocations, setConvertedLocations] = useState<any>([])
 
   // global state
   const updateCoordinate = useUserLocationData(
@@ -88,8 +94,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
       document
         .querySelectorAll(".ambulance-marker")
         .forEach((marker) => marker.remove());
-
-      console.log(filteredLocations);
 
       filteredLocations.map((marker: any, markerIndex: number) => {
         const el = document.createElement("div");
@@ -172,7 +176,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
       document.querySelectorAll(".marker-label");
 
     if (data) {
-      if (currentAmbulanceMarkerLabel.length > emergencyData?.data?.length) {
+      if (currentAmbulanceMarkerLabel.length > locations?.length) {
         currentAmbulanceMarkerLabel.forEach((el) => el.remove());
       } else {
         for (let i = 0; i < currentAmbulanceMarkerLabel.length; i++) {
@@ -196,16 +200,16 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     }
 
     const popupContent = `
-        <div class="p-3">
-            <div class="flex items-center space-x-2">
-                <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 2a6 6 0 00-6 6c0 4.418 6 10 6 10s6-5.582 6-10a6 6 0 00-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z" clip-rule="evenodd" />
-                </svg>
-                <h3 class="text-white font-semibold">MSW Warehouse</h3>
+            <div class="p-3">
+                <div class="flex items-center space-x-2">
+                    <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 2a6 6 0 00-6 6c0 4.418 6 10 6 10s6-5.582 6-10a6 6 0 00-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z" clip-rule="evenodd" />
+                    </svg>
+                    <h3 class="text-white font-semibold">MSW Warehouse</h3>
+                </div>
+                <p class="text-gray-300 text-sm">741 Nicolette Freeway, Utah</p>
+                <p class="text-gray-400 text-xs mt-1">15:32 · GMT +7</p>
             </div>
-            <p class="text-gray-600 text-sm">741 Nicolette Freeway, Utah</p>
-            <p class="text-gray-600 text-xs mt-1">15:32 · GMT +7</p>
-        </div>
     `;
 
     let current = new mapboxgl.Marker(el)
@@ -223,24 +227,23 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
   };
 
   const getMatrixOfLocations = (longitude: number, latitude: number) => {
-    getDistanceMatrix(
-      [longitude ?? 0, latitude ?? 0],
-      emergencyData?.data
-    ).then((res) => {
-      const transformedLocations = res.map((location: any) => {
-        return {
-          id: location?.id,
-          name: location?.name,
-          coordinates: location?.coordinates,
-          distance: location.responseTime.distance,
-          duration: location.responseTime.duration,
-        };
-      });
+    getDistanceMatrix([longitude ?? 0, latitude ?? 0], locations).then(
+      (res) => {
+        const transformedLocations = res.map((location: any) => {
+          return {
+            id: location?.id,
+            name: location?.name,
+            coordinates: location?.coordinates,
+            distance: location.responseTime.distance,
+            duration: location.responseTime.duration,
+          };
+        });
 
-      updateMarkerInformation(transformedLocations);
-      updateEmergencyData(res); // update global emergency state
-      setFilteredLocations(res); // update emergency state
-    });
+        updateMarkerInformation(transformedLocations);
+        updateEmergencyData(res); // update global emergency state
+        setFilteredLocations(res); // update emergency state
+      }
+    );
   };
 
   const drawDirectionLine = (route: any): void => {
@@ -327,6 +330,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
     mapContainer.on("load", () => {
       if (buildMapType === "rebuild") {
+        console.log("rebuild");
         drawCurrentMarkerLocation(
           coordinates?.long ?? 0,
           coordinates?.lat ?? 0
@@ -336,6 +340,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
         getMatrixOfLocations(coordinates?.long ?? 0, coordinates?.lat ?? 0);
       } else {
+        console.log("init");
         setIsGeolocating(true);
 
         getCurrentLocation((location: any) => {
@@ -395,7 +400,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
   useEffect(() => {
     buildTheMap();
-  }, [emergencyData?.data]); // build the map after getting emergency data
+  }, []);
 
   useEffect(() => {
     if (mapContainerState && longitudeState && latitudeState) {
@@ -414,20 +419,20 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     }
   }, [directionRoute]);
 
-  useEffect(() => {
-    if (
-      selectedEmergencyDataState &&
-      selectedEmergencyDataState.selectedEmergencySource == "detail"
-    ) {
-      zoomMapIntoSpecificArea(
-        [
-          selectedEmergencyDataState?.selectedEmergencyData.coordinates[0],
-          selectedEmergencyDataState?.selectedEmergencyData.coordinates[1],
-        ],
-        [longitudeState, latitudeState]
-      );
-    }
-  }, [selectedEmergencyDataState]);
+  // useEffect(() => {
+  //   if (
+  //     selectedEmergencyDataState &&
+  //     selectedEmergencyDataState.selectedEmergencySource == "detail"
+  //   ) {
+  //     zoomMapIntoSpecificArea(
+  //       [
+  //         selectedEmergencyDataState?.selectedEmergencyData.coordinates[0],
+  //         selectedEmergencyDataState?.selectedEmergencyData.coordinates[1],
+  //       ],
+  //       [longitudeState, latitudeState]
+  //     );
+  //   }
+  // }, [selectedEmergencyDataState]);
 
   useEffect(() => {
     if (isGeolocating) {
@@ -456,16 +461,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
       });
     }
   }, [isGeolocating]);
-
-  useEffect(() => {
-    toast.loading("Mencarikan data untukmu", {
-      style: {
-        borderRadius: "20px",
-        background: "#333",
-        color: "#fff",
-      },
-    });
-  }, [emergencyData?.data]);
 
   return (
     <>

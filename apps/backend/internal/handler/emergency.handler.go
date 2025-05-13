@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"butuhbantuan/internal/dto"
 	"butuhbantuan/internal/model/entity"
+	"butuhbantuan/internal/model/mapper"
 	"butuhbantuan/internal/model/request"
 	"butuhbantuan/pkg/database"
 
@@ -17,14 +19,21 @@ func GetEmergency(ctx *fiber.Ctx) error {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"status":  "error",
 			"message": "failed to get emergencies",
-			"data":    result.Error,
+			"data":    result.Error.Error(),
 		})
 	}
 
+	// ✅ Map to DTO
+	var response []dto.EmergencyServiceResponse
+	for _, e := range emergencies {
+		response = append(response, mapper.MapEmergencyServiceToResponse(e))
+	}
+
+	// ✅ Return DTO-based JSON
 	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
 		"status":  "success",
 		"message": "success to get emergencies data",
-		"data":    emergencies,
+		"data":    response,
 	})
 }
 
