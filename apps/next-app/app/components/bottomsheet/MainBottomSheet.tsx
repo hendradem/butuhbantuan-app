@@ -225,7 +225,7 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                       />
                     </button>
                   </div>
-                  <div className="sheet-body search-result-wrapper bg-neutral-50 overflow-y-scroll">
+                  <div className="sheet-body search-result-wrapper bg-neutral-50 overflow-y-scroll max-h-[250px]">
                     <div className="mt-5">
                       {emergencyData?.length == 0 && (
                         <div className="mx-3 mb-3 text-center text-slate-900">

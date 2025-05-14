@@ -16,6 +16,10 @@ export const getAddressInfo = async (
   longitude: number | string,
   latitude: number | string
 ): Promise<any> => {
+  if (!longitude || !latitude) {
+    return;
+  }
+
   const response = await fetcher(
     `${config.MAPBOX_URL}/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${config.MAPBOX_API_KEY}`
   );

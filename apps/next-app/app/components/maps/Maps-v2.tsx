@@ -29,8 +29,6 @@ type MapsProps = {
 const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
   let mapContainer: any;
   const mapWrapper = useRef<any>();
-  // const emergencyData = useEmergencyData((state) => state.emergencyData);
-
   const { emergencyData, refetchEmergencyData } = useEmergencyApi();
 
   const updateEmergencyData = useEmergencyData(
@@ -84,12 +82,10 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
   const mapTheMarker = (): void => {
     if (filteredLocations.length > 0) {
-      // Clear existing markers if needed
+      // Clear existing markers if neede
       document
         .querySelectorAll(".ambulance-marker")
         .forEach((marker) => marker.remove());
-
-      console.log(filteredLocations);
 
       filteredLocations.map((marker: any, markerIndex: number) => {
         const el = document.createElement("div");
@@ -142,6 +138,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             selectedEmergencyType: services[0],
             selectedEmergencySource: "map",
           });
+
+          console.log(marker);
 
           // get directions from marker location to user location
           const directions = await getDirectionsRoute(
@@ -368,6 +366,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
       // remove existing route layer
       removeExistingDirectionLine();
+
+      console.log("clicked");
 
       // get directions from marker location to user location
       const directions = getDirectionsRoute(

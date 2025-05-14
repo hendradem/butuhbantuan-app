@@ -14,24 +14,6 @@ var DB *gorm.DB
 
 var emergencySeed = []entity.Emergency{
 	{
-		Name:             "Ambulance Bali",
-		OrganizationName: "Bali Emergency Health Services",
-		OrganizationType: "Private",
-		Description:      "24/7 ambulance services across Bali.",
-		IsVerified:       false,
-		OrganizationLogo: "https://example.com/logo2.png",
-		Latitude:         "-7.7063",
-		Longitude:        "110.345",
-		Email:            "ambulance@balihealth.com",
-		Phone:            "036123456",
-		Whatsapp:         "6289876543210",
-		District:         "Denpasar",
-		Regency:          "Denpasar",
-		Province:         "Bali",
-		FullAddress:      "Jl. Sunset Road No.88, Denpasar",
-		TypeOfService:    "Medical Emergency",
-	},
-	{
 		Name:             "PMI Kab. Sleman",
 		OrganizationName: "Palang Merah Indonesia",
 		OrganizationType: "Ambulance",

@@ -2,6 +2,7 @@ package main
 
 import (
 	"butuhbantuan/internal/route"
+	"butuhbantuan/pkg/config"
 	"butuhbantuan/pkg/database"
 	"fmt"
 	"log"
@@ -21,6 +22,7 @@ func main() {
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
 		AllowCredentials: true,
 	}))
+	config.LoadEnv()
 	database.InitDB()
 	route.RegisterRoute(app)
 
