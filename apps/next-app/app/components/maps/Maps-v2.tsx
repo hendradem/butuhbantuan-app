@@ -6,10 +6,8 @@ import toast from "react-hot-toast";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css";
 import { getCurrentLocation } from "@/app/utils/getCurrentLocation";
-import {
-  getAddressInfo,
-  useAddressInformation,
-} from "@/app/store/api/location.api";
+import { useAddressInformation } from "@/app/store/api/location.api";
+import { getAddressInfo } from "@/app/store/api/services/location.service";
 import useMapBox from "@/app/store/useMapBox";
 import useUserLocationData from "@/app/store/useUserLocationData";
 import MainBottomMenu from "../bottomsheet/MainBottomSheet";
@@ -138,8 +136,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             selectedEmergencyType: services[0],
             selectedEmergencySource: "map",
           });
-
-          console.log(marker);
 
           // get directions from marker location to user location
           const directions = await getDirectionsRoute(
@@ -356,7 +352,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
       const { lng, lat } = e.lngLat;
       drawCurrentMarkerLocation(lng, lat);
 
-      // get address info to update address and filter emergency data
+      // get address info to update address and filter emergency data - [NOTE: Directly use location.service fetcher]
       getAddressInfo(lng, lat).then((res) => {
         const regency = res[3]?.text;
         const address = res[0]?.place_name;
@@ -366,8 +362,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
       // remove existing route layer
       removeExistingDirectionLine();
-
-      console.log("clicked");
 
       // get directions from marker location to user location
       const directions = getDirectionsRoute(

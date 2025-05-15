@@ -11,4 +11,5 @@ func DirectionsRouteSetup(apiVersion string, app *fiber.App) {
 	mapboxGroup.Get("/", handler.GetDirectionsRoute)
 	mapboxGroup.Get("/matrix", handler.GetDistanceMatrixRoute)
 	mapboxGroup.Get("/geocoding", handler.GetGeocodingApi)
+	mapboxGroup.Get("/geolocation", handler.GetGeolocation)
 }

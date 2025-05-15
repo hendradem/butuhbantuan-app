@@ -1,7 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { emergencyService } from "./services/emergency.service";
-import updateEmergencyData from "../useEmergencyData";
-import { EmergencyDataType } from "@/app/types/emergency";
 
 export const useEmergencyApi = () => {
   const queryClient = useQueryClient();

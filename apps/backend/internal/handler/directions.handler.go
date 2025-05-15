@@ -164,3 +164,47 @@ func GetGeocodingApi(ctx *fiber.Ctx) error {
 		"data":    response,
 	})
 }
+
+func GetGeolocation(ctx *fiber.Ctx) error {
+	// Parse query parameters
+	searchQuery := ctx.Query("searchQuery")
+
+	if searchQuery == "" {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Missing location query parameter",
+		})
+	}
+
+	geoApifyRequest := fmt.Sprintf("%s/autocomplete?text=%s&apiKey=%s",
+		os.Getenv("GEOAPIFY_URL"),
+		searchQuery,
+		os.Getenv("GEOAPIFY_API_KEY"),
+	)
+
+	resp, err := http.Get(geoApifyRequest)
+	if err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Failed to fetch geoapify data",
+			"data":    err,
+		})
+	}
+	defer resp.Body.Close()
+
+	response := make(map[string]interface{})
+
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Failed to decode geoapify data",
+			"data":    err.Error(),
+		})
+	}
+
+	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":  "success",
+		"message": "Geoapify data fetched successfully",
+		"data":    response,
+	})
+}
