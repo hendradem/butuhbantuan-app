@@ -22,6 +22,7 @@ export function getCurrentLocation(
             console.log("The request to get user location timed out.");
             break;
           default:
+            console.log("error");
             console.log(err);
         }
       },

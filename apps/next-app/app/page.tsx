@@ -1,61 +1,93 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import Maps from "./components/maps/Maps-v2";
+import toast from "react-hot-toast";
 import { useAvailableCityApi } from "@/app/store/api/availablecity.api";
 import { getCurrentLocation } from "./utils/getCurrentLocation";
 import { getAddressInfo } from "./store/api/services/location.service";
 import GettingService from "./components/onboarding/GettingService";
+import ServiceLoading from "./components/onboarding/ServiceLoading";
 
 export default function Home() {
   const [currentUserRegency, setCurrentUserRegency] = useState("");
   const [isAvailable, setIsAvailable] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-
+  const [isLoading, setIsLoading] = useState(true);
   const { currentCityData, isServiceIsAvailable, refetchAvailableCity } =
     useAvailableCityApi(currentUserRegency);
 
+  // Fetch user location and determine regency
   useEffect(() => {
-    setIsLoading(true);
-    getCurrentLocation((location: { lat: number; lng: number }) => {
-      getAddressInfo(location.lng, location.lat).then((res) => {
+    const fetchLocation = async () => {
+      try {
+        const location = await new Promise<{ lat: number; lng: number }>(
+          (resolve) => getCurrentLocation(resolve)
+        );
+
+        const res = await getAddressInfo(location.lng, location.lat);
         const regency = res[3]?.text;
-        setCurrentUserRegency(regency);
-      });
-    });
+
+        if (regency) {
+          setCurrentUserRegency(regency);
+          localStorage.setItem("userRegency", regency);
+        } else {
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Failed to fetch location/address info", error);
+        setIsLoading(false);
+      }
+    };
+
+    fetchLocation();
   }, []);
 
+  // When regency changes, trigger refetch
   useEffect(() => {
+    if (!currentUserRegency) return;
     refetchAvailableCity();
-
-    if (currentCityData && isServiceIsAvailable) {
-      setIsAvailable(true);
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 5000);
-    } else {
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 5000);
-    }
   }, [currentUserRegency]);
 
-  return (
-    <main className="w-full flex flex-col justify-between h-screen relative bg-white">
-      <div className="w-full h-100vh bottom-0">
-        {isAvailable ? (
-          <Maps mapHeight="100vh" />
-        ) : (
-          <div className="w-full h-screen px-10 text-center bg-white flex items-center justify-center">
-            <div>
-              <GettingService
-                currentUserRegency={currentUserRegency}
-                isServiceIsAvailable={isAvailable}
-                isLoading={isLoading}
-              />
-            </div>
-          </div>
-        )}
+  // When API data changes, determine availability
+  useEffect(() => {
+    if (!currentUserRegency) return;
+
+    const available = !!(currentCityData && isServiceIsAvailable);
+    setIsAvailable(available);
+
+    if (available) {
+      toast.success("Service is available", {
+        style: {
+          borderRadius: "20px",
+          background: "#333",
+          color: "#fff",
+        },
+      });
+    } else {
+      toast.error("Service not found", {
+        style: {
+          borderRadius: "20px",
+          background: "#333",
+          color: "#fff",
+        },
+      });
+    }
+
+    setTimeout(() => setIsLoading(false), 1000);
+  }, [currentCityData, isServiceIsAvailable]);
+
+  if (isLoading) {
+    return (
+      <main className="w-full h-screen flex flex-col items-center justify-center bg-white">
+        <ServiceLoading currentUserRegency={currentUserRegency} />
+      </main>
+    );
+  } else {
+    return (
+      <div className="w-full h-screen px-10 text-center bg-white flex items-center justify-center">
+        <GettingService
+          currentUserRegency={currentUserRegency}
+          isServiceIsAvailable={isAvailable}
+        />
       </div>
-    </main>
-  );
+    );
+  }
 }

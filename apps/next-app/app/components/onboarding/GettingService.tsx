@@ -7,30 +7,24 @@ import ServiceLoading from "./ServiceLoading";
 
 interface ServiceLoadingProps {
   currentUserRegency: string;
-  isLoading: boolean;
   isServiceIsAvailable: boolean;
 }
 
 function GettingService({
   currentUserRegency,
-  isLoading,
   isServiceIsAvailable,
 }: ServiceLoadingProps) {
+  console.log("apakah ada", isServiceIsAvailable);
   return (
     <div>
       <div>
-        {!isLoading && !isServiceIsAvailable && (
+        {!isServiceIsAvailable && (
           <ServiceNotFound currentUserRegency={currentUserRegency} />
         )}
       </div>
       <div>
-        {!isLoading && isServiceIsAvailable && (
+        {isServiceIsAvailable && (
           <ServiceFound currentUserRegency={currentUserRegency} />
-        )}
-      </div>
-      <div>
-        {isLoading && (
-          <ServiceLoading currentUserRegency={currentUserRegency} />
         )}
       </div>
     </div>
