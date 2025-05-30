@@ -75,7 +75,7 @@ func InitDB() *gorm.DB {
 }
 
 func RunMigrations() {
-	err := DB.AutoMigrate(&entity.Emergency{}, &entity.EmergencyType{})
+	err := DB.AutoMigrate(&entity.Emergency{}, &entity.EmergencyType{}, &entity.AvailableServiceCity{})
 
 	if err != nil {
 		log.Fatal("failed to migrate database", err)

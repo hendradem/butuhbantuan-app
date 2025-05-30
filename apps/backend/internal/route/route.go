@@ -9,4 +9,5 @@ func RegisterRoute(app *fiber.App) {
 	UserRouteSetup(apiVersion, app)
 	EmergencyRouteSetup(apiVersion, app)
 	DirectionsRouteSetup(apiVersion, app)
+	MasterDataRouteSetup(apiVersion, app)
 }
