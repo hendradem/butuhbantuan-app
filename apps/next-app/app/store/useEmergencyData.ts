@@ -21,9 +21,9 @@ type Actions = {
 const useEmergencyData = create<State & Actions>((set) => ({
     emergencyData: [],
     selectedEmergencyData: {
-        // selectedEmergencyData: {} as EmergencyDataType,
-        // selectedEmergencyType: null,
-        // selectedEmergencySource: "map",
+        selectedEmergencyData: {} as any,
+        selectedEmergencyType: null,
+        selectedEmergencySource: 'map',
     },
     updateEmergencyData: (data) => set({ emergencyData: data }),
     updateSelectedEmergencyData: (data) => set({ selectedEmergencyData: data }),

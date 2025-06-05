@@ -79,7 +79,7 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
             (a: any, b: any) => a?.matrix?.duration - b?.matrix?.duration
         )
 
-        setOrderedEmergencyData(orderedData)
+        setOrderedEmergencyData(orderedData as [])
     }
 
     const parseResponseTime = (duration: number): JSX.Element => {

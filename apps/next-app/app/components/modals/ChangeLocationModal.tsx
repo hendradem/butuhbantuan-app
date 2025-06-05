@@ -22,7 +22,7 @@ const ChangeLocationModal = () => {
     const [isOpen, setIsOpen] = useState<boolean>(true)
 
     const updateCoordinate = useUserLocationData(
-        (state) => state.updateUserCoordinate
+        (state) => state.updateCoordinate
     )
 
     const debouncedResult = useMemo(() => {

@@ -15,7 +15,6 @@ import services from '@/app/store/data/services.json'
 import { useAddressInformation } from '@/app/store/api/location.api'
 import { getAddressInfo } from '@/app/store/api/services/location.service'
 import { useEmergencyApi } from '@/app/store/api/emergency.api'
-import AddToHomeScreen from '../pwa/AddToHomeScreen'
 import useUserAgent from '@/app/hooks/useUserAgent'
 
 type MapsProps = {
@@ -428,17 +427,19 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     }, [directionRoute])
 
     useEffect(() => {
+        console.log(selectedEmergencyDataState)
+
+        const coords =
+            selectedEmergencyDataState?.selectedEmergencyData?.coordinates
+
         if (
             selectedEmergencyDataState &&
-            selectedEmergencyDataState.selectedEmergencySource == 'detail'
+            selectedEmergencyDataState.selectedEmergencySource === 'detail' &&
+            Array.isArray(coords) &&
+            coords.length === 2
         ) {
             zoomMapIntoSpecificArea(
-                [
-                    selectedEmergencyDataState?.selectedEmergencyData
-                        .coordinates[0],
-                    selectedEmergencyDataState?.selectedEmergencyData
-                        .coordinates[1],
-                ],
+                [coords[0], coords[1]],
                 [longitudeState, latitudeState]
             )
         }
