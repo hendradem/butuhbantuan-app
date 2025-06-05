@@ -27,7 +27,7 @@ export const getDistanceMatrix = async (
   origin: [number, number],
   destinations: any[]
 ): Promise<any> => {
-  const coordinates = [origin, ...destinations.map((dest) => dest.coordinates)]
+  const coordinates = [origin, ...destinations?.map((dest) => dest.coordinates)]
     .map((coord) => coord.join(","))
     .join(";");
 

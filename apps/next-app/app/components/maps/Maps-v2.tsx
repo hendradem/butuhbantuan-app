@@ -18,7 +18,8 @@ import services from "@/app/store/data/services.json";
 import { useAddressInformation } from "@/app/store/api/location.api";
 import { getAddressInfo } from "@/app/store/api/services/location.service";
 import { useEmergencyApi } from "@/app/store/api/emergency.api";
-import { useAvailableCityApi } from "@/app/store/api/availablecity.api";
+import AddToHomeScreen from "../pwa/AddToHomeScreen";
+import useUserAgent from "@/app/hooks/useUserAgent";
 
 type MapsProps = {
   mapHeight: string;
@@ -27,6 +28,11 @@ type MapsProps = {
 
 const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
   // ===== states ======
+
+  const [welcomeMessage, setWelcomeMessage] =
+    useState<string>("Checking device...");
+  const { isMobile, userAgentString, userAgent } = useUserAgent();
+
   let mapContainer: any;
   const mapWrapper = useRef<any>();
   const [mapContainerState, setMapContainerState] = useState<any>(null);
@@ -41,8 +47,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
   const [filteredLocations, setFilteredLocations] = useState<[]>([]);
   const [selectedEmergencyCoordinates, setSelectedEmergencyCoordinates] =
     useState<[number, number]>([0, 0]);
-
-  const [isServiceAvailable, setIsServiceAvailable] = useState<boolean>(false);
 
   // ===== end states ======
 
@@ -76,39 +80,13 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
   // ===== end store ======
 
   // ===== api ======
-  const { emergencyData, refetchEmergencyData } = useEmergencyApi();
+  const { emergencyData, emergencyDataLoading } = useEmergencyApi();
   const { data: addressInfo, refetch: refetchAddressInfo } =
     useAddressInformation(
       userLongitudeAfterGeolocated ? userLongitudeAfterGeolocated : 0,
       userLatitudeAfterGeolocated ? userLatitudeAfterGeolocated : 0
     );
-  const { availableCityData, availableCityDataLoading } = useAvailableCityApi();
   // ===== end api ======
-
-  if (availableCityData && addressInfo) {
-    // console.log(availableCityData);
-    // console.log(addressInfo);
-
-    getCurrentLocation((location: any) => {
-      const userLatitude = location?.lat;
-      const userLongitude = location?.lng;
-
-      if (userLatitude && userLongitude) {
-        // console.log(userLatitude, userLongitude);
-        // const foundCity = availableCityData?.data?.find(
-        //   (city: any) => city.city_name === currentRegency
-        // );
-        // if (foundCity) {
-        //   setIsServiceAvailable(true);
-        //   console.log("ada");
-        // } else {
-        //   setIsServiceAvailable(false);
-        //   console.log("tidak ada");
-        // }
-        // buildTheMap();
-      }
-    });
-  }
 
   const mapTheMarker = (): void => {
     if (filteredLocations.length > 0) {
@@ -489,7 +467,14 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     });
 
     buildTheMap();
-  }, [emergencyData?.data]);
+  }, [emergencyDataLoading]);
+
+  useEffect(() => {
+    const welcomeMessage = isMobile
+      ? "You are on a mobile device."
+      : "You are on a desktop device. Please use a mobile device to view this app.";
+    setWelcomeMessage(welcomeMessage);
+  }, [isMobile]);
 
   return (
     <>
@@ -502,6 +487,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         <div>
           <MainBottomMenu rebuildMap={buildTheMap} />
         </div>
+        <div></div>
       </div>
     </>
   );
