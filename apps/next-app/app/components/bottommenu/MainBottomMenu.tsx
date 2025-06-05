@@ -78,7 +78,6 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
         const orderedData = emergencyData?.sort(
             (a: any, b: any) => a?.matrix?.duration - b?.matrix?.duration
         )
-
         setOrderedEmergencyData(orderedData as [])
     }
 
@@ -123,8 +122,6 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                 selectedEmergencyDataState.selectedEmergencyData
             )
         }
-
-        console.log(selectedEmergencyDataState)
     }, [selectedEmergencyDataState])
 
     useEffect(() => {
