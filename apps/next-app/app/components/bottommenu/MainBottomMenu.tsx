@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import type { JSX } from 'react'
 import { BottomSheet, BottomSheetRef } from 'react-spring-bottom-sheet'
 import useMainBottomSheet from '@/app/store/useMainBottomSheet'
 import services from '@/app/store/data/services.json'
@@ -10,6 +11,7 @@ import { getDirectionsRoute } from '@/app/utils/mapboxMatrix'
 import useMapBox from '@/app/store/useMapBox'
 import useUserLocationData from '@/app/store/useUserLocationData'
 import { HiClock } from 'react-icons/hi2'
+import { BaseBottomSheet } from '../bottomsheet/BaseBottomSheet'
 
 type MapsPropsType = {
     rebuildMap: (arg1: any, arg2: any) => void
@@ -139,10 +141,16 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     return (
         <div>
             <div className="bottom-sheet">
-                <BottomSheet
+                <BaseBottomSheet
                     open={mainBottomSheet.isOpen}
                     ref={sheetRef}
-                    snapPoints={({ maxHeight, minHeight }) => [
+                    snapPoints={({
+                        maxHeight,
+                        minHeight,
+                    }: {
+                        maxHeight: number
+                        minHeight: number
+                    }) => [
                         maxHeight - maxHeight / 10,
                         // maxHeight / 8,
                         minHeight + 2,
@@ -376,7 +384,7 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                             )}
                         </div>
                     </div>
-                </BottomSheet>
+                </BaseBottomSheet>
             </div>
         </div>
     )
