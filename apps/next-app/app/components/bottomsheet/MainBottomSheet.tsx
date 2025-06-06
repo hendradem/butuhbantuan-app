@@ -3,15 +3,16 @@ import type { JSX } from 'react'
 import { BottomSheet, BottomSheetRef } from 'react-spring-bottom-sheet'
 import useMainBottomSheet from '@/app/store/useMainBottomSheet'
 import useEmergencyData from '@/app/store/useEmergencyData'
-import SearchBoxSecondary from '../maps/SearchBoxSecondary'
-import Icon from '../ui/Icon'
-import Image from 'next/image'
 import { getDirectionsRoute } from '@/app/utils/mapboxMatrix'
 import useMapBox from '@/app/store/useMapBox'
 import useUserLocationData from '@/app/store/useUserLocationData'
-import { HiClock } from 'react-icons/hi2'
 import { convertPhoneNumber } from '@/app/utils/covertPhoneNumber'
 import { useEmergencyTypeApi } from '@/app/store/api/emergency-type.api'
+import SearchBoxSecondary from '../maps/SearchBoxSecondary'
+import Icon from '../ui/Icon'
+import Image from 'next/image'
+import { HiClock } from 'react-icons/hi2'
+import { BaseBottomSheet } from './BaseBottomSheet'
 
 type MapsPropsType = {
     rebuildMap: (arg1: any, arg2: any) => void
@@ -180,13 +181,16 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     return (
         <div>
             <div className="bottom-sheet">
-                <BottomSheet
+                <BaseBottomSheet
                     open={mainBottomSheet.isOpen}
                     ref={sheetRef}
-                    snapPoints={({ maxHeight, minHeight }) => [
-                        maxHeight - maxHeight / 10,
-                        minHeight + 2,
-                    ]}
+                    snapPoints={({
+                        maxHeight,
+                        minHeight,
+                    }: {
+                        maxHeight: number
+                        minHeight: number
+                    }) => [maxHeight - maxHeight / 10, minHeight + 2]}
                     blocking={false}
                 >
                     <div>
@@ -493,7 +497,7 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                             )}
                         </div>
                     </div>
-                </BottomSheet>
+                </BaseBottomSheet>
             </div>
         </div>
     )
