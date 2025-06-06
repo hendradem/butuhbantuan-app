@@ -10,6 +10,7 @@
     "types": [
       "@serwist/next/typings"
     ],
+    "allowSyntheticDefaultImports": true,
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -22,7 +23,7 @@
     "isolatedModules": true,
     // "jsx": "preserve",
     "incremental": true,
-    "jsx": "react-jsx",
+    "jsx": "preserve",
     "plugins": [
       {
         "name": "next"

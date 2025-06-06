@@ -230,7 +230,7 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                                                     <div className="">
                                                                         <div className="flex items-start space-x-3">
                                                                             <div className="w-10 h-10 bg-white border border-neutral-100 p-1.5 rounded-lg flex items-center justify-center">
-                                                                                <Image
+                                                                                <img
                                                                                     alt="Organization logo"
                                                                                     width={
                                                                                         40
