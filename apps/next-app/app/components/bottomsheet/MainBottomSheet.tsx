@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react'
-import type { JSX } from 'react'
 import { BottomSheet, BottomSheetRef } from 'react-spring-bottom-sheet'
 import useMainBottomSheet from '@/app/store/useMainBottomSheet'
 import useEmergencyData from '@/app/store/useEmergencyData'
