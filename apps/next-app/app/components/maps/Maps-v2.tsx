@@ -1,21 +1,21 @@
 'use client'
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import config from '@/app/config'
 import toast from 'react-hot-toast'
-import 'mapbox-gl/dist/mapbox-gl.css'
-import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
 import useMapBox from '@/app/store/useMapBox'
 import useUserLocationData from '@/app/store/useUserLocationData'
 import MainBottomMenu from '../bottomsheet/MainBottomSheet'
 import { getCurrentLocation } from '@/app/utils/getCurrentLocation'
 import { getDistanceMatrix, getDirectionsRoute } from '@/app/utils/mapboxMatrix'
-import useEmergencyData from '@/app/store/useEmergencyData'
-import services from '@/app/store/data/services.json'
 import { useAddressInformation } from '@/app/store/api/location.api'
 import { getAddressInfo } from '@/app/store/api/services/location.service'
 import { useEmergencyApi } from '@/app/store/api/emergency.api'
+import useEmergencyData from '@/app/store/useEmergencyData'
+import services from '@/app/store/data/services.json'
 import useUserAgent from '@/app/hooks/useUserAgent'
+import 'mapbox-gl/dist/mapbox-gl.css'
+import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
 
 type MapsProps = {
     mapHeight: string
@@ -30,7 +30,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const { isMobile, userAgentString, userAgent } = useUserAgent()
 
     let mapContainer: any
-    const mapWrapper = useRef<any>()
+    const mapWrapper = useRef<any>({})
     const [mapContainerState, setMapContainerState] = useState<any>(null)
     const [userLatitudeAfterGeolocated, setUserLatitudeAfterGeolocated] =
         useState<number>(0)
@@ -498,7 +498,10 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                 <div
                     className="w-full"
                     style={{ height: '100vh' }}
-                    ref={(el) => (mapWrapper.current = el)}
+                    ref={(el) => {
+                        mapWrapper.current = el
+                        void 0
+                    }}
                 ></div>
                 <div>
                     <MainBottomMenu rebuildMap={buildTheMap} />

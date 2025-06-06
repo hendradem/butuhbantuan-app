@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import type { JSX } from 'react'
 import { BottomSheet, BottomSheetRef } from 'react-spring-bottom-sheet'
 import useMainBottomSheet from '@/app/store/useMainBottomSheet'
 import useEmergencyData from '@/app/store/useEmergencyData'
@@ -69,7 +70,6 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
 
     // details
     const handleSelectedEmergency = async (emergency: any) => {
-        console.log(emergency)
         setSelectedEmergencyName(emergency?.name) // to trigger focus on list component.
         updateSelectedEmergencyData({
             selectedEmergencyData: emergency,
@@ -97,7 +97,6 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
 
     const parseResponseTime = (duration: number): JSX.Element => {
         const maxResponseTime: number = 25
-
         return (
             <>
                 {duration <= maxResponseTime ? (
@@ -140,7 +139,6 @@ const MainBottomMenu: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     }
 
     const handleCloseDetailSheet = () => {
-        console.log('handle close')
         handleResetBottomSheet()
         setIsDetail(false)
         onExitFullScreen()
