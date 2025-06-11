@@ -7,6 +7,7 @@ import { FaMagnifyingGlass } from 'react-icons/fa6'
 import Icon from '../ui/Icon'
 import useMainBottomSheet from '@/app/store/useMainBottomSheet'
 import { getCurrentLocation } from '@/app/utils/getCurrentLocation'
+import { getAddressInfo } from '@/app/store/api/services/location.service'
 
 type MapsPropsType = {
     rebuildMap: (arg1: any, arg2: any) => void
@@ -95,6 +96,12 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
             }
             updateCoordinate(location.lat, location.lng)
             rebuildMap('rebuild', coordinates) // trigger map rebuild function at parent component
+
+            // get address info to update address on the textbox - [NOTE: Directly use location.service fetcher]
+            getAddressInfo(coordinates.long, coordinates.lat).then((res) => {
+                const address = res[0]?.place_name
+                setCurrentUserAddress(address)
+            })
         })
     }
 
@@ -103,7 +110,6 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
         resetBottomSheet()
         setIsSearchBoxActive(false)
         setCurrentUserAddress(address.address)
-        const coordinates = { lat: address.lat, long: address.long }
         updateCoordinate(address.lat, address.long)
         updateRefetchMatrix()
         onExitFullScreen()
@@ -213,10 +219,10 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
                             onClick={(e) => {
                                 handleGetCurrentLocation(e)
                             }}
-                            className="p-1 py-[8px] bg-gray-100 rounded-md"
+                            className="p-1 py-[8px] px-2 bg-gray-100 rounded-lg"
                         >
                             <Icon
-                                name="iconamoon:location-bold"
+                                name="material-symbols:my-location"
                                 className="text-xl"
                             />
                         </button>

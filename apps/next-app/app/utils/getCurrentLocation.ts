@@ -1,15 +1,19 @@
 import useAddressInformation from '@/app/store/useUserLocationData'
+import { toastService } from '@/app/libs/toast'
 
 export function getCurrentLocation(
     callback: (location: { lat: number; lng: number }) => void
 ) {
     if (navigator.geolocation) {
+        toastService.showLoading('Mencari lokasi...')
         navigator.geolocation.getCurrentPosition(
-            (pos) =>
+            (pos) => {
                 callback({
                     lat: pos.coords.latitude,
                     lng: pos.coords.longitude,
-                }),
+                })
+                toastService.dismiss()
+            },
             (err) => {
                 switch (err.code) {
                     case err.PERMISSION_DENIED:

@@ -5,7 +5,7 @@ import config from '@/app/config'
 import toast from 'react-hot-toast'
 import useMapBox from '@/app/store/useMapBox'
 import useUserLocationData from '@/app/store/useUserLocationData'
-import MainBottomMenu from '../bottomsheet/MainBottomSheet'
+import MainBottomSheet from '../bottomsheet/MainBottomSheet'
 import { getCurrentLocation } from '@/app/utils/getCurrentLocation'
 import { getDistanceMatrix, getDirectionsRoute } from '@/app/utils/mapboxMatrix'
 import { useAddressInformation } from '@/app/store/api/location.api'
@@ -37,7 +37,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const [userLongitudeAfterGeolocated, setUserLongitudeAfterGeolocated] =
         useState<number>(0)
 
-    const [isGeolocating, setIsGeolocating] = useState<boolean>(false)
     const [currentMarker, setCurrentMarker] = useState<any>(null)
     const [currentRegency, setCurrentRegency] = useState<any>('')
     const [filteredLocations, setFilteredLocations] = useState<[]>([])
@@ -78,7 +77,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     // ===== end store ======
 
     // ===== api ======
-    const { emergencyData, emergencyDataLoading } = useEmergencyApi()
+    const { getEmergencyData, emergencyDataLoading } = useEmergencyApi()
     const { data: addressInfo, refetch: refetchAddressInfo } =
         useAddressInformation(
             userLongitudeAfterGeolocated ? userLongitudeAfterGeolocated : 0,
@@ -181,7 +180,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
         if (data) {
             if (
-                currentAmbulanceMarkerLabel.length > emergencyData?.data?.length
+                currentAmbulanceMarkerLabel.length >
+                getEmergencyData?.data?.length
             ) {
                 currentAmbulanceMarkerLabel.forEach((el) => el.remove())
             } else {
@@ -235,7 +235,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const getMatrixOfLocations = (longitude: number, latitude: number) => {
         getDistanceMatrix(
             [longitude ?? 0, latitude ?? 0],
-            emergencyData?.data
+            getEmergencyData?.data
         ).then((res) => {
             const transformedLocations = res.map((location: any) => {
                 return {
@@ -342,21 +342,16 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                     coordinates?.lat ?? 0
                 )
                 refetchAddressInfo()
-                setIsGeolocating(false)
-
                 getMatrixOfLocations(
                     coordinates?.long ?? 0,
                     coordinates?.lat ?? 0
                 )
             } else {
-                setIsGeolocating(true)
-
                 getCurrentLocation((location: any) => {
                     const userLatitude = location?.lat
                     const userLongitude = location?.lng
 
                     if (userLatitude && userLongitude) {
-                        setIsGeolocating(false)
                         refetchAddressInfo()
                         setUserLatitudeAfterGeolocated(userLatitude)
                         setUserLongitudeAfterGeolocated(userLongitude)
@@ -381,17 +376,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
             // remove existing route layer
             removeExistingDirectionLine()
-
-            // get directions from marker location to user location
-            const directions = getDirectionsRoute(
-                [
-                    selectedEmergencyCoordinates[0],
-                    selectedEmergencyCoordinates[1],
-                ], // origin coordinate (emergency location)
-                [longitudeState, latitudeState] // user location coordinate
-            )
-
-            updateDirectionRoute(directions)
             refetchAddressInfo()
         })
     }
@@ -427,8 +411,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     }, [directionRoute])
 
     useEffect(() => {
-        console.log(selectedEmergencyDataState)
-
         const coords =
             selectedEmergencyDataState?.selectedEmergencyData?.coordinates
 
@@ -446,42 +428,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     }, [selectedEmergencyDataState])
 
     useEffect(() => {
-        if (isGeolocating) {
-            toast.loading('Getting your location', {
-                style: {
-                    borderRadius: '20px',
-                    background: '#333',
-                    color: '#fff',
-                },
-            })
-        }
-
-        if (
-            !isGeolocating &&
-            userLatitudeAfterGeolocated &&
-            userLongitudeAfterGeolocated
-        ) {
-            toast.dismiss()
-            toast.success('Your location found!', {
-                style: {
-                    borderRadius: '20px',
-                    background: '#333',
-                    color: '#fff',
-                },
-                duration: 500,
-            })
-        }
-    }, [isGeolocating])
-
-    useEffect(() => {
-        toast.loading('Mencarikan data untukmu', {
-            style: {
-                borderRadius: '20px',
-                background: '#333',
-                color: '#fff',
-            },
-        })
-
         buildTheMap()
     }, [emergencyDataLoading])
 
@@ -504,9 +450,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                     }}
                 ></div>
                 <div>
-                    <MainBottomMenu rebuildMap={buildTheMap} />
+                    <MainBottomSheet rebuildMap={buildTheMap} />
                 </div>
-                <div></div>
             </div>
         </>
     )
