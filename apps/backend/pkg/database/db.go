@@ -2,12 +2,14 @@ package database
 
 import (
 	"butuhbantuan/internal/model/entity"
+	"butuhbantuan/pkg/config"
 	"fmt"
 	"log"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
+
 )
 
 var DB *gorm.DB
@@ -51,11 +53,14 @@ var emergencySeed = []entity.Emergency{
 	},
 }
 
-func InitDB() *gorm.DB {
-
+func InitDB() *gorm.DB { 
 	var err error
+	config.LoadEnv()
+	db := config.GetEnv("DB", "null")   
 
-	dsn := "root:@tcp(127.0.0.1:3306)/butuhbantuan?charset=utf8mb4&parseTime=True&loc=Local"
+	fmt.Println(db)
+
+	dsn := fmt.Sprintf("%s", db)
 	DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
 			SingularTable: true,

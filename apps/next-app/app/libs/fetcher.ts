@@ -7,6 +7,7 @@ const instance = axios.create({
     headers: {
         Accept: 'application/json, text/plain, */*',
         'Content-Type': 'application/json; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
     },
 })
 
