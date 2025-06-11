@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/gofiber/fiber/v2"
@@ -166,7 +167,6 @@ func GetGeocodingApi(ctx *fiber.Ctx) error {
 }
 
 func GetGeolocation(ctx *fiber.Ctx) error {
-	// Parse query parameters
 	searchQuery := ctx.Query("searchQuery")
 
 	if searchQuery == "" {
@@ -176,9 +176,11 @@ func GetGeolocation(ctx *fiber.Ctx) error {
 		})
 	}
 
+	encodedQuery := url.QueryEscape(searchQuery)
+
 	geoApifyRequest := fmt.Sprintf("%s/autocomplete?text=%s&apiKey=%s",
 		os.Getenv("GEOAPIFY_URL"),
-		searchQuery,
+		encodedQuery,
 		os.Getenv("GEOAPIFY_API_KEY"),
 	)
 
@@ -187,13 +189,12 @@ func GetGeolocation(ctx *fiber.Ctx) error {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Failed to fetch geoapify data",
-			"data":    err,
+			"data":    err.Error(),
 		})
 	}
 	defer resp.Body.Close()
 
 	response := make(map[string]interface{})
-
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"status":  "error",
