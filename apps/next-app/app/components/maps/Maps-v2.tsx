@@ -22,6 +22,13 @@ type MapsProps = {
     updateLatestLocation?: () => void
 }
 
+enum EMERGENCY_TYPE {
+    FIRE = 'Fire',
+    AMBULANCE = 'Ambulance',
+    SAR = 'Sar',
+    HOSPITAL = 'Hospital',
+}
+
 const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     // ===== states ======
 
@@ -92,43 +99,34 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                 .querySelectorAll('.ambulance-marker')
                 .forEach((marker) => marker.remove())
 
-            filteredLocations.map((marker: any, markerIndex: number) => {
+            document
+                .querySelectorAll('.fire-fighter-marker')
+                .forEach((marker) => marker.remove())
+
+            document
+                .querySelectorAll('.sar-marker')
+                .forEach((marker) => marker.remove())
+
+            document
+                .querySelectorAll('.hospital-marker')
+                .forEach((marker) => marker.remove())
+
+            filteredLocations.map((marker: any) => {
                 const el = document.createElement('div')
-                el.className = 'ambulance-marker'
 
-                // label
-                const label = document.createElement('div')
-                label.className = 'marker-label'
-                label.style.position = 'absolute'
-                label.style.background = 'white'
-                label.style.width = '100px'
-                label.style.padding = '5px'
-                label.style.borderRadius = '8px'
-                label.style.fontSize = '11px'
-                label.style.marginTop = '-15px'
-                label.style.marginLeft = '30px'
-                label.style.boxShadow = '0 1px 2px 0 rgb(0 0 0 / 0.05)'
-                label.style.display = 'none'
-                el.appendChild(label)
+                if (marker.organizationType == EMERGENCY_TYPE.AMBULANCE) {
+                    el.className = 'ambulance-marker'
+                } else if (marker.organizationType == EMERGENCY_TYPE.FIRE) {
+                    el.className = 'fire-fighter-marker'
+                } else if (marker.organizationType == EMERGENCY_TYPE.SAR) {
+                    el.className = 'sar-marker'
+                } else if (marker.organizationType == EMERGENCY_TYPE.HOSPITAL) {
+                    el.className = 'hospital-marker'
+                }
 
-                const popupContent = `
-                    <div class="rounded-lg p-3 bg-white shadow-sm text-neutral-900 emergency-popup">
-                        <div class="flex items-center space-x-2">
-                            <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M10 2a6 6 0 00-6 6c0 4.418 6 10 6 10s6-5.582 6-10a6 6 0 00-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z" clip-rule="evenodd" />
-                            </svg>
-                            <h3 class="font-semibold">MSW Warehouse</h3>
-                        </div>
-                        <p class="text-sm">741 Nicolette Freeway, Utah</p>
-                        <p class="text-xs mt-1">15:32 · GMT +7</p>
-                    </div>
-                    `
                 // Add markers to the map.
                 new mapboxgl.Marker(el)
                     .setLngLat([marker.coordinates[0], marker.coordinates[1]])
-                    .setPopup(
-                        new mapboxgl.Popup({ offset: 25 }).setHTML(popupContent)
-                    )
                     .addTo(mapContainer ? mapContainer : mapContainerState)
 
                 el.addEventListener('click', async (e: any) => {
@@ -171,25 +169,18 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             document
                 .querySelectorAll('.ambulance-marker')
                 .forEach((marker) => marker.remove())
-        }
-    }
 
-    const updateMarkerInformation = (data: any) => {
-        const currentAmbulanceMarkerLabel =
-            document.querySelectorAll('.marker-label')
+            document
+                .querySelectorAll('.fire-fighter-marker')
+                .forEach((marker) => marker.remove())
 
-        if (data) {
-            if (
-                currentAmbulanceMarkerLabel.length >
-                getEmergencyData?.data?.length
-            ) {
-                currentAmbulanceMarkerLabel.forEach((el) => el.remove())
-            } else {
-                for (let i = 0; i < currentAmbulanceMarkerLabel.length; i++) {
-                    currentAmbulanceMarkerLabel[i].innerHTML =
-                        `<h3 className='text-orange-200'>${data[i]?.name}</h3><p> <p> ${data[i]?.duration} min</p>`
-                }
-            }
+            document
+                .querySelectorAll('.sar-marker')
+                .forEach((marker) => marker.remove())
+
+            document
+                .querySelectorAll('.hospital-marker')
+                .forEach((marker) => marker.remove())
         }
     }
 
@@ -205,22 +196,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             userLocationMarker[0].remove()
         }
 
-        const popupContent = `
-        <div class="p-3">
-            <div class="flex items-center space-x-2">
-                <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 2a6 6 0 00-6 6c0 4.418 6 10 6 10s6-5.582 6-10a6 6 0 00-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z" clip-rule="evenodd" />
-                </svg>
-                <h3 class="text-white font-semibold">MSW Warehouse</h3>
-            </div>
-            <p class="text-gray-600 text-sm">741 Nicolette Freeway, Utah</p>
-            <p class="text-gray-600 text-xs mt-1">15:32 · GMT +7</p>
-        </div>
-    `
-
         let current = new mapboxgl.Marker(el)
             .setLngLat([longitude, latitude])
-            .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(popupContent))
             .addTo(mapContainer)
 
         setCurrentMarker(current)
@@ -237,17 +214,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             [longitude ?? 0, latitude ?? 0],
             getEmergencyData?.data
         ).then((res) => {
-            const transformedLocations = res.map((location: any) => {
-                return {
-                    id: location?.id,
-                    name: location?.name,
-                    coordinates: location?.coordinates,
-                    distance: location.responseTime.distance,
-                    duration: location.responseTime.duration,
-                }
-            })
-
-            updateMarkerInformation(transformedLocations)
+            // updateMarkerInformation(transformedLocations)
             updateEmergencyData(res) // update global emergency state
             setFilteredLocations(res as any) // update emergency state
         })

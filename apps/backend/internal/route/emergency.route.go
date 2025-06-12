@@ -10,6 +10,7 @@ func EmergencyRouteSetup(apiVersion string, app *fiber.App) {
 	emergencyGroup := app.Group(apiVersion + "/emergency")
 
 	emergencyGroup.Get("/", handler.GetEmergency)
+	emergencyGroup.Get("/by-type/:emergencyTypeID", handler.GetEmergencyByType)
 	emergencyGroup.Post("/", handler.AddEmergency)
 	emergencyGroup.Get("/type", handler.GetEmergencyType)
 	emergencyGroup.Post("/type", handler.AddEmergencyType)

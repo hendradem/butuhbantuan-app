@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { EmergencyDataType } from '../types/emergency'
-import { useEmergencyApi } from '@/app/store/api/emergency.api'
 
 type SelectedEmergencyDataType = {
     selectedEmergencyData: EmergencyDataType

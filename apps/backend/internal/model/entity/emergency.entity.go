@@ -13,6 +13,7 @@ type Emergency struct {
 	Name             string         `json:"name" gorm:"type:varchar(255); not null"`
 	OrganizationName string         `json:"organization_name" gorm:"type:varchar(255); not null"`
 	OrganizationType string         `json:"organization_type" gorm:"type:varchar(255); not null"`
+	EmergencyTypeID  uint           `json:"emergency_type_id" gorm:"type:varchar(255); not null"`
 	Description      string         `json:"description" gorm:"type:varchar(255); not null"`
 	IsVerified       bool           `json:"is_verified" gorm:"type:tinyint(1); default:0"`
 	OrganizationLogo string         `json:"organization_logo" gorm:"type:varchar(255); not null"`

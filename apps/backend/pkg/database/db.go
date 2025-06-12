@@ -9,7 +9,6 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
-
 )
 
 var DB *gorm.DB
@@ -19,6 +18,7 @@ var emergencySeed = []entity.Emergency{
 		Name:             "PMI Kab. Sleman",
 		OrganizationName: "Palang Merah Indonesia",
 		OrganizationType: "Ambulance",
+		EmergencyTypeID:  1,
 		Description:      "24/7",
 		IsVerified:       true,
 		OrganizationLogo: "https://res.cloudinary.com/djzrlqubf/image/upload/v1705744061/butuhbantuan/xteksibif5uschl27nbe.png",
@@ -37,6 +37,7 @@ var emergencySeed = []entity.Emergency{
 		Name:             "Ambulance MPD Peduli",
 		OrganizationName: "MPD Peduli",
 		OrganizationType: "Ambulance",
+		EmergencyTypeID:  1,
 		Description:      "24/7",
 		IsVerified:       true,
 		OrganizationLogo: "https://res.cloudinary.com/djzrlqubf/image/upload/v1705744433/butuhbantuan/iicqfihmm4uocius8cbe.png",
@@ -51,12 +52,69 @@ var emergencySeed = []entity.Emergency{
 		FullAddress:      "Jl. Pogung Raya, Mlati",
 		TypeOfService:    "Emergency, Transport",
 	},
+	{
+		Name:             "Damkar Sleman",
+		OrganizationName: "Pemadam Kebakaran",
+		OrganizationType: "Damkar",
+		EmergencyTypeID:  2,
+		Description:      "24/7",
+		IsVerified:       true,
+		OrganizationLogo: "https://res.cloudinary.com/djzrlqubf/image/upload/v1749732912/butuhbantuan/LOGO-DAMKAR_lsoh5q.png",
+		Latitude:         "-7.7177503",
+		Longitude:        "110.3528115",
+		Email:            "damkar@sleman.go.id",
+		Phone:            "02748589030",
+		Whatsapp:         "085061131348",
+		District:         "Sleman",
+		Regency:          "Sleman",
+		Province:         "DIY",
+		FullAddress:      "Jl. Candi Gebang No.3, Beran, Beran Kidul, Tridadi, Kec. Sleman, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55511",
+		TypeOfService:    "Kebakaran, Rescue",
+	},
+	{
+		Name:             "Pos Damkar UGM",
+		OrganizationName: "Pemadam Kebakaran",
+		OrganizationType: "Damkar",
+		EmergencyTypeID:  2,
+		Description:      "24/7",
+		IsVerified:       true,
+		OrganizationLogo: "https://res.cloudinary.com/djzrlqubf/image/upload/v1749732912/butuhbantuan/LOGO-DAMKAR_lsoh5q.png",
+		Latitude:         "-7.7759116",
+		Longitude:        "110.3786138",
+		Email:            "damkar@ugm.ac.id",
+		Phone:            "02748689330",
+		Whatsapp:         "085161135348",
+		District:         "Depok",
+		Regency:          "Sleman",
+		Province:         "DIY",
+		FullAddress:      "Jl. Colombo No.3, RW.02, Sagan, Caturtunggal, Kec. Depok, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55281",
+		TypeOfService:    "Kebakaran, Rescue",
+	},
+	{
+		Name:             "SAR DIY",
+		OrganizationName: "SAR",
+		OrganizationType: "Sar",
+		EmergencyTypeID:  2,
+		Description:      "24/7",
+		IsVerified:       true,
+		OrganizationLogo: "https://res.cloudinary.com/djzrlqubf/image/upload/v1749735152/butuhbantuan/Logo_Basarnas_btx5sf.png",
+		Latitude:         "-7.7870701",
+		Longitude:        "110.3560524",
+		Email:            "sar@diy.go.id",
+		Phone:            "02748289330",
+		Whatsapp:         "085160135348",
+		District:         "Bumijo",
+		Regency:          "Yogyakarta",
+		Province:         "DIY",
+		FullAddress:      "6975+5F Bumijo, Kota Yogyakarta, Daerah Istimewa Yogyakarta",
+		TypeOfService:    "Search and Rescue",
+	},
 }
 
-func InitDB() *gorm.DB { 
+func InitDB() *gorm.DB {
 	var err error
 	config.LoadEnv()
-	db := config.GetEnv("DB", "null")   
+	db := config.GetEnv("DB", "null")
 
 	fmt.Println(db)
 

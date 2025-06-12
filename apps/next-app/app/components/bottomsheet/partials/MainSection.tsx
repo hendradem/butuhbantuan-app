@@ -1,8 +1,7 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useEmergencyTypeApi } from '@/app/store/api/emergency-type.api'
 import SearchBoxSecondary from '../../maps/SearchBoxSecondary'
 import Icon from '../../ui/Icon'
-import SearchBox from '../../maps/SearchBox'
 
 interface PropsType {
     rebuildMap: (arg1: any, arg2: any) => void
@@ -18,6 +17,7 @@ const MainSection: React.FC<PropsType> = ({
     handleServiceClick,
 }) => {
     const { emergencyTypeData, emergencyTypeLoading } = useEmergencyTypeApi()
+    const [selectedEmergencyTypeID, setSelectedEmergencyTypeID] = useState(0)
 
     const skeletonLoader = () => {
         return (

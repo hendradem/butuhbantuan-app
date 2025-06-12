@@ -114,6 +114,54 @@ body {
     cursor: pointer;
 }
 
+.fire-fighter-marker {
+    background-image: url('../public/assets/icons/fire-fighter-logo.svg');
+    background-color: #ef4444;
+    color: white;
+    box-shadow:
+        0 4px 6px -1px rgb(0 0 0 / 0.1),
+        0 2px 4px -2px rgb(0 0 0 / 0.1);
+    background-size: 12px 12px;
+    background-position: center;
+    background-repeat: no-repeat;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.hospital-marker {
+    background-image: url('../public/assets/icons/hospital-logo.svg');
+    background-color: #8b5cf6;
+    color: white;
+    box-shadow:
+        0 4px 6px -1px rgb(0 0 0 / 0.1),
+        0 2px 4px -2px rgb(0 0 0 / 0.1);
+    background-size: 12px 12px;
+    background-position: center;
+    background-repeat: no-repeat;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.sar-marker {
+    background-image: url('../public/assets/icons/sar-logo.svg');
+    background-color: #f97316;
+    color: white;
+    box-shadow:
+        0 4px 6px -1px rgb(0 0 0 / 0.1),
+        0 2px 4px -2px rgb(0 0 0 / 0.1);
+    background-size: 12px 12px;
+    background-position: center;
+    background-repeat: no-repeat;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
 .mapboxgl-popup {
     max-width: 200px;
 } 

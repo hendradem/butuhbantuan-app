@@ -37,6 +37,34 @@ func GetEmergency(ctx *fiber.Ctx) error {
 	})
 }
 
+func GetEmergencyByType(ctx *fiber.Ctx) error {
+	emergencyTypeID := ctx.Params("emergencyTypeID")
+	var emergencies []entity.Emergency
+
+	result := database.DB.Where("emergency_type_id = ?", emergencyTypeID).Find(&emergencies)
+
+	if result.Error != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "failed to get emergencies",
+			"data":    result.Error.Error(),
+		})
+	}
+
+	// ✅ Map to DTO
+	var response []dto.EmergencyServiceResponse
+	for _, e := range emergencies {
+		response = append(response, mapper.MapEmergencyServiceToResponse(e))
+	}
+
+	// ✅ Return DTO-based JSON
+	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":  "success",
+		"message": "success to get emergencies data",
+		"data":    response,
+	})
+}
+
 func GetEmergencyType(ctx *fiber.Ctx) error {
 	var emergencyType []entity.EmergencyType
 	result := database.DB.Find(&emergencyType)

@@ -34,7 +34,11 @@ const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     )
     const [selectedEmergencyData, setSelectedEmergencyData] =
         useState<emergencyDataType>()
+
     const [isDetail, setIsDetail] = useState(false)
+
+    const [filteredEmergencyData, setFilteredEmergencyData] = useState<any>([])
+
     const handleSearchInputOnClick = () => {
         sheetRef?.current?.snapTo(({ snapPoints }) => Math.max(...snapPoints))
         onFullScreen()
@@ -43,6 +47,13 @@ const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
         sheetRef?.current?.snapTo(({ snapPoints }) => Math.min(...snapPoints))
     }
     const handleServiceClick = (service?: any) => {
+        const serviceID = service?.id
+
+        const filteredEmergencies = emergencyData.filter((item: any) => {
+            return item?.emergencyTypeID === serviceID
+        })
+
+        setFilteredEmergencyData(filteredEmergencies)
         setSelectedEmergencyData(service)
         setIsDetail(true)
     }
@@ -137,7 +148,7 @@ const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                     selectedEmergencyData={
                                         selectedEmergencyData
                                     }
-                                    emergencyData={emergencyData}
+                                    emergencyData={filteredEmergencyData}
                                     selectedEmergencyName={
                                         selectedEmergencyName
                                     }

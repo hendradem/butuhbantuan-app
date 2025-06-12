@@ -1,5 +1,4 @@
 import config from '../config'
-import { fetcher } from '../libs/fetcher'
 import axios from 'axios'
 
 export interface Location {
@@ -58,7 +57,7 @@ export const getDistanceMatrix = async (
                     Math.floor(parseInt(responseTime.duration)) <= 30
             )
             .sort((a, b) => a.responseTime.duration - b.responseTime.duration)
-            .map((location, index) => ({
+            .map((location) => ({
                 ...location,
             }))
     } catch (error) {
