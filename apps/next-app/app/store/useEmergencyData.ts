@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { EmergencyDataType } from '../types/emergency'
 
 type SelectedEmergencyDataType = {
-    selectedEmergencyData: EmergencyDataType
+    selectedEmergencyData: any
     selectedEmergencyType?: any
     selectedEmergencySource: 'map' | 'detail'
 }
