@@ -7,54 +7,35 @@ export const useEmergencyApi = () => {
 
     const getAll = useQuery(['emergency'], emergencyService.getAll, {
         onSuccess: (data) => {},
-        onError: () => toastService.error('Gagal mengambil data emergency'),
+        // onError: () => toastService.error('Gagal mengambil data emergency'),
     })
 
-    if (getAll.isLoading) {
-        toastService.showLoading('Mencarikan data untukmu')
-    }
+    // if (getAll.isLoading) {
+    //     toastService.showLoading('Mencarikan data untukmu')
+    // }
 
     const create = useMutation(emergencyService.create, {
-        onMutate: () => toastService.showLoading('Menyimpan data...'),
+        // onMutate: () => toastService.showLoading('Menyimpan data...'),
         onSuccess: () => {
-            toastService.dismiss()
-            toastService.success('Data berhasil dibuat')
             queryClient.invalidateQueries(['emergency'])
         },
-        onError: () => {
-            toastService.dismiss()
-            toastService.error('Gagal membuat data')
-        },
+        onError: () => {},
     })
 
     const update = useMutation(
         ({ id, data }: { id: string; data: any }) =>
             emergencyService.update(id, data),
         {
-            onMutate: () => toastService.showLoading('Mengupdate data...'),
-            onSuccess: () => {
-                toastService.dismiss()
-                toastService.success('Data berhasil diupdate')
-                queryClient.invalidateQueries(['emergency'])
-            },
-            onError: () => {
-                toastService.dismiss()
-                toastService.error('Gagal mengupdate data')
-            },
+            // onMutate: () => toastService.showLoading('Mengupdate data...'),
+            onSuccess: () => {},
+            onError: () => {},
         }
     )
 
     const remove = useMutation((id: string) => emergencyService.delete(id), {
-        onMutate: () => toastService.showLoading('Menghapus data...'),
-        onSuccess: () => {
-            toastService.dismiss()
-            toastService.success('Data berhasil dihapus')
-            queryClient.invalidateQueries(['emergency'])
-        },
-        onError: () => {
-            toastService.dismiss()
-            toastService.error('Gagal menghapus data')
-        },
+        // onMutate: () => toastService.showLoading('Menghapus data...'),
+        onSuccess: () => {},
+        onError: () => {},
     })
 
     return {

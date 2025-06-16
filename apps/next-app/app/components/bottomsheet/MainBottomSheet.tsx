@@ -19,11 +19,14 @@ type emergencyDataType = {
     name: string
 }
 
+type selectedEmergencyDataType = {
+    emergency_type_name: string | null
+    emergency_type_icon: string | null
+}
+
 const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     const mainBottomSheet = useMainBottomSheet()
     const sheetRef = React.useRef<BottomSheetRef>(null)
-    const onFullScreen = mainBottomSheet.onFullScreen
-    const onExitFullScreen = mainBottomSheet.onExitFullScreen
     const isSheetFullscreen = mainBottomSheet.isFullScreen
     const emergencyData = useEmergencyData((state) => state.emergencyData)
     const selectedEmergencyDataState = useEmergencyData(
@@ -39,9 +42,15 @@ const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
 
     const [filteredEmergencyData, setFilteredEmergencyData] = useState<any>([])
 
+    const [selectedEmergencyType, setSelectedEmergencyType] =
+        useState<selectedEmergencyDataType>({
+            emergency_type_name: null,
+            emergency_type_icon: null,
+        })
+
     const handleSearchInputOnClick = () => {
         sheetRef?.current?.snapTo(({ snapPoints }) => Math.max(...snapPoints))
-        onFullScreen()
+        mainBottomSheet.onFullScreen()
     }
     const handleResetBottomSheet = () => {
         sheetRef?.current?.snapTo(({ snapPoints }) => Math.min(...snapPoints))
@@ -49,8 +58,13 @@ const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     const handleServiceClick = (service?: any) => {
         const serviceID = service?.id
 
+        setSelectedEmergencyType({
+            emergency_type_name: service?.emergency_type_name,
+            emergency_type_icon: service?.icon,
+        })
+
         const filteredEmergencies = emergencyData.filter((item: any) => {
-            return item?.emergencyTypeID === serviceID
+            return +item.id === serviceID
         })
 
         setFilteredEmergencyData(filteredEmergencies)
@@ -59,7 +73,7 @@ const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     }
     const handleChangeLocationOnClick = () => {
         setIsDetail(false)
-        onFullScreen()
+        mainBottomSheet.onFullScreen()
         sheetRef?.current?.snapTo(({ snapPoints }) => Math.max(...snapPoints))
     }
 
@@ -90,7 +104,7 @@ const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     const handleCloseDetailSheet = () => {
         handleResetBottomSheet()
         setIsDetail(false)
-        onExitFullScreen()
+        mainBottomSheet.onExitFullScreen()
     }
 
     const scrollToTop = () => {
@@ -102,6 +116,14 @@ const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
             selectedEmergencyDataState &&
             selectedEmergencyDataState.selectedEmergencySource == 'map'
         ) {
+            const service =
+                selectedEmergencyDataState.selectedEmergencyData.EmergencyType
+
+            setSelectedEmergencyType({
+                emergency_type_name: service?.emergencyTypeName,
+                emergency_type_icon: service?.icon,
+            })
+
             handleServiceClick(selectedEmergencyDataState.selectedEmergencyType)
             handleSelectedEmergency(
                 selectedEmergencyDataState.selectedEmergencyData
@@ -149,6 +171,7 @@ const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
                                         selectedEmergencyData
                                     }
                                     emergencyData={filteredEmergencyData}
+                                    emergencyTypeData={selectedEmergencyType}
                                     selectedEmergencyName={
                                         selectedEmergencyName
                                     }

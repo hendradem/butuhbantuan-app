@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useEmergencyTypeApi } from '@/app/store/api/emergency-type.api'
 import SearchBoxSecondary from '../../maps/SearchBoxSecondary'
 import Icon from '../../ui/Icon'
@@ -17,7 +17,6 @@ const MainSection: React.FC<PropsType> = ({
     handleServiceClick,
 }) => {
     const { emergencyTypeData, emergencyTypeLoading } = useEmergencyTypeApi()
-    const [selectedEmergencyTypeID, setSelectedEmergencyTypeID] = useState(0)
 
     const skeletonLoader = () => {
         return (
@@ -70,7 +69,7 @@ const MainSection: React.FC<PropsType> = ({
                                     </div>
                                     <div className="mx-3">
                                         <h3 className="text-center text-[11px] mt-1 text-neutral-600 font-medium leading-[1.3]">
-                                            {service?.name}
+                                            {service?.emergency_type_name}
                                         </h3>
                                     </div>
                                 </div>

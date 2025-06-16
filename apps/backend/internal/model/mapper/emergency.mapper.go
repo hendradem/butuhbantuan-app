@@ -15,12 +15,16 @@ func MapEmergencyServiceToResponse(e entity.Emergency) dto.EmergencyServiceRespo
 		Name:             e.Name,
 		OrganizationName: e.OrganizationName,
 		OrganizationType: e.OrganizationType,
-		EmergencyTypeID:  e.EmergencyTypeID,
 		Logo:             e.OrganizationLogo,
 		Description:      e.Description,
 		Coordinates:      [2]float64{lng, lat},
 		TypeOfService:    e.TypeOfService,
 	}
+
+	res.EmergencyType.ID = e.EmergencyTypes.ID
+	res.EmergencyType.EmergencyTypeName = e.EmergencyTypes.EmergencyTypeName
+	res.EmergencyType.IsActive = e.EmergencyTypes.IsActive
+	res.EmergencyType.Icon = e.EmergencyTypes.Icon
 
 	res.Address.District = e.District
 	res.Address.Regency = e.Regency

@@ -5,14 +5,14 @@ export function getCurrentLocation(
     callback: (location: { lat: number; lng: number }) => void
 ) {
     if (navigator.geolocation) {
-        toastService.showLoading('Mencari lokasi...')
+        // toastService.showLoading('Mencari lokasi...')
         navigator.geolocation.getCurrentPosition(
             (pos) => {
                 callback({
                     lat: pos.coords.latitude,
                     lng: pos.coords.longitude,
                 })
-                toastService.dismiss()
+                // toastService.dismiss()
             },
             (err) => {
                 switch (err.code) {

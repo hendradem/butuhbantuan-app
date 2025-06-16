@@ -6,14 +6,15 @@ import toast from 'react-hot-toast'
 import useMapBox from '@/app/store/useMapBox'
 import useUserLocationData from '@/app/store/useUserLocationData'
 import MainBottomSheet from '../bottomsheet/MainBottomSheet'
+import DetailBottomSheet from '../bottomsheet/DetailBottomSheet'
+import useMainBottomSheet from '@/app/store/useMainBottomSheet'
 import { getCurrentLocation } from '@/app/utils/getCurrentLocation'
 import { getDistanceMatrix, getDirectionsRoute } from '@/app/utils/mapboxMatrix'
 import { useAddressInformation } from '@/app/store/api/location.api'
 import { getAddressInfo } from '@/app/store/api/services/location.service'
 import { useEmergencyApi } from '@/app/store/api/emergency.api'
 import useEmergencyData from '@/app/store/useEmergencyData'
-import services from '@/app/store/data/services.json'
-import useUserAgent from '@/app/hooks/useUserAgent'
+import useDetailSheet from '@/app/store/useDetailSheet'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
 
@@ -31,11 +32,6 @@ enum EMERGENCY_TYPE {
 
 const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     // ===== states ======
-
-    const [welcomeMessage, setWelcomeMessage] =
-        useState<string>('Checking device...')
-    const { isMobile, userAgentString, userAgent } = useUserAgent()
-
     let mapContainer: any
     const mapWrapper = useRef<any>({})
     const [mapContainerState, setMapContainerState] = useState<any>(null)
@@ -47,12 +43,10 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const [currentMarker, setCurrentMarker] = useState<any>(null)
     const [currentRegency, setCurrentRegency] = useState<any>('')
     const [filteredLocations, setFilteredLocations] = useState<[]>([])
-    const [selectedEmergencyCoordinates, setSelectedEmergencyCoordinates] =
-        useState<[number, number]>([0, 0])
-
     // ===== end states ======
 
     // ===== store ======
+    const detailSheet = useDetailSheet()
     const updateEmergencyData = useEmergencyData(
         (action) => action.updateEmergencyData
     )
@@ -77,6 +71,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const isRefetchMatrix = useUserLocationData(
         (state) => state.isRefetchMatrix
     )
+    const mainBottomSheet = useMainBottomSheet()
     const longitudeState = useUserLocationData((state) => state.long)
     const latitudeState = useUserLocationData((state) => state.lat)
     const regencyState = useUserLocationData((state) => state.regency)
@@ -94,7 +89,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
     const mapTheMarker = (): void => {
         if (filteredLocations.length > 0) {
-            // Clear existing markers if neede
+            // Clear existing markers if needed
             document
                 .querySelectorAll('.ambulance-marker')
                 .forEach((marker) => marker.remove())
@@ -132,37 +127,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                 el.addEventListener('click', async (e: any) => {
                     e.stopPropagation()
 
-                    setSelectedEmergencyCoordinates([
-                        marker.coordinates[0],
-                        marker.coordinates[1],
-                    ])
-
-                    // update global emergency state to trigger action in another component
-                    updateSelectedEmergencyData({
-                        selectedEmergencyData: marker,
-                        selectedEmergencyType: services[0],
-                        selectedEmergencySource: 'map',
-                    })
-
-                    // get directions from marker location to user location
-                    const directions = await getDirectionsRoute(
-                        [marker.coordinates[0], marker.coordinates[1]], // origin coordinate (emergency location)
-                        [
-                            longitudeState
-                                ? longitudeState
-                                : userLongitudeAfterGeolocated,
-                            latitudeState
-                                ? latitudeState
-                                : userLatitudeAfterGeolocated,
-                        ] // user location coordinate
-                    )
-
-                    updateDirectionRoute(directions)
-
-                    zoomMapIntoSpecificArea(
-                        [marker.coordinates[0], marker.coordinates[1]],
-                        [longitudeState, latitudeState]
-                    )
+                    handleMarkerClick(marker)
                 })
             })
         } else {
@@ -184,7 +149,32 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         }
     }
 
+    const handleMarkerClick = async (marker: any) => {
+        // update selected emergency data
+        detailSheet.onOpen()
+        detailSheet.setDetailSheetData({
+            emergencyType: marker.EmergencyType,
+            emergency: marker,
+        })
+
+        // get directions from marker location to user location
+        const directions = await getDirectionsRoute(
+            [marker.coordinates[0], marker.coordinates[1]], // origin coordinate (emergency location)
+            [
+                longitudeState ? longitudeState : userLongitudeAfterGeolocated,
+                latitudeState ? latitudeState : userLatitudeAfterGeolocated,
+            ] // user location coordinate
+        )
+
+        updateDirectionRoute(directions)
+        zoomMapIntoSpecificArea(
+            [marker.coordinates[0], marker.coordinates[1]],
+            [longitudeState, latitudeState]
+        )
+    }
+
     const drawCurrentMarkerLocation = (longitude: number, latitude: number) => {
+        console.log('draw current marker called')
         updateCoordinate(latitude, longitude)
         mapContainer = mapContainer ? mapContainer : mapContainerState
 
@@ -399,11 +389,9 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     }, [emergencyDataLoading])
 
     useEffect(() => {
-        const welcomeMessage = isMobile
-            ? 'You are on a mobile device.'
-            : 'You are on a desktop device. Please use a mobile device to view this app.'
-        setWelcomeMessage(welcomeMessage)
-    }, [isMobile])
+        console.log('exit')
+        removeExistingDirectionLine()
+    }, [mainBottomSheet.onExitFullScreen])
 
     return (
         <>
@@ -418,6 +406,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
                 ></div>
                 <div>
                     <MainBottomSheet rebuildMap={buildTheMap} />
+                    <DetailBottomSheet />
                 </div>
             </div>
         </>

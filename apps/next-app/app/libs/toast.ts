@@ -8,7 +8,7 @@ const defaultStyle = {
 
 export const toastService = {
     showLoading: (message: string) =>
-        toast.loading(message, { style: defaultStyle }),
+        toast.success(message, { style: defaultStyle }),
     success: (message: string) =>
         toast.success(message, { style: defaultStyle }),
     error: (message: string) => toast.error(message, { style: defaultStyle }),

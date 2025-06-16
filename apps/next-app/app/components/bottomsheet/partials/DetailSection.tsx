@@ -1,9 +1,10 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Icon from '../../ui/Icon'
 import EmergencyDataList from './EmergencyDataList'
 
 interface PropsType {
     selectedEmergencyData: any
+    emergencyTypeData: any
     emergencyData: any
     selectedEmergencyName: any
     handleChangeLocationOnClick: () => void
@@ -13,6 +14,7 @@ interface PropsType {
 
 const DetailSection: React.FC<PropsType> = ({
     selectedEmergencyData,
+    emergencyTypeData,
     emergencyData,
     selectedEmergencyName,
     handleChangeLocationOnClick,
@@ -28,13 +30,13 @@ const DetailSection: React.FC<PropsType> = ({
                             className={`flex items-center justify-center w-10 h-10 rounded-xl bg-red-50`}
                         >
                             <Icon
-                                name={selectedEmergencyData?.icon}
+                                name={emergencyTypeData?.emergency_type_icon}
                                 className={`text-red-500 text-xl`}
                             />
                         </div>
                         <div>
                             <h1 className="text-lg leading-none m-0 text-neutral-800 font-semibold">
-                                {selectedEmergencyData?.name}
+                                {emergencyTypeData?.emergency_type_name}
                             </h1>
                             <p className="m-0 text-[14px] text-neutral-500">
                                 {emergencyData?.length} hasil ditemukan.

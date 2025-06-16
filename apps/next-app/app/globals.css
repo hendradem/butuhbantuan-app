@@ -98,6 +98,18 @@ body {
     cursor: pointer;
 }
 
+.debounce-effect {
+    opacity: 0;
+    animation: fadeIn 0.5s ease forwards;
+    animation-delay: 0.3s; /* Delayed effect */    
+}
+  
+@keyframes fadeIn {
+to {
+    opacity: 1;
+}
+}
+
 .ambulance-marker {
     background-image: url('../public/assets/icons/ambulance-logo.svg');
     background-color: #1e1e1e;
