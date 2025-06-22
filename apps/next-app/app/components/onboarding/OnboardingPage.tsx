@@ -90,6 +90,8 @@ export default function OnboardingPage() {
                             <Image
                                 src={image}
                                 alt={title}
+                                width={100}
+                                height={100}
                                 className="h-full w-full rounded-lg"
                             />
                         </div>
