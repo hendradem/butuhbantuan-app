@@ -107,6 +107,7 @@ const SearchBoxSecondary: React.FC<MapsPropsType> = ({
 
     const handleSelectedAddress = (address: any, e: any): void => {
         e.preventDefault()
+
         resetBottomSheet()
         setIsSearchBoxActive(false)
         setCurrentUserAddress(address.address)

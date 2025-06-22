@@ -2,19 +2,18 @@
 import React, { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import config from '@/app/config'
-import toast from 'react-hot-toast'
 import useMapBox from '@/app/store/useMapBox'
 import useUserLocationData from '@/app/store/useUserLocationData'
 import MainBottomSheet from '../bottomsheet/MainBottomSheet'
 import DetailBottomSheet from '../bottomsheet/DetailBottomSheet'
 import useMainBottomSheet from '@/app/store/useMainBottomSheet'
+import useDetailSheet from '@/app/store/useDetailSheet'
 import { getCurrentLocation } from '@/app/utils/getCurrentLocation'
 import { getDistanceMatrix, getDirectionsRoute } from '@/app/utils/mapboxMatrix'
 import { useAddressInformation } from '@/app/store/api/location.api'
 import { getAddressInfo } from '@/app/store/api/services/location.service'
 import { useEmergencyApi } from '@/app/store/api/emergency.api'
 import useEmergencyData from '@/app/store/useEmergencyData'
-import useDetailSheet from '@/app/store/useDetailSheet'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
 
@@ -39,14 +38,12 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         useState<number>(0)
     const [userLongitudeAfterGeolocated, setUserLongitudeAfterGeolocated] =
         useState<number>(0)
-
-    const [currentMarker, setCurrentMarker] = useState<any>(null)
-    const [currentRegency, setCurrentRegency] = useState<any>('')
     const [filteredLocations, setFilteredLocations] = useState<[]>([])
     // ===== end states ======
 
     // ===== store ======
     const detailSheet = useDetailSheet()
+    const mainBottomSheet = useMainBottomSheet()
     const updateEmergencyData = useEmergencyData(
         (action) => action.updateEmergencyData
     )
@@ -71,10 +68,8 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     const isRefetchMatrix = useUserLocationData(
         (state) => state.isRefetchMatrix
     )
-    const mainBottomSheet = useMainBottomSheet()
     const longitudeState = useUserLocationData((state) => state.long)
     const latitudeState = useUserLocationData((state) => state.lat)
-    const regencyState = useUserLocationData((state) => state.regency)
 
     // ===== end store ======
 
@@ -149,6 +144,24 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         }
     }
 
+    const handleMapClick = (e: any) => {
+        mainBottomSheet.setMainBottomDetailSheetOpen(false)
+        detailSheet.onClose()
+
+        const { lng, lat } = e.lngLat
+        drawCurrentMarkerLocation(lng, lat)
+
+        // get address info to update address and filter emergency data - [NOTE: Directly use location.service fetcher]
+        getAddressInfo(lng, lat).then((res) => {
+            const address = res[0]?.place_name
+            updateFullAddress(address)
+        })
+
+        // remove existing route layer
+        removeExistingDirectionLine()
+        refetchAddressInfo()
+    }
+
     const handleMarkerClick = async (marker: any) => {
         // update selected emergency data
         detailSheet.onOpen()
@@ -186,11 +199,10 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
             userLocationMarker[0].remove()
         }
 
-        let current = new mapboxgl.Marker(el)
+        new mapboxgl.Marker(el) // render a marker
             .setLngLat([longitude, latitude])
             .addTo(mapContainer)
 
-        setCurrentMarker(current)
         getMatrixOfLocations(longitude, latitude)
 
         mapContainer.flyTo({
@@ -320,20 +332,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         })
 
         mapContainer.on('click', (e: any) => {
-            const { lng, lat } = e.lngLat
-            drawCurrentMarkerLocation(lng, lat)
-
-            // get address info to update address and filter emergency data - [NOTE: Directly use location.service fetcher]
-            getAddressInfo(lng, lat).then((res) => {
-                const regency = res[3]?.text
-                const address = res[0]?.place_name
-                setCurrentRegency(regency)
-                updateFullAddress(address)
-            })
-
-            // remove existing route layer
-            removeExistingDirectionLine()
-            refetchAddressInfo()
+            handleMapClick(e)
         })
     }
 
@@ -341,7 +340,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         if (addressInfo) {
             const regency = addressInfo[3]?.text
             const address = addressInfo[0]?.place_name
-            setCurrentRegency(regency)
             updateFullAddress(address)
         }
     }, [addressInfo])
@@ -395,9 +393,9 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
     return (
         <>
-            <div>
+            <div className="relative w-full max-w-screen-md mx-auto h-screen">
                 <div
-                    className="w-full"
+                    className="absolute inset-0 z-0"
                     style={{ height: '100vh' }}
                     ref={(el) => {
                         mapWrapper.current = el

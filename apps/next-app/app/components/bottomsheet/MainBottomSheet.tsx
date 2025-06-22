@@ -38,10 +38,10 @@ const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
     const [selectedEmergencyData, setSelectedEmergencyData] =
         useState<emergencyDataType>()
 
-    const [isDetail, setIsDetail] = useState(false)
+    const isDetail = mainBottomSheet.isMainBottomDetailSheetOpen
+    const setIsDetail = mainBottomSheet.setMainBottomDetailSheetOpen
 
     const [filteredEmergencyData, setFilteredEmergencyData] = useState<any>([])
-
     const [selectedEmergencyType, setSelectedEmergencyType] =
         useState<selectedEmergencyDataType>({
             emergency_type_name: null,
@@ -53,7 +53,8 @@ const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
         mainBottomSheet.onFullScreen()
     }
     const handleResetBottomSheet = () => {
-        sheetRef?.current?.snapTo(({ snapPoints }) => Math.min(...snapPoints))
+        // sheetRef?.current?.snapTo(({ snapPoints }) => Math.min(...snapPoints))
+        sheetRef?.current?.snapTo(({ minHeight }) => minHeight)
     }
     const handleServiceClick = (service?: any) => {
         const serviceID = service?.id
@@ -98,17 +99,12 @@ const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
             [userLocationLongitude, userLocationLatitude] // user location coordinate
         )
         updateDirectionRoute(directions)
-        scrollToTop()
     }
 
     const handleCloseDetailSheet = () => {
         handleResetBottomSheet()
         setIsDetail(false)
         mainBottomSheet.onExitFullScreen()
-    }
-
-    const scrollToTop = () => {
-        console.log('scroll to top')
     }
 
     useEffect(() => {
@@ -128,7 +124,6 @@ const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
             handleSelectedEmergency(
                 selectedEmergencyDataState.selectedEmergencyData
             )
-            scrollToTop()
         }
     }, [selectedEmergencyDataState])
 
@@ -137,10 +132,14 @@ const MainBottomSheet: React.FC<MapsPropsType> = ({ rebuildMap }) => {
             sheetRef?.current?.snapTo(({ snapPoints }) =>
                 Math.max(...snapPoints)
             )
+
+            console.log(isSheetFullscreen)
         } else {
             sheetRef?.current?.snapTo(({ snapPoints }) =>
                 Math.min(...snapPoints)
             )
+
+            console.log(isSheetFullscreen)
         }
     }, [isSheetFullscreen])
 
