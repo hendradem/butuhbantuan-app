@@ -1,10 +1,9 @@
 'use client'
-
 import { useState } from 'react'
 import { useSwipeable } from 'react-swipeable'
 import { motion } from 'framer-motion'
-import { redirect } from 'next/navigation'
 import useOnboardingStore from '@/app/store/useOnboarding'
+import Image from 'next/image'
 
 const steps = [
     {
@@ -63,7 +62,6 @@ export default function OnboardingPage() {
     const setOnboardingStatus = () => {
         localStorage.setItem('onboarding', 'false')
         setIsOnboarding(false)
-        redirect('/')
     }
 
     const swipeHandlers = useSwipeable({
@@ -89,7 +87,7 @@ export default function OnboardingPage() {
                         transition={{ duration: 0.6 }}
                     >
                         <div className="w-full h-[200px] mb-6">
-                            <img
+                            <Image
                                 src={image}
                                 alt={title}
                                 className="h-full w-full rounded-lg"
