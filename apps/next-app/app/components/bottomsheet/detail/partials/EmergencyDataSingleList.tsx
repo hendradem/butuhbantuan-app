@@ -2,7 +2,7 @@ import React from 'react'
 import Image from 'next/image'
 import { HiClock } from 'react-icons/hi2'
 import { convertPhoneNumber } from '@/app/utils/covertPhoneNumber'
-import Icon from '../../ui/Icon'
+import Icon from '../../../ui/Icon'
 
 interface Props {
     emergencyData: any
@@ -65,7 +65,7 @@ const EmergencyDataSingleList: React.FC<Props> = ({ emergencyData }) => {
                                     alt="Organization logo"
                                     width={40}
                                     height={40}
-                                    src={emergencyData.logo}
+                                    src={emergencyData?.logo}
                                 />
                             </div>
                             <div className="w-full">
@@ -95,7 +95,7 @@ const EmergencyDataSingleList: React.FC<Props> = ({ emergencyData }) => {
                                     <span className="flex items-center gap-1">
                                         <Icon name="mingcute:location-fill" />
                                         <span className="m-0 leading-none">
-                                            {emergencyData?.address.regency}
+                                            {emergencyData?.address?.regency}
                                         </span>
                                     </span>
                                     <span className="flex items-center gap-1">
@@ -114,12 +114,12 @@ const EmergencyDataSingleList: React.FC<Props> = ({ emergencyData }) => {
                                 onClick={(e) => {
                                     onContactClick(
                                         'whatsapp',
-                                        emergencyData.contact.whatsapp,
+                                        emergencyData?.contact?.whatsapp,
                                         e
                                     )
                                 }}
                                 disabled={
-                                    emergencyData?.contact.whatsapp == null
+                                    emergencyData?.contact?.whatsapp == null
                                 }
                                 className={`flex text-[15px] items-center w-full p-2 justify-center bg-green-600 text-white font-medium rounded-lg shadow-sm transition ${emergencyData?.contact.whatsapp == null ? 'opacity-80 cursor-not-allowed' : 'hover:bg-green-700'}`}
                             >
@@ -133,11 +133,11 @@ const EmergencyDataSingleList: React.FC<Props> = ({ emergencyData }) => {
                                 onClick={(e) => {
                                     onContactClick(
                                         'phone',
-                                        emergencyData.contact.telp,
+                                        emergencyData?.contact?.telp,
                                         e
                                     )
                                 }}
-                                disabled={emergencyData?.contact.telp == null}
+                                disabled={emergencyData?.contact?.telp == null}
                                 className={`flex text-[15px] w-full p-2 items-center justify-center bg-white border border-gray-100 text-neutral-600 font-medium rounded-lg shadow-sm hover:bg-gray-50 transition ${emergencyData?.contact.telp == null ? 'opacity-80 cursor-not-allowed' : ''}`}
                             >
                                 <Icon

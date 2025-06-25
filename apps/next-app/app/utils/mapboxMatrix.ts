@@ -25,44 +25,123 @@ export const getDirectionsRoute = async (
 export const getDistanceMatrix = async (
     origin: [number, number],
     destinations: any[]
-): Promise<any> => {
-    const coordinates = [
-        origin,
-        ...destinations?.map((dest) => dest.coordinates),
-    ]
-        .map((coord) => coord.join(','))
-        .join(';')
-
+): Promise<any[]> => {
     try {
+        // Validate inputs
+        if (!origin || !Array.isArray(origin) || origin.length !== 2) {
+            console.error('Invalid origin coordinates:', origin)
+            return []
+        }
+
+        if (
+            !destinations ||
+            !Array.isArray(destinations) ||
+            destinations.length === 0
+        ) {
+            console.error('Invalid destinations:', destinations)
+            return []
+        }
+
+        // Safely build coordinates array
+        const destinationCoords = destinations
+            .filter(
+                (dest) => dest?.coordinates && Array.isArray(dest.coordinates)
+            )
+            .map((dest) => dest.coordinates)
+
+        if (destinationCoords.length === 0) {
+            console.error('No valid destination coordinates found')
+            return []
+        }
+
+        const coordinates = [origin, ...destinationCoords]
+            .map((coord) => {
+                if (!Array.isArray(coord) || coord.length !== 2) {
+                    console.error('Invalid coordinate:', coord)
+                    return null
+                }
+                return coord.join(',')
+            })
+            .filter((coord) => coord !== null) // Remove invalid coordinates
+            .join(';')
+
+        if (!coordinates) {
+            console.error('No valid coordinates to process')
+            return []
+        }
+
         const response = await axios.get(
             `${MATRIX_URL_API}?coordinates=${coordinates}`
         )
-        const matrixResponse = response.data.data
+
+        const matrixResponse = response.data?.data
+
+        // Validate API response structure
+        if (
+            !matrixResponse ||
+            !Array.isArray(matrixResponse.durations) ||
+            !Array.isArray(matrixResponse.distances)
+        ) {
+            console.error('Invalid matrix response structure:', matrixResponse)
+            return []
+        }
+
+        // Check if we have data for the first row (origin)
+        if (!matrixResponse.durations[0] || !matrixResponse.distances[0]) {
+            console.error('Missing duration/distance data for origin')
+            return []
+        }
 
         // First row contains durations from origin to all destinations
         const durations = matrixResponse.durations[0].slice(1) // Skip first element (distance to self)
         const distances = matrixResponse.distances[0].slice(1)
 
-        destinations.forEach((location, index) => {
-            location.responseTime = {
-                duration: formatTheTime(durations[index]),
-                distance: formatDistance(distances[index]),
+        // Validate that we have matching data
+        if (
+            durations.length !== distances.length ||
+            durations.length !== destinations.length
+        ) {
+            console.error(
+                'Mismatch between API response and destinations count'
+            )
+            return []
+        }
+
+        // Add response time to each destination
+        const destinationsWithTime = destinations.map((location, index) => {
+            if (index >= durations.length || index >= distances.length) {
+                return {
+                    ...location,
+                    responseTime: {
+                        duration: 'N/A',
+                        distance: 'N/A',
+                    },
+                }
+            }
+
+            return {
+                ...location,
+                responseTime: {
+                    duration: formatTheTime(durations[index]),
+                    distance: formatDistance(distances[index]),
+                },
             }
         })
 
-        // Sort destinations by duration
-        return destinations
-            .filter(
-                ({ responseTime }) =>
-                    Math.floor(parseInt(responseTime.duration)) <= 30
-            )
-            .sort((a, b) => a.responseTime.duration - b.responseTime.duration)
-            .map((location) => ({
-                ...location,
-            }))
+        // Filter and sort destinations
+        return destinationsWithTime
+            .filter(({ responseTime }) => {
+                const durationValue = parseInt(responseTime.duration)
+                return !isNaN(durationValue) && Math.floor(durationValue) <= 30
+            })
+            .sort((a, b) => {
+                const durationA = parseInt(a.responseTime.duration) || Infinity
+                const durationB = parseInt(b.responseTime.duration) || Infinity
+                return durationA - durationB
+            })
     } catch (error) {
         console.error('Error fetching distance matrix:', error)
-        throw error
+        return [] // Return empty array instead of throwing
     }
 }
 

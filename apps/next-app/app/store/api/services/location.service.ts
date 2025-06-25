@@ -16,7 +16,7 @@ export const getAddressLocation = async (
     locationQuery: string
 ): Promise<any> => {
     if (!locationQuery) {
-        return
+        return null
     }
 
     const response = await axios.get(
@@ -33,14 +33,19 @@ export const getAddressInfo = async (
     latitude: number | string
 ): Promise<any> => {
     if (!longitude || !latitude) {
-        return
+        return null
     }
 
-    const response = await axios.get(
-        `${GEOCODING_URL_API}?longitude=${longitude}&latitude=${latitude}`,
-        axiosConfig
-    )
+    try {
+        const response = await axios.get(
+            `${GEOCODING_URL_API}?longitude=${longitude}&latitude=${latitude}`,
+            axiosConfig
+        )
 
-    const geocodingResponse = response.data.data
-    return geocodingResponse?.features
+        const geocodingResponse = response.data.data
+        return geocodingResponse?.features || null // ✅ Return null if features is undefined
+    } catch (error) {
+        console.error('Geocoding API error:', error)
+        return null // ✅ Return null on error
+    }
 }

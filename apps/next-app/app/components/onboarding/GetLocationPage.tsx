@@ -10,6 +10,7 @@ import { redirect } from 'next/navigation'
 
 const GetLocationPage = () => {
     const [currentUserRegency, setCurrentUserRegency] = useState('')
+    const [error, setError] = useState('')
     const [isAvailable, setIsAvailable] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
     const { currentCityData, isServiceIsAvailable, refetchAvailableCity } =
@@ -22,7 +23,13 @@ const GetLocationPage = () => {
                 const location = await new Promise<{
                     lat: number
                     lng: number
+                    error?: string
                 }>((resolve) => getCurrentLocation(resolve))
+
+                if (location.error) {
+                    setError(location.error)
+                    setIsLoading(false)
+                }
 
                 const res = await getAddressInfo(location.lng, location.lat)
                 const regency = res[3]?.text
@@ -91,6 +98,14 @@ const GetLocationPage = () => {
                     currentUserRegency={currentUserRegency}
                     isServiceIsAvailable={isAvailable}
                 />
+
+                {error && (
+                    <div>
+                        <h2 className="text-black text-base font-semibold leading-relaxed pb-1">
+                            {error}
+                        </h2>
+                    </div>
+                )}
             </div>
         )
     }

@@ -4,9 +4,7 @@ import mapboxgl from 'mapbox-gl'
 import config from '@/app/config'
 import useMapBox from '@/app/store/useMapBox'
 import useUserLocationData from '@/app/store/useUserLocationData'
-import MainBottomSheet from '../bottomsheet/MainBottomSheet'
-import DetailBottomSheet from '../bottomsheet/DetailBottomSheet'
-import useMainBottomSheet from '@/app/store/useMainBottomSheet'
+import useExploreSheet from '@/app/store/useExploreSheet'
 import useDetailSheet from '@/app/store/useDetailSheet'
 import { getCurrentLocation } from '@/app/utils/getCurrentLocation'
 import { getDistanceMatrix, getDirectionsRoute } from '@/app/utils/mapboxMatrix'
@@ -18,7 +16,6 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
 
 type MapsProps = {
-    mapHeight: string
     updateLatestLocation?: () => void
 }
 
@@ -29,7 +26,7 @@ enum EMERGENCY_TYPE {
     HOSPITAL = 'Hospital',
 }
 
-const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
+const MapsV2: React.FC<MapsProps> = () => {
     // ===== states ======
     let mapContainer: any
     const mapWrapper = useRef<any>({})
@@ -43,33 +40,22 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
     // ===== store ======
     const detailSheet = useDetailSheet()
-    const mainBottomSheet = useMainBottomSheet()
-    const updateEmergencyData = useEmergencyData(
-        (action) => action.updateEmergencyData
-    )
-    const updateSelectedEmergencyData = useEmergencyData(
-        (action) => action.updateSelectedEmergencyData
-    )
-    const selectedEmergencyDataState = useEmergencyData(
-        (state) => state.selectedEmergencyData
-    )
-    const directionRoute = useMapBox((state) => state.directionRoute)
-    const updateDirectionRoute = useMapBox(
-        (action) => action.updateDirectionRoute
-    )
+    const exploreSheet = useExploreSheet()
+    const { isRebuildMap, directionRoute, onRebuild, updateDirectionRoute } =
+        useMapBox()
 
-    const updateCoordinate = useUserLocationData(
-        (state) => state.updateCoordinate
-    )
-    const updateFullAddress = useUserLocationData(
-        (state) => state.updateFullAddress
-    )
+    const {
+        updateEmergencyData,
+        selectedEmergencyData: selectedEmergencyDataState,
+    } = useEmergencyData()
 
-    const isRefetchMatrix = useUserLocationData(
-        (state) => state.isRefetchMatrix
-    )
-    const longitudeState = useUserLocationData((state) => state.long)
-    const latitudeState = useUserLocationData((state) => state.lat)
+    const {
+        long: longitudeState,
+        lat: latitudeState,
+        isRefetchMatrix,
+        updateCoordinate,
+        updateFullAddress,
+    } = useUserLocationData()
 
     // ===== end store ======
 
@@ -145,7 +131,7 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     }
 
     const handleMapClick = (e: any) => {
-        mainBottomSheet.setMainBottomDetailSheetOpen(false)
+        exploreSheet.onClose()
         detailSheet.onClose()
 
         const { lng, lat } = e.lngLat
@@ -288,16 +274,11 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         )
     }
 
-    const buildTheMap = (
-        buildMapType?: string,
-        coordinates?: { lat: number; long: number }
-    ) => {
+    const buildTheMap = () => {
         mapContainer = new mapboxgl.Map({
             container: mapWrapper.current,
             style: 'mapbox://styles/mapbox/streets-v10',
-            center: coordinates
-                ? [coordinates.long, coordinates.lat]
-                : [110.3450278, -7.7063721],
+            center: [110.3450278, -7.7063721],
             zoom: 12,
             accessToken: config.MAPBOX_API_KEY,
         })
@@ -305,30 +286,18 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
         setMapContainerState(mapContainer) // set mapContainer state to gobal state
 
         mapContainer.on('load', () => {
-            if (buildMapType === 'rebuild') {
-                drawCurrentMarkerLocation(
-                    coordinates?.long ?? 0,
-                    coordinates?.lat ?? 0
-                )
-                refetchAddressInfo()
-                getMatrixOfLocations(
-                    coordinates?.long ?? 0,
-                    coordinates?.lat ?? 0
-                )
-            } else {
-                getCurrentLocation((location: any) => {
-                    const userLatitude = location?.lat
-                    const userLongitude = location?.lng
+            getCurrentLocation((location: any) => {
+                const userLatitude = location?.lat
+                const userLongitude = location?.lng
 
-                    if (userLatitude && userLongitude) {
-                        refetchAddressInfo()
-                        setUserLatitudeAfterGeolocated(userLatitude)
-                        setUserLongitudeAfterGeolocated(userLongitude)
-                        drawCurrentMarkerLocation(userLongitude, userLatitude)
-                        getMatrixOfLocations(userLongitude, userLatitude)
-                    }
-                })
-            }
+                if (userLatitude && userLongitude) {
+                    refetchAddressInfo()
+                    setUserLatitudeAfterGeolocated(userLatitude)
+                    setUserLongitudeAfterGeolocated(userLongitude)
+                    drawCurrentMarkerLocation(userLongitude, userLatitude)
+                    getMatrixOfLocations(userLongitude, userLatitude)
+                }
+            })
         })
 
         mapContainer.on('click', (e: any) => {
@@ -338,7 +307,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
     useEffect(() => {
         if (addressInfo) {
-            const regency = addressInfo[3]?.text
             const address = addressInfo[0]?.place_name
             updateFullAddress(address)
         }
@@ -371,7 +339,6 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
 
         if (
             selectedEmergencyDataState &&
-            selectedEmergencyDataState.selectedEmergencySource === 'detail' &&
             Array.isArray(coords) &&
             coords.length === 2
         ) {
@@ -387,27 +354,22 @@ const MapsV2: React.FC<MapsProps> = ({ mapHeight }) => {
     }, [emergencyDataLoading])
 
     useEffect(() => {
-        console.log('exit')
         removeExistingDirectionLine()
-    }, [mainBottomSheet.onExitFullScreen])
+    }, [exploreSheet.isOpen, detailSheet.isOpen]) // remove direction line when explore or detail sheet open
+
+    useEffect(() => {
+        removeExistingDirectionLine()
+        drawCurrentMarkerLocation(longitudeState, latitudeState)
+    }, [longitudeState, latitudeState]) // draw current marker location when longitude or latitude change
 
     return (
-        <>
-            <div className="relative w-full max-w-screen-md mx-auto h-screen">
-                <div
-                    className="absolute inset-0 z-0"
-                    style={{ height: '100vh' }}
-                    ref={(el) => {
-                        mapWrapper.current = el
-                        void 0
-                    }}
-                ></div>
-                <div>
-                    <MainBottomSheet rebuildMap={buildTheMap} />
-                    <DetailBottomSheet />
-                </div>
-            </div>
-        </>
+        <div
+            className="absolute inset-0 w-screen h-[100%] z-0"
+            ref={(el) => {
+                mapWrapper.current = el
+                void 0
+            }}
+        ></div>
     )
 }
 

@@ -52,7 +52,7 @@ body {
 }
 
 .bottom-sheet-shadow {
-    box-shadow: 0 -1px 30px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.15);
 }
 
 /* reusable tailwind classes */

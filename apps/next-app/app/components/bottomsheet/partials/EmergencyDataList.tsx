@@ -7,7 +7,7 @@ import Icon from '../../ui/Icon'
 interface Props {
     emergencyData: any
     handleSelectedEmergency: (emergency: any) => {}
-    selectedEmergencyName: any
+    selectedEmergencyName: string
 }
 
 const parseResponseTime = (duration: number): JSX.Element => {

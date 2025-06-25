@@ -1,32 +1,31 @@
-import useAddressInformation from '@/app/store/useUserLocationData'
-import { toastService } from '@/app/libs/toast'
-
 export function getCurrentLocation(
-    callback: (location: { lat: number; lng: number }) => void
+    callback: (location: { lat: number; lng: number; error?: string }) => void
 ) {
     if (navigator.geolocation) {
-        // toastService.showLoading('Mencari lokasi...')
-
         navigator.geolocation.getCurrentPosition(
             (pos) => {
                 callback({
                     lat: pos.coords.latitude,
                     lng: pos.coords.longitude,
                 })
-                // toastService.dismiss()
             },
             (err) => {
                 switch (err.code) {
                     case err.PERMISSION_DENIED:
+                        callback({ lat: 0, lng: 0, error: 'permission_denied' })
                         console.log('Location permission denied')
                         break
                     case err.POSITION_UNAVAILABLE:
+                        callback({
+                            lat: 0,
+                            lng: 0,
+                            error: 'position_unavailable',
+                        })
                         console.log('Location information is unavailable.')
                         break
                     case err.TIMEOUT:
-                        console.log(
-                            'The request to get user location timed out.'
-                        )
+                        callback({ lat: 0, lng: 0, error: 'timeout' })
+                        console.log('The request location timed out.')
                         break
                     default:
                         console.log('error')
