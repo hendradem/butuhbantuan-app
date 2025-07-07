@@ -1,103 +1,87 @@
-import Icon from '@/app/components/ui/Icon'
-import Image from 'next/image'
+'use client'
 import React from 'react'
+import { MapPin, ChevronRight } from 'lucide-react'
+import EmptyState from '@/components/commons/EmptyState'
+import useSearchData from '@/store/useSearchData'
+import Icon from '@/components/ui/Icon'
 
 interface SearchResultProps {
-    locationResult: LocationResultType[]
-    isLoading: boolean
+    locationResult: any[]
     handleSelectedAddress: (address: any, e: any) => void
 }
 
-type LocationResultType = {
-    name: String
-    address: String
-    lat: number
-    long: number
-    urban_village: String
-    subdistrict: String
-    regency: String
-    province: String
-    district: String
-    county: String
-    city: string
-    state: string
-    formatted_city: string
-}
-
-const SearchResult: React.FC<SearchResultProps> = ({
+const SearchResult = ({
     locationResult,
-    isLoading,
     handleSelectedAddress,
-}) => {
-    const addressOnClick = (address: any, e: any): void => {
-        e.preventDefault()
-        handleSelectedAddress(address, e)
+}: SearchResultProps) => {
+    const { isActive: isSearchBoxActive } = useSearchData()
+
+    const emptyDataCta = () => {
+        return (
+            <div className="w-full flex items-center justify-center">
+                <button className="btn-dark">Cari lokasi di maps</button>
+            </div>
+        )
     }
 
     return (
-        <>
-            <div className="w-full bg-white text-neutral-800 overflow-y-scroll max-h-[400px] border border-neutral-200 rounded-b-xl">
-                {isLoading && (
-                    <div className="w-full mt-2 px-3 text-neutral-800 py-2">
-                        <div className="flex flex-col gap-2">
-                            <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
-                            <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
-                            <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
-                            <div className="bg-gray-100 w-full h-[30px] p-2 rounded-md animate-pulse flex items-center"></div>
-                        </div>
-                    </div>
+        <div className="bg-white rounded-lg mb-5 px-3 overflow-hidden">
+            <div>
+                {locationResult.length == 0 && isSearchBoxActive && (
+                    <EmptyState
+                        size="xs"
+                        title="Pencarian tidak ditemukan"
+                        description="Pencarian tidak ditemukan, coba kata kunci lain, nama jalan, atau nama lokasi terdekatmu."
+                        cta={emptyDataCta()}
+                    />
                 )}
+            </div>
 
-                {!isLoading && locationResult.length !== 0 && (
-                    <div>
-                        {locationResult?.map(
-                            (item: LocationResultType, index) => {
-                                return (
-                                    <div
-                                        key={index}
-                                        className="w-full flex items-center gap-3 text-neutral-800 text-sm hover:bg-gray-100 rounded p-2 cursor-pointer"
-                                        onClick={(e) => {
-                                            addressOnClick(item, e)
-                                        }}
-                                    >
-                                        <div className="p-2 rounded-xl bg-neutral-100">
-                                            <Icon
-                                                name="mingcute:location-fill"
-                                                className="text-lg text-neutral-600"
-                                            />
-                                        </div>
-                                        <div className="w-full truncate">
-                                            <p className="font-normal text-neutral-900 text-[15px] leading-none m-0 p-0 w-full truncate">
-                                                {item?.name}
-                                            </p>
-                                            <p className="m-0 p-0 leading-none text-[13px] mt-1 w-full truncate text-neutral-500">
-                                                {item?.formatted_city}
-                                            </p>
-                                        </div>
-                                    </div>
-                                )
-                            }
-                        )}
-                    </div>
-                )}
-
-                {!isLoading && locationResult.length === 0 && (
-                    <div className="w-full flex flex-col items-center justify-center my-5">
-                        <Image
-                            src="/assets/illustration/location.svg"
-                            alt="search"
-                            width={100}
-                            height={100}
-                        />
-
-                        <p className="text-center text-sm mt-5 mx-8">
-                            Cari lokasi terdekatmu dengan nama jalan, nama desa,
-                            atau nama lokasi lain.
-                        </p>
+            <div>
+                {locationResult.length > 0 && (
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-gray-800 text-[15px] font-medium">
+                            Hasil pencarian
+                        </span>
+                        <span className="text-gray-400 text-sm">
+                            {locationResult.length} hasil pencarian
+                        </span>
                     </div>
                 )}
             </div>
-        </>
+
+            <div className="divide-y divide-gray-100">
+                {locationResult.map((location, index) => (
+                    <div
+                        key={`${location.place_name}-${index}`}
+                        className="flex items-center justify-between p-2 hover:bg-gray-50 cursor-pointer transition-colors"
+                        onClick={(e) => handleSelectedAddress(location, e)}
+                    >
+                        <div className="flex items-center space-x-3">
+                            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <MapPin className="w-5 h-5 text-gray-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h4 className="font-semibold text-gray-900 text-base truncate">
+                                    {location.name || 'Unknown Location'}
+                                </h4>
+                                <p className="text-sm text-gray-600 line-clamp-1">
+                                    {location.address ||
+                                        location.formatted ||
+                                        'Address not available'}
+                                </p>
+                                {location.formatted_city && (
+                                    <p className="text-sm text-gray-400">
+                                        {location.formatted_city}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0 ml-2" />
+                    </div>
+                ))}
+            </div>
+        </div>
     )
 }
 

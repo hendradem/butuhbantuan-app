@@ -1,15 +1,22 @@
 import React from 'react'
-import Icon from '@/app/components/ui/Icon'
-import useExploreSheet from '@/app/store/useExploreSheet'
+import Icon from '@/components/ui/Icon'
+import useExploreSheet from '@/store/useExploreSheet'
+import useSearchSheet from '@/store/useSearchSeet'
 
 const HeaderSection = () => {
     const exploreSheet = useExploreSheet()
     const handleCloseSheet = exploreSheet.onClose
     const exploreSheetData = exploreSheet.sheetData
+    const { onOpen } = useSearchSheet()
+
+    const handleOpenSearchSheet = () => {
+        exploreSheet.onClose()
+        onOpen()
+    }
 
     return (
         <div>
-            <div className="sheet-header border-b p-2 px-3 bg-white border-neutral-100 flex items-center justify-between rounded-t-2xl pt-[12px]">
+            <div className="sheet-header border-b py-3 px-3 bg-white border-neutral-100 flex items-center justify-between rounded-t-3xl pt-[12px]">
                 <div className="flex gap-2 items-center">
                     <div
                         className={`flex items-center justify-center w-10 h-10 rounded-xl bg-red-50`}
@@ -29,7 +36,12 @@ const HeaderSection = () => {
                         <p className="mt-[2px] leading-none text-[14px] text-neutral-500">
                             {exploreSheetData?.emergency?.length} hasil
                             ditemukan.
-                            <span className="text-blue-500 ml-1 font-medium cursor-pointer">
+                            <span
+                                className="text-blue-500 ml-1 font-medium cursor-pointer"
+                                onClick={() => {
+                                    handleOpenSearchSheet()
+                                }}
+                            >
                                 Ganti lokasi
                             </span>
                         </p>

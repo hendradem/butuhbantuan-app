@@ -1,7 +1,7 @@
 import React from 'react'
 import Image from 'next/image'
 import { HiClock } from 'react-icons/hi2'
-import { convertPhoneNumber } from '@/app/utils/covertPhoneNumber'
+import useConfirmationSheet from '@/store/useConfirmationSheet'
 import Icon from '../../ui/Icon'
 
 interface Props {
@@ -10,54 +10,64 @@ interface Props {
     selectedEmergencyName: string
 }
 
-const parseResponseTime = (duration: number): JSX.Element => {
-    const maxResponseTime: number = 25
-    return (
-        <>
-            {duration <= maxResponseTime ? (
-                <div className="flex items-center">
-                    <HiClock className="mr-1" />
-                    <span> {Math.floor(+duration)} </span>
-                    <span className="ml-1">menit</span>
-                </div>
-            ) : (
-                <span>Di luar jangkauan</span>
-            )}
-        </>
-    )
-}
-
-const badgeClassesByDuration = (duration: number): string => {
-    if (duration <= 15) {
-        return 'bg-green-100 text-green-800'
-    } else if (duration >= 15 && duration <= 20) {
-        return 'bg-orange-100 text-orange-800'
-    } else if (duration > 20 && duration <= 25) {
-        return 'bg-red-100 text-red-800'
-    } else {
-        return 'bg-black text-white'
-    }
-}
-
-const onContactClick = (type: string, contactNumber: any, e: any): void => {
-    e.stopPropagation() // Prevent the event from propagating to the parent element
-    const convertedPhoneNumber = convertPhoneNumber(contactNumber)
-
-    switch (type) {
-        case 'whatsapp':
-            window.open(`https://wa.me/${convertedPhoneNumber}`, '_blank')
-            break
-        case 'phone':
-            window.open(`tel:${contactNumber}`, '_blank')
-            break
-    }
-}
-
 const EmergencyDataList: React.FC<Props> = ({
     emergencyData,
     handleSelectedEmergency,
     selectedEmergencyName,
 }) => {
+    const {
+        onOpen: openConfirmationSheet,
+        setCallType,
+        setCallNumber,
+    } = useConfirmationSheet()
+
+    const parseResponseTime = (duration: number): JSX.Element => {
+        const maxResponseTime: number = 25
+        return (
+            <>
+                {duration <= maxResponseTime ? (
+                    <div className="flex items-center">
+                        <HiClock className="mr-1" />
+                        <span> {Math.floor(+duration)} </span>
+                        <span className="ml-1">menit</span>
+                    </div>
+                ) : (
+                    <span>Di luar jangkauan</span>
+                )}
+            </>
+        )
+    }
+
+    const badgeClassesByDuration = (duration: number): string => {
+        if (duration <= 15) {
+            return 'bg-green-100 text-green-800'
+        } else if (duration >= 15 && duration <= 20) {
+            return 'bg-orange-100 text-orange-800'
+        } else if (duration > 20 && duration <= 25) {
+            return 'bg-red-100 text-red-800'
+        } else {
+            return 'bg-black text-white'
+        }
+    }
+
+    const onContactClick = (type: string, contactNumber: any, e: any): void => {
+        e.stopPropagation() // Prevent the event from propagating to the parent element
+        openConfirmationSheet()
+
+        // const convertedPhoneNumber = convertPhoneNumber(contactNumber)
+
+        switch (type) {
+            case 'whatsapp':
+                setCallType('whatsapp')
+                setCallNumber(contactNumber)
+                break
+            case 'phone':
+                setCallType('phone')
+                setCallNumber(contactNumber)
+                break
+        }
+    }
+
     return (
         <div>
             {emergencyData &&
@@ -159,15 +169,15 @@ const EmergencyDataList: React.FC<Props> = ({
                                                 onClick={(e) => {
                                                     onContactClick(
                                                         'phone',
-                                                        emergency.contact.telp,
+                                                        emergency.contact.phone,
                                                         e
                                                     )
                                                 }}
                                                 disabled={
-                                                    emergency?.contact.telp ==
+                                                    emergency?.contact.phone ==
                                                     null
                                                 }
-                                                className={`flex text-[15px] w-full p-2 items-center justify-center bg-white border border-gray-100 text-neutral-600 font-medium rounded-lg shadow-sm hover:bg-gray-50 transition ${emergency?.contact.telp == null ? 'opacity-80 cursor-not-allowed' : ''}`}
+                                                className={`flex text-[15px] w-full p-2 items-center justify-center bg-white border border-gray-100 text-neutral-600 font-medium rounded-lg shadow-sm hover:bg-gray-50 transition ${emergency?.contact.phone == null ? 'opacity-80 cursor-not-allowed' : ''}`}
                                             >
                                                 <Icon
                                                     name="mdi:phone"

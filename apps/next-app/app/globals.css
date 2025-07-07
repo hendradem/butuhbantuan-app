@@ -2,28 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-    --foreground-rgb: 0, 0, 0;
-    --background-start-rgb: 214, 219, 220;
-    --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root {
-        --foreground-rgb: 255, 255, 255;
-        --background-start-rgb: 0, 0, 0;
-        --background-end-rgb: 0, 0, 0;
-    }
-}
-
+ 
 body {
-    color: rgb(var(--foreground-rgb));
-    background: linear-gradient(
-            to bottom,
-            transparent,
-            rgb(var(--background-end-rgb))
-        )
-        rgb(var(--background-start-rgb));
+    background-color: #fff;
 }
 
 /* bottom sheet */
@@ -55,39 +36,82 @@ body {
     box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.15);
 }
 
+@layer layout {
+    .default-layout {
+        @apply min-h-screen max-w-md mx-auto flex flex-col;
+    }
+}
+
 /* reusable tailwind classes */
 @layer components {
     .badge {
         @apply bg-white text-gray-800 border border-gray-100 rounded-full text-xs font-medium px-1.5 pr-2 py-1;
     }
-
     .badge-icon {
         @apply flex items-center;
     }
-
     .button {
         @apply text-gray-900 bg-white border border-gray-100 sm:px-1 sm:py-1 focus:outline-none hover:bg-gray-50 focus:ring-0 font-medium rounded-lg text-sm px-4 py-2.5;
     }
-
     .button-icon-default {
         @apply w-auto grow-0 bg-gray-50 text-gray-800 text-xs font-medium inline-flex items-center px-3 py-1 rounded-full border border-gray-100;
     }
-
     .success {
         @apply bg-green-50 border border-green-100 text-green-700 !important;
     }
-
     .blue {
         @apply bg-blue-50 border border-blue-100 text-blue-700 !important;
     }
-
     .warning {
         @apply bg-orange-50 border border-orange-100 text-orange-700 !important;
     }
-
     .modal {
         @apply fixed z-20 bg-black bg-opacity-20 w-full h-screen backdrop-blur-sm flex items-center justify-center;
     }
+
+    /* buttons */ 
+    .btn-base {
+        @apply text-sm font-medium rounded-lg px-5 py-2.5 me-2 mb-2 focus:outline-none hover:bg-neutral-100;
+    }
+    .btn-whatsapp {
+        @apply btn-base flex items-center w-full justify-center bg-green-600 text-white transition hover:bg-green-700
+    }
+    .btn-call {
+        @apply btn-base flex  w-full items-center justify-center bg-white border border-gray-300 text-neutral-600 hover:bg-gray-50 transition 
+    }
+    
+    .btn-blue {
+        @apply btn-base text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800;
+    }
+    
+    .btn-alternative {
+        @apply btn-base text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-4 focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700;
+    }
+    
+    .btn-dark {
+        @apply btn-base text-white bg-gray-800 hover:bg-gray-900 focus:ring-4 focus:ring-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 dark:focus:ring-gray-700 dark:border-gray-700;
+    }
+    
+    .btn-light {
+        @apply btn-base text-gray-900 bg-white border border-gray-300 hover:bg-gray-100 focus:ring-4 focus:ring-gray-100 dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:border-gray-600 dark:focus:ring-gray-700;
+    }
+    
+    .btn-green {
+        @apply btn-base text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:ring-green-300 dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-800;
+    }
+    
+    .btn-red {
+        @apply btn-base text-white bg-red-700 hover:bg-red-800 focus:ring-4 focus:ring-red-300 dark:bg-red-600 dark:hover:bg-red-700 dark:focus:ring-red-900;
+    }
+    
+    .btn-yellow {
+        @apply btn-base text-white bg-yellow-400 hover:bg-yellow-500 focus:ring-4 focus:ring-yellow-300 dark:focus:ring-yellow-900;
+    }
+    
+    .btn-purple {
+        @apply btn-base text-white bg-purple-700 hover:bg-purple-800 focus:ring-4 focus:ring-purple-300 dark:bg-purple-600 dark:hover:bg-purple-700 dark:focus:ring-purple-900;
+    }
+  
 }
 
 /* maps */

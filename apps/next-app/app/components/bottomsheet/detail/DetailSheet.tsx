@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useState } from 'react'
-import useDetailSheet from '@/app/store/useDetailSheet'
+import useDetailSheet from '@/store/useDetailSheet'
 import CoreSheet from '../core/CoreSheet'
 import HeaderSection from './partials/HeaderSection'
 import EmergencyDataSingleList from './partials/EmergencyDataSingleList'
@@ -14,16 +14,12 @@ const DetailSheet = () => {
     }
 
     useEffect(() => {
-        console.log(emergencyData)
-    }, [emergencyData])
-
-    useEffect(() => {
         setIsOpen(detailSheet.isOpen)
     }, [detailSheet.isOpen])
 
     return (
         <div>
-            <div className="bottom-sheet">
+            <div>
                 <CoreSheet
                     isOpen={isOpen}
                     header={
@@ -32,6 +28,7 @@ const DetailSheet = () => {
                             handleCloseDetailSheet={handleCloseDetailSheet}
                         />
                     }
+                    snapPoints={[250, 0]}
                 >
                     <div className="sheet mt-2">
                         <EmergencyDataSingleList

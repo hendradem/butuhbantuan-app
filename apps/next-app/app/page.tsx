@@ -1,5 +1,4 @@
 'use client'
-
 import React, { useEffect, useState } from 'react'
 import useOnboardingStore from './store/useOnboarding'
 import GetLocationPage from './components/onboarding/GetLocationPage'
@@ -12,8 +11,6 @@ export default function Home() {
     )
 
     useEffect(() => {
-        if (typeof window === 'undefined') return // SSR guard
-
         const local = localStorage.getItem('onboarding')
 
         if (local === 'false') {
@@ -29,6 +26,8 @@ export default function Home() {
     if (shouldOnboarding === null) return null
 
     return (
-        <div>{shouldOnboarding ? <OnboardingPage /> : <GetLocationPage />}</div>
+        <div className="w-full bg-white">
+            {shouldOnboarding ? <OnboardingPage /> : <GetLocationPage />}
+        </div>
     )
 }

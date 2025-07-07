@@ -23,8 +23,8 @@ const ServiceFound = ({ currentUserRegency }: ServiceNotFoundProps) => {
                         Siap untuk digunakan
                     </h2>
                     <p className="text-center text-black text-sm font-normal leading-snug pb-4">
-                        Layanan kami tersedia untuk {currentUserRegency}. Klik
-                        tombol di bawah ini untuk mulai
+                        Layanan kami tersedia untuk wilayah {currentUserRegency}
+                        .
                     </p>
                 </div>
             </div>

@@ -1,5 +1,5 @@
 import axios from 'axios'
-import config from '@/app/config'
+import config from '@/config'
 
 const BASE_URL = `${config.BACKEND_HOST}/master/available-city-service`
 

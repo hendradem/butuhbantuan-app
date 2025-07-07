@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useSwipeable } from 'react-swipeable'
 import { motion } from 'framer-motion'
-import useOnboardingStore from '@/app/store/useOnboarding'
+import useOnboardingStore from '@/store/useOnboarding'
 import Image from 'next/image'
 
 const steps = [

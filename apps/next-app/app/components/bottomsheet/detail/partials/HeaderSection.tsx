@@ -1,5 +1,5 @@
 import React from 'react'
-import Icon from '@/app/components/ui/Icon'
+import Icon from '@/components/ui/Icon'
 
 interface PropTypes {
     emergencyData: any
@@ -12,8 +12,8 @@ const HeaderSection: React.FC<PropTypes> = ({
 }) => {
     return (
         <div>
-            <div className="sheet-header border-none p-2 px-3 bg-white border-neutral-100 rounded-t-xl flex items-center justify-between">
-                <div className="flex gap-2 mt-1 items-center">
+            <div className="sheet-header border-b py-3 px-3 bg-white border-neutral-100 rounded-t-[40px] flex items-center justify-between">
+                <div className="flex gap-2 mt-1 items-center rounded-t-[40px]">
                     <div
                         className={`flex items-center justify-center w-10 h-10 rounded-xl bg-red-50`}
                     >

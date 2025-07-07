@@ -1,14 +1,15 @@
 import React from 'react'
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { useAvailableCityApi } from '@/app/store/api/availablecity.api'
-import { getCurrentLocation } from '@/app/utils/getCurrentLocation'
-import { getAddressInfo } from '@/app/store/api/services/location.service'
+import { useAvailableCityApi } from '@/store/api/availablecity.api'
+import { getCurrentLocation } from '@/utils/getCurrentLocation'
+import { getAddressInfo } from '@/store/api/services/location.service'
 import GettingService from './partials/GettingService'
 import ServiceLoading from './partials/ServiceLoading'
-import { redirect } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 
 const GetLocationPage = () => {
+    const router = useRouter()
     const [currentUserRegency, setCurrentUserRegency] = useState('')
     const [error, setError] = useState('')
     const [isAvailable, setIsAvailable] = useState(false)
@@ -71,7 +72,7 @@ const GetLocationPage = () => {
                 },
             })
 
-            redirect('/emergency')
+            router.replace('/emergency')
         } else {
             toast.error('Service not found', {
                 style: {

@@ -1,4 +1,5 @@
 import React from 'react'
+import toast from 'react-hot-toast'
 import Icon from '../ui/Icon'
 
 interface PropsType {
@@ -10,6 +11,16 @@ const AvailableServiceList: React.FC<PropsType> = ({
     emergencyTypeData,
     handleServiceClick,
 }) => {
+    const handleUnavailableServiceClick = () => {
+        toast.error('Under Development', {
+            style: {
+                borderRadius: '20px',
+                background: '#333',
+                color: '#fff',
+            },
+        })
+    }
+
     return (
         <div>
             <div className="grid grid-cols-4 items-start">
@@ -39,7 +50,10 @@ const AvailableServiceList: React.FC<PropsType> = ({
 
                 {emergencyTypeData?.data && (
                     <div>
-                        <div className="flex flex-col cursor-pointer items-center justify-center">
+                        <div
+                            className="flex flex-col cursor-pointer items-center justify-center"
+                            onClick={handleUnavailableServiceClick}
+                        >
                             <div className="flex flex-col cursor-pointer items-center justify-center">
                                 <div
                                     className={`p-2.5 border-none rounded-full bg-red-50 shadow-sm`}

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { emergencyService } from './services/emergency.service'
-import { toastService } from '@/app/libs/toast'
+import { toastService } from '@/libs/toast'
 
 export const useEmergencyApi = () => {
     const queryClient = useQueryClient()

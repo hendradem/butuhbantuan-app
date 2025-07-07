@@ -1,9 +1,13 @@
 import { Toaster } from 'react-hot-toast'
-import { ReactQueryClientProvider } from './components/commons/ReactQueryClientProvider'
+import { ReactQueryClientProvider } from '@/components/commons/ReactQueryClientProvider'
+import type { Metadata } from 'next'
 import './globals.css'
 import 'react-spring-bottom-sheet/dist/style.css'
 import 'react-loading-skeleton/dist/skeleton.css'
-import type { Metadata } from 'next'
+import DetailSheet from '@/components/bottomsheet/detail/DetailSheet'
+import ExploreDetailSheet from '@/components/bottomsheet/explore/ExploreDetailSheet'
+import SearchSheet from '@/components/bottomsheet/search/SearchSheet'
+import ConfirmationSheet from '@/components/bottomsheet/confirmation/ConfirmationSheet'
 
 export const metadata: Metadata = {
     metadataBase: new URL('https://butuhbantuan.com'),
@@ -28,11 +32,17 @@ export default function RootLayout({
                     <meta name="theme-color" content="#0f172a" />
                 </head>
                 <body suppressHydrationWarning={true}>
-                    <Toaster />
-                    <div className="h-full bg-white grid">
-                        <div className="w-[100%] lg:w-[25%] xl:w-[28%] h-full justify-self-center bg-white border-x-[1px] border-gray-100 shadow-sm">
-                            {children}
-                        </div>
+                    <div className="main-content default-layout border-x border-neutral-100">
+                        {children}
+                    </div>
+                    <div className="bottom-sheet">
+                        <DetailSheet />
+                        <ExploreDetailSheet />
+                        <SearchSheet />
+                        <ConfirmationSheet />
+                    </div>
+                    <div className="others">
+                        <Toaster />
                     </div>
                 </body>
             </html>

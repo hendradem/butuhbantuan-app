@@ -1,20 +1,18 @@
 'use client'
 import React, { useRef, useState } from 'react'
-import { useEmergencyTypeApi } from '@/app/store/api/emergency-type.api'
+import { useEmergencyTypeApi } from '@/store/api/emergency-type.api'
 import PreviewSearchBox from '../search/preview/PreviewSearchBox'
-import useDetailSheet from '@/app/store/useDetailSheet'
-import useEmergencyData from '@/app/store/useEmergencyData'
-import useExploreSheet from '@/app/store/useExploreSheet'
+import useDetailSheet from '@/store/useDetailSheet'
+import useEmergencyData from '@/store/useEmergencyData'
+import useExploreSheet from '@/store/useExploreSheet'
 import AvailableServiceList from './AvailableServiceList'
 
 const BottomMenu = () => {
     const { emergencyTypeData, emergencyTypeLoading } = useEmergencyTypeApi()
-    const openExploreSheet = useExploreSheet((action) => action.onOpen)
-    const setDetailSheetData = useDetailSheet(
-        (action) => action.setDetailSheetData
-    )
-    const setExploreSheetData = useExploreSheet((action) => action.setSheetData)
-    const emergencyData = useEmergencyData((state) => state.emergencyData)
+    const { setDetailSheetData } = useDetailSheet()
+    const { setSheetData: setExploreSheetData, onOpen: openExploreSheet } =
+        useExploreSheet()
+    const { emergencyData } = useEmergencyData()
 
     const handleServiceClick = (service?: any) => {
         const serviceID = service?.id
@@ -45,7 +43,7 @@ const BottomMenu = () => {
     }
 
     return (
-        <div className="sticky bottom-0 left-0 z-50 w-full h-[100%] py-5 bg-white rounded-t-xl">
+        <div className="sticky bottom-0 left-0 z-50 w-full h-[100%] py-5 rounded-t-xl bg-white border-t-slate-200">
             <div className="sheet-wrapper">
                 <div className="sheet-header mx-2">
                     <PreviewSearchBox />

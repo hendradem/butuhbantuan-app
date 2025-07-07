@@ -1,4 +1,4 @@
-import config from '@/app/config'
+import config from '@/config'
 import axios from 'axios'
 
 const GEOCODING_URL_API = `${config.BACKEND_HOST}/directions/geocoding`

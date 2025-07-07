@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useEmergencyTypeApi } from '@/app/store/api/emergency-type.api'
+import { useEmergencyTypeApi } from '@/store/api/emergency-type.api'
 import SearchBoxSecondary from '../../maps/SearchBoxSecondary'
 import Icon from '../../ui/Icon'
 

@@ -1,19 +1,20 @@
 'use client'
 import React, { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
-import config from '@/app/config'
-import useMapBox from '@/app/store/useMapBox'
-import useUserLocationData from '@/app/store/useUserLocationData'
-import useExploreSheet from '@/app/store/useExploreSheet'
-import useDetailSheet from '@/app/store/useDetailSheet'
-import { getCurrentLocation } from '@/app/utils/getCurrentLocation'
-import { getDistanceMatrix, getDirectionsRoute } from '@/app/utils/mapboxMatrix'
-import { useAddressInformation } from '@/app/store/api/location.api'
-import { getAddressInfo } from '@/app/store/api/services/location.service'
-import { useEmergencyApi } from '@/app/store/api/emergency.api'
-import useEmergencyData from '@/app/store/useEmergencyData'
+import config from '@/config'
+import useMapBox from '@/store/useMapBox'
+import useUserLocationData from '@/store/useUserLocationData'
+import useExploreSheet from '@/store/useExploreSheet'
+import useDetailSheet from '@/store/useDetailSheet'
+import { getCurrentLocation } from '@/utils/getCurrentLocation'
+import { getDistanceMatrix, getDirectionsRoute } from '@/utils/mapboxMatrix'
+import { useAddressInformation } from '@/store/api/location.api'
+import { getAddressInfo } from '@/store/api/services/location.service'
+import { useEmergencyApi } from '@/store/api/emergency.api'
+import useEmergencyData from '@/store/useEmergencyData'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
+import useSearchSheet from '@/store/useSearchSeet'
 
 type MapsProps = {
     updateLatestLocation?: () => void
@@ -41,14 +42,9 @@ const MapsV2: React.FC<MapsProps> = () => {
     // ===== store ======
     const detailSheet = useDetailSheet()
     const exploreSheet = useExploreSheet()
-    const { isRebuildMap, directionRoute, onRebuild, updateDirectionRoute } =
-        useMapBox()
-
-    const {
-        updateEmergencyData,
-        selectedEmergencyData: selectedEmergencyDataState,
-    } = useEmergencyData()
-
+    const searchSheet = useSearchSheet()
+    const { directionRoute, updateDirectionRoute } = useMapBox()
+    const { updateEmergencyData, selectedEmergencyData } = useEmergencyData()
     const {
         long: longitudeState,
         lat: latitudeState,
@@ -133,6 +129,7 @@ const MapsV2: React.FC<MapsProps> = () => {
     const handleMapClick = (e: any) => {
         exploreSheet.onClose()
         detailSheet.onClose()
+        searchSheet.onClose()
 
         const { lng, lat } = e.lngLat
         drawCurrentMarkerLocation(lng, lat)
@@ -174,6 +171,7 @@ const MapsV2: React.FC<MapsProps> = () => {
 
     const drawCurrentMarkerLocation = (longitude: number, latitude: number) => {
         console.log('draw current marker called')
+
         updateCoordinate(latitude, longitude)
         mapContainer = mapContainer ? mapContainer : mapContainerState
 
@@ -267,7 +265,7 @@ const MapsV2: React.FC<MapsProps> = () => {
                 [destination[0], destination[1]],
             ],
             {
-                padding: { top: 50, bottom: 400, left: 50, right: 50 },
+                padding: { top: 50, bottom: 300, left: 50, right: 50 },
                 maxZoom: 13, // Prevents excessive zoom
                 duration: 1000, // Smooth animation (1s)
             }
@@ -334,11 +332,10 @@ const MapsV2: React.FC<MapsProps> = () => {
     }, [directionRoute])
 
     useEffect(() => {
-        const coords =
-            selectedEmergencyDataState?.selectedEmergencyData?.coordinates
+        const coords = selectedEmergencyData?.selectedEmergencyData?.coordinates
 
         if (
-            selectedEmergencyDataState &&
+            selectedEmergencyData &&
             Array.isArray(coords) &&
             coords.length === 2
         ) {
@@ -347,7 +344,7 @@ const MapsV2: React.FC<MapsProps> = () => {
                 [longitudeState, latitudeState]
             )
         }
-    }, [selectedEmergencyDataState])
+    }, [selectedEmergencyData])
 
     useEffect(() => {
         buildTheMap()
@@ -364,7 +361,12 @@ const MapsV2: React.FC<MapsProps> = () => {
 
     return (
         <div
-            className="absolute inset-0 w-screen h-[100%] z-0"
+            style={{
+                width: '100%',
+                height: '100vh', // or fixed value e.g., "500px"
+                maxHeight: '100vh', // Prevents height from changing on resize
+                overflow: 'hidden',
+            }}
             ref={(el) => {
                 mapWrapper.current = el
                 void 0

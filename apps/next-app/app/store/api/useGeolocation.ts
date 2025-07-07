@@ -1,5 +1,5 @@
-import config from '@/app/config'
-import { fetcher } from '@/app/libs/fetcher'
+import config from '@/config'
+import { fetcher } from '@/libs/fetcher'
 const useGeolocation = () => {
     const getLocation = async (locationQuery: string) => {
         if (locationQuery === '') {

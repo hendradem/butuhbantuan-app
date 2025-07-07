@@ -1,26 +1,23 @@
 import React, { useState } from 'react'
 import EmergencyDataList from '../../partials/EmergencyDataList'
-import useExploreSheet from '@/app/store/useExploreSheet'
-import useMapBox from '@/app/store/useMapBox'
-import { getDirectionsRoute } from '@/app/utils/mapboxMatrix'
-import useUserLocationData from '@/app/store/useUserLocationData'
-import useEmergencyData from '@/app/store/useEmergencyData'
+import useExploreSheet from '@/store/useExploreSheet'
+import useMapBox from '@/store/useMapBox'
+import { getDirectionsRoute } from '@/utils/mapboxMatrix'
+import useUserLocationData from '@/store/useUserLocationData'
+import useEmergencyData from '@/store/useEmergencyData'
+import EmptyState from '@/components/commons/EmptyState'
+import useSearchSheet from '@/store/useSearchSeet'
 
 const ContentSection = () => {
     const exploreSheet = useExploreSheet()
+    const searchSheet = useSearchSheet()
     const emergencyData = exploreSheet.sheetData?.emergency
     const userLatitude = useUserLocationData((state) => state.lat)
     const userLongitude = useUserLocationData((state) => state.long)
-    const updateRoute = useMapBox((action) => action.updateDirectionRoute)
-    const updateSelectedEmergencyData = useEmergencyData(
-        (action) => action.updateSelectedEmergencyData
-    )
+    const { updateDirectionRoute } = useMapBox()
+    const { updateSelectedEmergencyData } = useEmergencyData()
 
     const [selectedEmergencyName, setSelectedEmergencyName] = useState('')
-
-    const handleChangeLocation = () => {
-        console.log('clicked')
-    }
 
     const handleSelectedEmergency = async (emergency: any) => {
         const emergencyName = emergency?.name
@@ -35,28 +32,48 @@ const ContentSection = () => {
             [emergency?.coordinates[0], emergency?.coordinates[1]], // emergency coordinates
             [userLongitude, userLatitude] // user coordinates from store
         )
-        updateRoute(directions)
+        updateDirectionRoute(directions)
+    }
+
+    const handleOpenSearchSheet = () => {
+        exploreSheet.onClose()
+        searchSheet.onOpen()
+    }
+
+    const ctaComponent = () => {
+        return (
+            <div className="flex items-center justify-center mt-2">
+                <button
+                    onClick={() => handleOpenSearchSheet()}
+                    type="button"
+                    className="btn-dark"
+                >
+                    Ubah pencarian
+                </button>
+                <button
+                    onClick={() => exploreSheet.onClose()}
+                    type="button"
+                    className="btn-base"
+                >
+                    Cari di maps
+                </button>
+            </div>
+        )
     }
 
     return (
         <div>
-            <div className="sheet-body search-result-wrapper bg-neutral-50 overflow-y-scroll max-h-[250px]">
-                <div className="mt-5">
+            <div className="sheet-body search-result-wrapper bg-neutral-50 overflow-y-scroll">
+                <div>
                     {emergencyData?.length == 0 && (
-                        <div className="mx-3 mb-3 text-center text-slate-900">
-                            Data emergency tidak ditemukan
-                            <div>
-                                <button
-                                    onClick={() => handleChangeLocation()}
-                                    type="button"
-                                    className="border focus:outline-none  focus:ring-4 font-medium rounded-lg text-sm mt-2 px-4 py-2 me-2 mb-2 bg-gray-800 text-white border-gray-600 hover:bg-gray-700 hover:border-gray-600 focus:ring-gray-700"
-                                >
-                                    Ubah Lokasi Pencarian
-                                </button>
-                            </div>
-                        </div>
+                        <EmptyState
+                            size="xxs"
+                            title="Data Tidak Ditemukan"
+                            cta={ctaComponent()}
+                        />
                     )}
-
+                </div>
+                <div className="max-h-[210px] pt-3 overflow-y-scroll">
                     <EmergencyDataList
                         emergencyData={emergencyData}
                         handleSelectedEmergency={async (emergency: any) => {
