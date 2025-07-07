@@ -57,9 +57,7 @@
     "vaul": "^1.1.2",
     "zustand": "^4.3.8"
   },
-  "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
+  "devDependencies": { 
     "@types/google-map-react": "^2.1.7",
     "@types/lodash.debounce": "^4.0.9",
     "@types/mapbox__mapbox-gl-geocoder": "^4.7.7",
