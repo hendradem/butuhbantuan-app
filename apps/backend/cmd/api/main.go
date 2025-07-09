@@ -12,8 +12,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 )
 
-func main() { 
-	app := fiber.New() 
+func main() {
+	app := fiber.New()
 	app.Use(cors.New())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     "http://localhost:3000",
@@ -21,11 +21,14 @@ func main() {
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
 		AllowCredentials: true,
 	}))
+
 	config.LoadEnv()
-	port := config.GetEnv("PORT", ":8080")  
+
+	port := config.GetEnv("PORT", ":8080")
+
 	database.InitDB()
 
-	route.RegisterRoute(app) 
+	route.RegisterRoute(app)
 
 	if err := app.Listen(port); err != nil {
 		defer os.Exit(1)
