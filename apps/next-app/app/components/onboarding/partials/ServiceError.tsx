@@ -3,21 +3,13 @@ import EmptyImage from '../../ui/EmptyImage'
 import { Button } from '../../ui/Button'
 import useConfirmationSheet from '@/store/useConfirmationSheet'
 
-interface ServiceNotFoundProps {
-    currentUserRegency: string
+interface Props {
+    error: string
 }
 
-const ServiceNotFound = ({ currentUserRegency }: ServiceNotFoundProps) => {
-    const {
-        onOpen: openConfirmationSheet,
-        setCallNumber,
-        setCallType,
-    } = useConfirmationSheet()
-
-    const handleContactClick = (): void => {
-        setCallNumber('119')
-        setCallType('phone')
-        openConfirmationSheet()
+const ServiceError: React.FC<Props> = ({ error }) => {
+    const handleRefresh = (): void => {
+        window.location.href = '/'
     }
 
     return (
@@ -26,20 +18,19 @@ const ServiceNotFound = ({ currentUserRegency }: ServiceNotFoundProps) => {
                 <EmptyImage />
                 <div className="px-4">
                     <h2 className="text-center text-black text-base font-semibold leading-relaxed pb-1">
-                        Layanan belum tersedia
+                        Aktifkan GPS
                     </h2>
                     <p className="text-center text-black text-sm font-normal leading-snug pb-4">
-                        Mohon maaf layanan kami belum tersedia. Silakan hubungi
-                        PSC 119 ( Layanan ambulans nasional )
+                        Aktifkan GPS kamu untuk mendapatkan layanan.
                     </p>
                     <div className="flex flex-col gap-2">
                         <Button
                             size="md"
                             variant="black"
                             className="rounded-full"
-                            onClick={() => handleContactClick()}
+                            onClick={() => handleRefresh()}
                         >
-                            Hubungi PSC 119
+                            Reload Page
                         </Button>
                     </div>
                 </div>
@@ -48,4 +39,4 @@ const ServiceNotFound = ({ currentUserRegency }: ServiceNotFoundProps) => {
     )
 }
 
-export default ServiceNotFound
+export default ServiceError

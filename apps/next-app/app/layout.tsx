@@ -31,7 +31,10 @@ export default function RootLayout({
                     <link rel="apple-touch-icon" href="/ambulance-logo.jpg" />
                     <meta name="theme-color" content="#0f172a" />
                 </head>
-                <body suppressHydrationWarning={true}>
+                <body
+                    suppressHydrationWarning={true}
+                    className="h-screen-dynamic"
+                >
                     <div className="main-content default-layout border-x border-neutral-100">
                         {children}
                     </div>

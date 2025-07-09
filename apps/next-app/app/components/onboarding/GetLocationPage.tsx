@@ -7,6 +7,7 @@ import { getAddressInfo } from '@/store/api/services/location.service'
 import GettingService from './partials/GettingService'
 import ServiceLoading from './partials/ServiceLoading'
 import { useRouter } from 'next/navigation'
+import ServiceError from './partials/ServiceError'
 
 const GetLocationPage = () => {
     const router = useRouter()
@@ -83,7 +84,7 @@ const GetLocationPage = () => {
             })
         }
 
-        setTimeout(() => setIsLoading(false), 500)
+        setTimeout(() => setIsLoading(false), 5000)
     }, [currentCityData, isServiceIsAvailable])
 
     if (isLoading) {
@@ -95,17 +96,13 @@ const GetLocationPage = () => {
     } else {
         return (
             <div className="w-full h-screen px-10 text-center bg-white flex items-center justify-center">
-                <GettingService
-                    currentUserRegency={currentUserRegency}
-                    isServiceIsAvailable={isAvailable}
-                />
+                {error == 'permission_denied' && <ServiceError error={error} />}
 
-                {error && (
-                    <div>
-                        <h2 className="text-black text-base font-semibold leading-relaxed pb-1">
-                            {error}
-                        </h2>
-                    </div>
+                {error == '' && (
+                    <GettingService
+                        currentUserRegency={currentUserRegency}
+                        isServiceIsAvailable={isAvailable}
+                    />
                 )}
             </div>
         )

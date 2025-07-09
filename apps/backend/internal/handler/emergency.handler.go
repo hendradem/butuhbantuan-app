@@ -11,32 +11,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// func GetEmergency(ctx *fiber.Ctx) error {
-// 	var emergencies []entity.Emergency
-// 	result := database.DB.Find(&emergencies)
-
-// 	if result.Error != nil {
-// 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-// 			"status":  "error",
-// 			"message": "failed to get emergencies",
-// 			"data":    result.Error.Error(),
-// 		})
-// 	}
-
-// 	✅ Map to DTO
-// 	var response []dto.EmergencyServiceResponse
-// 	for _, e := range emergencies {
-// 		response = append(response, mapper.MapEmergencyServiceToResponse(e))
-// 	}
-
-// 	// ✅ Return DTO-based JSON
-// 	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
-// 		"status":  "success",
-// 		"message": "success to get emergencies data",
-// 		"data":    result,
-// 	})
-// }
-
 func GetEmergency(ctx *fiber.Ctx) error {
 	var emergencies []entity.Emergency
 	result := database.DB.Preload("EmergencyTypes").Table("emergency").Select("emergency.*, emergency_type.*").Joins("JOIN emergency_type ON emergency.emergency_type_id = emergency_type.id").Find(&emergencies)
