@@ -24,16 +24,16 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-${{ hashFiles('apps/backend/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
 
       - name: Build Go backend
         run: |
           cd apps/backend
-          go build -o my-backend .
+          go build -o my-backend ./cmd/api
 
-      - name: Set up Node.js
+      - name: Set up Node
         uses: actions/setup-node@v3
         with:
           node-version: 18
@@ -43,7 +43,7 @@ jobs:
         with:
           version: 8
 
-      - name: Install frontend deps & build
+      - name: Install frontend dependencies & build
         run: |
           pnpm install
           pnpm build --filter=next-app
@@ -57,7 +57,7 @@ jobs:
           source: "apps/backend/my-backend"
           target: "/var/www/butuhbantuan-app/apps/backend/"
 
-      - name: Deploy via SSH
+      - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -66,18 +66,18 @@ jobs:
           script: |
             cd /var/www/butuhbantuan-app
 
-            echo "Pull latest changes..."
+            echo "Pulling latest changes..."
             git pull origin master
 
-            echo "Reinstall frontend dependencies..."
+            echo "Installing frontend..."
             cd apps/next-app
             pnpm install
             pnpm build
 
-            echo "Restart Go backend..."
+            echo "Restarting backend with PM2..."
             cd ../backend
             pm2 restart backend || pm2 start ./my-backend --name backend
 
-            echo "Restart frontend..."
+            echo "Restarting frontend with PM2..."
             cd ../next-app
             pm2 restart next-app || pm2 start "pnpm start" --name next-app
