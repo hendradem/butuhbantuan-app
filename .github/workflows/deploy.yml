@@ -1,0 +1,73 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Build Go backend
+        run: |
+          cd apps/backend
+          go build -o my-backend .
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install PNPM
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install frontend deps & build
+        run: |
+          pnpm install
+          pnpm build --filter=next-app
+
+      - name: Upload Go binary to VPS
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_PRIVATE_KEY }}
+          source: "apps/backend/my-backend"
+          target: "/var/www/butuhbantuan-app/apps/backend/"
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_PRIVATE_KEY }}
+          script: |
+            cd /var/www/butuhbantuan-app
+
+            echo "Pull latest changes..."
+            git pull origin master
+
+            echo "Reinstall frontend dependencies..."
+            cd apps/next-app
+            pnpm install
+            pnpm build
+
+            echo "Restart Go backend..."
+            cd ../backend
+            pm2 restart backend || pm2 start ./my-backend --name backend
+
+            echo "Restart frontend..."
+            cd ../next-app
+            pm2 restart next-app || pm2 start "pnpm start" --name next-app
