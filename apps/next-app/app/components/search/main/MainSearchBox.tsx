@@ -3,8 +3,6 @@ import React, { useState, useMemo, useEffect } from 'react'
 import debounce from 'lodash.debounce'
 import useUserLocationData from '@/store/useUserLocationData'
 import { useAddressLocation } from '@/store/api/location.api'
-import { getCurrentLocation } from '@/utils/getCurrentLocation'
-import { getAddressInfo } from '@/store/api/services/location.service'
 import useSearchData from '@/store/useSearchData'
 import useSearchSheet from '@/store/useSearchSeet'
 import Icon from '@/components/ui/Icon'
@@ -19,7 +17,6 @@ interface SearchBoxProps {
 
 const SearchBox = ({
     onFocus,
-    onAddressSelect,
     placeholder = 'Search places, addresses...',
     className = '',
     showLocationButton = true,
@@ -163,8 +160,8 @@ const SearchBox = ({
                         className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-200"
                     >
                         <Icon
-                            name="iconamoon:location"
-                            className="text-blue-500 text-xl"
+                            name="line-md:my-location-loop"
+                            className="text-neutral-500 text-xl"
                         />
                     </button>
                 )}

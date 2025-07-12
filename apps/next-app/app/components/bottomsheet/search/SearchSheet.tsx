@@ -29,7 +29,7 @@ const SearchSheet = () => {
         updateRefetchMatrix,
     } = useUserLocationData()
     const [activeTab, setActiveTab] = useState(1)
-    const snapPoints = [900, 280, 0]
+    const snapPoints = [700, 0]
 
     const tabs = [
         {

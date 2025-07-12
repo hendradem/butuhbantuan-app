@@ -18,21 +18,6 @@ const PreviewSearchBox = () => {
         e.preventDefault()
         getAndSetCurrentLocation()
         rebuildMap()
-
-        // getCurrentLocation((location: any) => {
-        //     const coordinates = {
-        //         lat: location.lat,
-        //         long: location.lng,
-        //     }
-        //     updateCoordinate(location.lat, location.lng)
-        //     rebuildMap()
-
-        //     // get address info to update address on the textbox - [NOTE: Directly use location.service fetcher]
-        //     getAddressInfo(coordinates.long, coordinates.lat).then((res) => {
-        //         const address = res[0]?.place_name
-        //         setCurrentUserAddress(address)
-        //     })
-        // })
     }
 
     const handleSearchBoxClick = () => {
@@ -48,40 +33,34 @@ const PreviewSearchBox = () => {
     }, [fullAddress])
 
     return (
-        <form>
-            <div className="px-1.5">
+        <div>
+            <div className="search-box relative w-full">
+                <div className="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                    <Icon
+                        name="ph:magnifying-glass"
+                        className="text-xl text-gray-400"
+                    />
+                </div>
                 <div
-                    className={`gap-1 text-gray-800 flex items-center w-full p-0`}
+                    className="searchbox cursor-pointer"
+                    onClick={handleSearchBoxClick}
                 >
-                    <div className="cursor-pointer flex gap-1 input-wrapper text-gray-900 bg-gray-100 rounded-[10px] py-2.5 text-sm px-3 border-none focus:ring-none focus:border-none focus:outline-none w-full">
-                        <div>
-                            <Icon
-                                name="ph:magnifying-glass"
-                                className="text-lg"
-                            />
-                        </div>
-                        <input
-                            type="text"
-                            value={currentUserAddress}
-                            className="p-0 w-full bg-gray-100 focus:border-none focus:ring-none focus:outline-none cursor-pointer"
-                            placeholder="Cari lokasi, desa atau daerah terdekat"
-                            onClick={handleSearchBoxClick}
-                        />
-                    </div>
+                    {currentUserAddress}
+                </div>
+                <div className="absolute inset-y-0 end-0 flex items-center mx-2">
                     <button
-                        onClick={(e) => {
-                            handleGetCurrentLocation(e)
-                        }}
-                        className="p-1 py-[10px] px-2 bg-gray-100 rounded-lg"
+                        type="button"
+                        onClick={handleGetCurrentLocation}
+                        className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-200"
                     >
                         <Icon
-                            name="material-symbols:my-location"
-                            className="text-xl"
+                            name="line-md:my-location-loop"
+                            className="text-neutral-500 text-xl"
                         />
                     </button>
                 </div>
             </div>
-        </form>
+        </div>
     )
 }
 

@@ -18,6 +18,7 @@ const AvailableServiceList: React.FC<PropsType> = ({
                 background: '#333',
                 color: '#fff',
             },
+            duration: 500,
         })
     }
 

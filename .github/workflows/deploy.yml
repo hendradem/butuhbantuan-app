@@ -63,21 +63,31 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
+          port: 22
+          timeout: 60s
+          command_timeout: 30m
           script: |
-            cd /var/www/butuhbantuan-app
+            echo "🔁 Moving to project directory..."
+            cd /var/www/butuhbantuan-app || exit 1
 
-            echo "Pulling latest changes..."
-            git pull origin master
+            echo "🔄 Pulling latest changes..."
+            git pull origin master || exit 1
 
-            echo "Installing frontend..."
-            cd apps/next-app
-            pnpm install
-            pnpm build
+            echo "📦 Installing frontend dependencies..."
+            cd apps/next-app || exit 1
+            pnpm install --no-fund --silent || exit 1
 
-            echo "Restarting backend with PM2..."
-            cd ../backend
-            pm2 restart backend || pm2 start ./my-backend --name backend
+            echo "🛠️ Building frontend..."
+            pnpm build || exit 1
 
-            echo "Restarting frontend with PM2..."
-            cd ../next-app
-            pm2 restart next-app || pm2 start "pnpm start" --name next-app
+            echo "🚀 Restarting backend with PM2..."
+            cd ../backend || exit 1
+            pm2 restart backend || pm2 start ./my-backend --name backend || exit 1
+
+            echo "🚀 Restarting frontend with PM2..."
+            cd ../next-app || exit 1
+            pm2 restart next-app || pm2 start "pnpm start" --name next-app || exit 1
+
+            echo "✅ Deployment completed successfully."
+
+            exit 0

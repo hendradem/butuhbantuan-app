@@ -111,6 +111,11 @@ body {
     .btn-purple {
         @apply btn-base text-white bg-purple-700 hover:bg-purple-800 focus:ring-4 focus:ring-purple-300 dark:bg-purple-600 dark:hover:bg-purple-700 dark:focus:ring-purple-900;
     }
+
+    /* form */
+    .searchbox {
+        @apply bg-gray-100 border-0 text-gray-900 text-sm rounded-xl focus:border-0 focus:outline-none block w-full px-10 py-3 placeholder-gray-400 pr-[45px] truncate
+    }
   
 }
 

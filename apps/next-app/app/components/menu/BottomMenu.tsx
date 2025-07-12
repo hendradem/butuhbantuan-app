@@ -45,7 +45,7 @@ const BottomMenu = () => {
     return (
         <div className="sticky bottom-0 left-0 z-50 w-full h-[100%] py-5 rounded-t-xl bg-white border-t-slate-200">
             <div className="sheet-wrapper">
-                <div className="sheet-header mx-2">
+                <div className="sheet-header mx-4">
                     <PreviewSearchBox />
                 </div>
                 <div className="sheet-body mt-4">

@@ -170,8 +170,6 @@ const MapsV2: React.FC<MapsProps> = () => {
     }
 
     const drawCurrentMarkerLocation = (longitude: number, latitude: number) => {
-        console.log('draw current marker called')
-
         updateCoordinate(latitude, longitude)
         mapContainer = mapContainer ? mapContainer : mapContainerState
 
@@ -200,7 +198,6 @@ const MapsV2: React.FC<MapsProps> = () => {
             [longitude ?? 0, latitude ?? 0],
             getEmergencyData?.data
         ).then((res) => {
-            // updateMarkerInformation(transformedLocations)
             updateEmergencyData(res) // update global emergency state
             setFilteredLocations(res as any) // update emergency state
         })
