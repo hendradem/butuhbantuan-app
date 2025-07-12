@@ -82,11 +82,14 @@ jobs:
 
             echo "🚀 Restarting backend with PM2..."
             cd ../backend || exit 1
-            pm2 restart backend || pm2 start ./my-backend --name backend || exit 1
+            go build -o my-backend ./cmd/api || exit 1
+            pm2 delete backend || true
+            pm2 start ./my-backend --name backend || exit 1
 
             echo "🚀 Restarting frontend with PM2..."
             cd ../next-app || exit 1
             pm2 restart next-app || pm2 start "pnpm start" --name next-app || exit 1
 
             echo "✅ Deployment completed successfully."
+
 
