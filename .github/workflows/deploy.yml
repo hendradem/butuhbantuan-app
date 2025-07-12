@@ -57,7 +57,7 @@ jobs:
           source: "apps/backend/my-backend"
           target: "/var/www/butuhbantuan-app/apps/backend/"
 
-      - name: Deploy to VPS via SSH
+     - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -75,7 +75,7 @@ jobs:
 
             echo "📦 Installing frontend dependencies..."
             cd apps/next-app || exit 1
-            pnpm install --no-fund --silent || exit 1
+            pnpm install || exit 1
 
             echo "🛠️ Building frontend..."
             pnpm build || exit 1
@@ -90,4 +90,3 @@ jobs:
 
             echo "✅ Deployment completed successfully."
 
-            exit 0
