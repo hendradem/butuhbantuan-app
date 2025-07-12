@@ -57,7 +57,7 @@ jobs:
           source: "apps/backend/my-backend"
           target: "/var/www/butuhbantuan-app/apps/backend/"
 
-     - name: Deploy to VPS via SSH
+      - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
