@@ -1,31 +1,28 @@
 'use client'
-import React, { useRef, useState } from 'react'
+import React from 'react'
 import { useEmergencyTypeApi } from '@/store/api/emergency-type.api'
 import PreviewSearchBox from '../search/preview/PreviewSearchBox'
 import useDetailSheet from '@/store/useDetailSheet'
-import useEmergencyData from '@/store/useEmergencyData'
 import useExploreSheet from '@/store/useExploreSheet'
 import AvailableServiceList from './AvailableServiceList'
+import { filterEmergencyByService } from '@/utils/filterEmergencyByService'
 
 const BottomMenu = () => {
     const { emergencyTypeData, emergencyTypeLoading } = useEmergencyTypeApi()
     const { setDetailSheetData } = useDetailSheet()
     const { setSheetData: setExploreSheetData, onOpen: openExploreSheet } =
         useExploreSheet()
-    const { emergencyData } = useEmergencyData()
 
-    const handleServiceClick = (service?: any) => {
-        const serviceID = service?.id
-        const filteredEmergencies = emergencyData.filter((item: any) => {
-            return +item.id === serviceID
-        })
-        setDetailSheetData({
-            emergencyType: service,
-            emergency: filteredEmergencies,
-        })
+    const handleServiceClick = async (service?: any) => {
+        const serviceName = service?.name
+        const filteredEmergencyByService = filterEmergencyByService(serviceName)
+        // setDetailSheetData({
+        //     emergencyType: service,
+        //     emergency: filteredEmergencyByService,
+        // })
         setExploreSheetData({
             emergencyType: service,
-            emergency: filteredEmergencies,
+            emergency: filteredEmergencyByService,
         })
         openExploreSheet()
     }

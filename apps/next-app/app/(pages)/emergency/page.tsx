@@ -1,7 +1,7 @@
 'use client'
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Maps from '@/components/maps/Maps-v2'
+import Maps from '@/components/maps/leaflet/Leaflet'
 import BottomMenu from '@/components/menu/BottomMenu'
 import AddToHomeScreenBanner from '@/components/commons/AddToHomeScreenBanner'
 import { setRealViewportHeight } from '@/utils/setViewportHeight'
@@ -30,10 +30,13 @@ export default function EmergencyPage() {
             <div className="banner">
                 <AddToHomeScreenBanner />
             </div>
-            <div className="h-[78%]">
+            <div className="h-[78%] bg-neutral-100">
                 <Maps />
             </div>
-            <div className="h-[22%] mb-[400px] left-0 right-0 z-50 bg-white">
+            <div
+                className="h-[22%] left-0 right-0 z-50 bg-transparent absolute bottom-0"
+                style={{ zIndex: 100 }}
+            >
                 <BottomMenu />
             </div>
         </div>

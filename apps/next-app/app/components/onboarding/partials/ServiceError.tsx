@@ -1,7 +1,6 @@
 import React from 'react'
 import EmptyImage from '../../ui/EmptyImage'
 import { Button } from '../../ui/Button'
-import useConfirmationSheet from '@/store/useConfirmationSheet'
 
 interface Props {
     error: string
@@ -12,17 +11,38 @@ const ServiceError: React.FC<Props> = ({ error }) => {
         window.location.href = '/'
     }
 
-    return (
-        <div>
-            <div className="grid gap-4 w-80">
-                <EmptyImage />
-                <div className="px-4">
+    const renderErrorMessage = (errorStatus: string) => {
+        if (errorStatus === 'permission_denied') {
+            return (
+                <div>
                     <h2 className="text-center text-black text-base font-semibold leading-relaxed pb-1">
                         Aktifkan GPS
                     </h2>
                     <p className="text-center text-black text-sm font-normal leading-snug pb-4">
                         Aktifkan GPS kamu untuk mendapatkan layanan.
                     </p>
+                </div>
+            )
+        } else if (errorStatus === 'position_unavailable') {
+            return (
+                <div>
+                    <h2 className="text-center text-black text-base font-semibold leading-relaxed pb-1">
+                        Lokasi tidak terdeteksi
+                    </h2>
+                    <p className="text-center text-black text-sm font-normal leading-snug pb-4">
+                        Aktifkan GPS, Ganti Jaringan dan coba lagi.
+                    </p>
+                </div>
+            )
+        }
+    }
+
+    return (
+        <div>
+            <div className="grid gap-4 w-80">
+                <EmptyImage />
+                <div className="px-4">
+                    <div>{renderErrorMessage(error)}</div>
                     <div className="flex flex-col gap-2">
                         <Button
                             size="md"

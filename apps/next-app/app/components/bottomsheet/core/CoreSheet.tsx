@@ -1,3 +1,4 @@
+'use client'
 import React, { useEffect, useRef } from 'react'
 import { Sheet, SheetRef } from 'react-modal-sheet'
 import useCoreSheet from '@/store/useCoreSheet'
@@ -43,20 +44,13 @@ const CoreSheet: React.FC<Props> = ({
     }
 
     const handleSnap = (snapIndex: number) => {
-        // Check if snapped to the bottom (last snap point)
         const isBottomSnap = snapIndex === snapPoints.length - 1
 
         if (isBottomSnap) {
-            // Trigger close function which handles global state
             onClose()
-            return // Early return to prevent further execution
+            return
         }
-
-        // Call original snap handler for other snap points
         onSnap?.(snapIndex)
-
-        // Optional: Log current snap point for debugging
-        console.log('Current snap point index:', snapIndex)
     }
 
     return (
@@ -80,7 +74,9 @@ const CoreSheet: React.FC<Props> = ({
                     disableDrag={!draggable}
                     className={`mx-auto flex flex-col border-x border-neutral-100 max-w-md`}
                     style={{
-                        zIndex: 50,
+                        zIndex: 9999,
+                        transition: 'transform 0.3s ease-out',
+                        willChange: 'transform',
                     }}
                 >
                     <Sheet.Container

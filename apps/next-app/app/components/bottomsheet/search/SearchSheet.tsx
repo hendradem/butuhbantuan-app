@@ -10,7 +10,6 @@ import SearchResult from './partials/SearchResult'
 import useEmergencyData from '@/store/useEmergencyData'
 import NearestService from './partials/NearestService'
 import InfoState from '@/components/commons/InfoState'
-import { MapPin } from 'lucide-react'
 import Tabs from '@/components/ui/Tabs'
 
 const SearchSheet = () => {
@@ -21,6 +20,7 @@ const SearchSheet = () => {
         isLoading,
         isActive: isSearchBoxActive,
         setIsActive: setIsSearchBoxActive,
+        updateSearchCoordinate,
     } = useSearchData()
     const {
         fullAddress,
@@ -29,7 +29,7 @@ const SearchSheet = () => {
         updateRefetchMatrix,
     } = useUserLocationData()
     const [activeTab, setActiveTab] = useState(1)
-    const snapPoints = [700, 0]
+    const snapPoints = [500, 0]
 
     const tabs = [
         {
@@ -45,8 +45,7 @@ const SearchSheet = () => {
     const handleSearchBoxFocus = () => {}
     const handleAddressSelect = (address: any) => {
         updateFullAddress(address.address)
-        updateCoordinate(address.lat, address.long)
-        updateRefetchMatrix() // refetch matrix on maps
+        updateSearchCoordinate(address.lat, address.long)
         setIsSearchBoxActive(false) // set searchbox status to inactive
         onClose()
     }
@@ -107,29 +106,6 @@ const SearchSheet = () => {
                             <div className="all-tab-content">
                                 {activeTab === 1 && (
                                     <>
-                                        <div className="current-location my-3 px-3">
-                                            {!isLoading && (
-                                                <div className="flex items-center space-x-3 p-2 px-3 bg-blue-50 rounded-xl">
-                                                    <div className="w-[10%]">
-                                                        <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                                                            <MapPin className="w-5 h-5 text-white" />
-                                                        </div>
-                                                    </div>
-                                                    <div className="w-[85%]">
-                                                        <h3 className="font-medium text-[15px] text-blue-600">
-                                                            Lokasimu saat ini
-                                                        </h3>
-                                                        <div className="w-full">
-                                                            <p className="text-[13.5px] text-blue-500 truncate">
-                                                                {fullAddress ||
-                                                                    'Lokasi tidak ditemukan'}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-
                                         <div className="info-state">
                                             {renderInfoState && (
                                                 <InfoState

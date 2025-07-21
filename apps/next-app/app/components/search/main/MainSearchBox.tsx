@@ -28,7 +28,7 @@ const SearchBox = ({
         setIsLoading,
         setIsActive,
     } = useSearchData()
-    const { fullAddress, getAndSetCurrentLocation } = useUserLocationData()
+    const { fullAddress, updateIsGetCurrentLocation } = useUserLocationData()
     const { onClose } = useSearchSheet()
     const [currentUserAddress, setCurrentUserAddress] = useState<string>('')
 
@@ -65,7 +65,7 @@ const SearchBox = ({
 
     const handleGetCurrentLocation = (e: any): void => {
         e.preventDefault()
-        getAndSetCurrentLocation()
+        updateIsGetCurrentLocation(true)
         onClose() // close search sheet
     }
 

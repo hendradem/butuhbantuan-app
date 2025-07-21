@@ -4,13 +4,16 @@ import useDetailSheet from '@/store/useDetailSheet'
 import CoreSheet from '../core/CoreSheet'
 import HeaderSection from './partials/HeaderSection'
 import EmergencyDataSingleList from './partials/EmergencyDataSingleList'
+import useLeaflet from '@/store/useLeaflet'
 
 const DetailSheet = () => {
     const [isOpen, setIsOpen] = useState(true)
-    const emergencyData = useDetailSheet((state) => state.detailSheetData)
+    const { resetLeafletRouting } = useLeaflet()
     const detailSheet = useDetailSheet()
+    const detailSheetData = detailSheet.detailSheetData
     const handleCloseDetailSheet = (): void => {
         detailSheet.onClose()
+        resetLeafletRouting()
     }
 
     useEffect(() => {
@@ -24,7 +27,7 @@ const DetailSheet = () => {
                     isOpen={isOpen}
                     header={
                         <HeaderSection
-                            emergencyData={emergencyData}
+                            data={detailSheetData}
                             handleCloseDetailSheet={handleCloseDetailSheet}
                         />
                     }
@@ -32,7 +35,7 @@ const DetailSheet = () => {
                 >
                     <div className="sheet mt-2">
                         <EmergencyDataSingleList
-                            emergencyData={emergencyData?.emergency}
+                            data={detailSheetData?.emergency}
                         />
                     </div>
                 </CoreSheet>

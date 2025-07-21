@@ -2,8 +2,10 @@ package main
 
 import (
 	"butuhbantuan/internal/route"
+	"butuhbantuan/internal/seeder"
 	"butuhbantuan/pkg/config"
 	"butuhbantuan/pkg/database"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -13,6 +15,21 @@ import (
 )
 
 func main() {
+
+	// Parse CLI flags
+	seed := flag.Bool("seed", false, "Run database seeders")
+	flag.Parse()
+
+	// Run seeders if --seed is provided
+	if *seed {
+		log.Println("🔧 Running seeders...")
+		if err := seeder.RunSeed(); err != nil {
+			log.Fatalf("❌ Seeder failed: %v", err)
+		}
+		log.Println("✅ Seeding completed.")
+		return
+	}
+
 	app := fiber.New()
 	app.Use(cors.New())
 	app.Use(cors.New(cors.Config{
@@ -25,7 +42,6 @@ func main() {
 	config.LoadEnv()
 
 	port := config.GetEnv("PORT", ":8080")
-
 	database.InitDB()
 
 	route.RegisterRoute(app)

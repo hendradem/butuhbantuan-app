@@ -2,16 +2,24 @@ import React from 'react'
 import Icon from '@/components/ui/Icon'
 import useExploreSheet from '@/store/useExploreSheet'
 import useSearchSheet from '@/store/useSearchSeet'
+import useLeaflet from '@/store/useLeaflet'
 
 const HeaderSection = () => {
     const exploreSheet = useExploreSheet()
+    const { resetLeafletRouting } = useLeaflet()
     const handleCloseSheet = exploreSheet.onClose
     const exploreSheetData = exploreSheet.sheetData
     const { onOpen } = useSearchSheet()
 
     const handleOpenSearchSheet = () => {
         exploreSheet.onClose()
+        resetLeafletRouting()
         onOpen()
+    }
+
+    const handleCloseExploreSheet = () => {
+        handleCloseSheet()
+        resetLeafletRouting()
     }
 
     return (
@@ -28,10 +36,7 @@ const HeaderSection = () => {
                     </div>
                     <div className="flex flex-col justify-center">
                         <h1 className="text-lg leading-none m-0 text-neutral-800 font-semibold">
-                            {
-                                exploreSheetData?.emergencyType
-                                    ?.emergency_type_name
-                            }
+                            {exploreSheetData?.emergencyType?.name}
                         </h1>
                         <p className="mt-[2px] leading-none text-[14px] text-neutral-500">
                             {exploreSheetData?.emergency?.length} hasil
@@ -48,7 +53,7 @@ const HeaderSection = () => {
                     </div>
                 </div>
                 <button
-                    onClick={() => handleCloseSheet()}
+                    onClick={() => handleCloseExploreSheet()}
                     type="button"
                     className="bg-neutral-100 flex items-center justify-center w-8 h-8 rounded-full"
                 >

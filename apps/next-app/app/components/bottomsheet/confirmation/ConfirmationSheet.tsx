@@ -67,7 +67,7 @@ const ConfirmationSheet = () => {
                                                 name="mingcute:chat-1-fill"
                                                 className="w-5 h-5 mr-2"
                                             />
-                                            Buka Whatsapp
+                                            Whatsapp
                                         </button>
                                     )}
 
@@ -79,7 +79,7 @@ const ConfirmationSheet = () => {
                                             }}
                                         >
                                             <Icon
-                                                name="mingcute:chat-1-fill"
+                                                name="mingcute:phone-call-fill"
                                                 className="w-5 h-5 mr-2"
                                             />
                                             Telfon

@@ -1,26 +1,23 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { emergencyService } from './services/emergency.service'
-import { toastService } from '@/libs/toast'
+import { toast } from 'react-hot-toast'
 
 export const useEmergencyApi = () => {
     const queryClient = useQueryClient()
 
     const getAll = useQuery(['emergency'], emergencyService.getAll, {
         onSuccess: (data) => {},
-        // onError: () => toastService.error('Gagal mengambil data emergency'),
     })
 
-    // if (getAll.isLoading) {
-    //     toastService.showLoading('Mencarikan data untukmu')
-    // }
-
-    const create = useMutation(emergencyService.create, {
-        // onMutate: () => toastService.showLoading('Menyimpan data...'),
-        onSuccess: () => {
-            queryClient.invalidateQueries(['emergency'])
-        },
-        onError: () => {},
-    })
+    // const getAllbyRegion = useQuery(
+    //     ['emergency', regencyID],
+    //     () => emergencyService.getAllbyRegional(regencyID),
+    //     {
+    //         enabled: !!regencyID,
+    //         onSuccess: (data) => {},
+    //         onError: () => toast.error('Gagal mengambil data emergency'),
+    //     }
+    // )
 
     const update = useMutation(
         ({ id, data }: { id: string; data: any }) =>
@@ -32,18 +29,12 @@ export const useEmergencyApi = () => {
         }
     )
 
-    const remove = useMutation((id: string) => emergencyService.delete(id), {
-        // onMutate: () => toastService.showLoading('Menghapus data...'),
-        onSuccess: () => {},
-        onError: () => {},
-    })
-
     return {
         getEmergencyData: getAll.data,
         emergencyDataLoading: getAll.isLoading,
         refetchEmergencyData: getAll.refetch,
-        createEmergencyData: create,
+        // refetchEmergencybyRegion: getAllbyRegion.refetch,
         updateEmergencyData: update,
-        deleteEmergencyData: remove,
+        // getEmergencybyRegion: getAllbyRegion.data,
     }
 }

@@ -2,12 +2,12 @@ import React from 'react'
 import Icon from '@/components/ui/Icon'
 
 interface PropTypes {
-    emergencyData: any
+    data: any
     handleCloseDetailSheet: () => void
 }
 
 const HeaderSection: React.FC<PropTypes> = ({
-    emergencyData,
+    data,
     handleCloseDetailSheet,
 }) => {
     return (
@@ -18,16 +18,16 @@ const HeaderSection: React.FC<PropTypes> = ({
                         className={`flex items-center justify-center w-10 h-10 rounded-xl bg-red-50`}
                     >
                         <Icon
-                            name={`${emergencyData?.emergencyType?.icon}`}
+                            name={`${data?.emergencyType?.icon}`}
                             className={`text-red-500 text-xl`}
                         />
                     </div>
                     <div>
                         <h1 className="text-md leading-none m-0 text-neutral-800 font-semibold">
-                            {emergencyData?.emergency?.name}
+                            {data?.emergency?.emergencyData.name}
                         </h1>
                         <p className="m-0 mt-1 leading-none text-[14px] text-neutral-500">
-                            {emergencyData?.emergency?.responseTime?.duration}{' '}
+                            {Math.floor(data?.emergency?.trip?.duration) * 2}{' '}
                             menit dari lokasimu saat ini
                         </p>
                     </div>

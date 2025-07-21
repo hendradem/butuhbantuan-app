@@ -1,37 +1,22 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import Image from 'next/image'
 import { HiClock } from 'react-icons/hi2'
-import { convertPhoneNumber } from '@/utils/covertPhoneNumber'
 import useConfirmationSheet from '@/store/useConfirmationSheet'
 import Icon from '../../../ui/Icon'
 
 interface Props {
-    emergencyData: any
+    data: any
 }
 
-const EmergencyDataSingleList: React.FC<Props> = ({ emergencyData }) => {
+const EmergencyDataSingleList: React.FC<Props> = ({ data }) => {
     const {
         onOpen: openConfirmationSheet,
         setCallType,
         setCallNumber,
     } = useConfirmationSheet()
 
-    const parseResponseTime = (duration: number): JSX.Element => {
-        const maxResponseTime: number = 25
-        return (
-            <>
-                {duration <= maxResponseTime ? (
-                    <div className="flex items-center">
-                        <HiClock className="mr-1" />
-                        <span> {Math.floor(+duration)} </span>
-                        <span className="ml-1">menit</span>
-                    </div>
-                ) : (
-                    <span>Di luar jangkauan</span>
-                )}
-            </>
-        )
-    }
+    const emergencyData = data?.emergencyData
+    const tripData = data?.trip
 
     const badgeClassesByDuration = (duration: number): string => {
         if (duration <= 15) {
@@ -43,6 +28,43 @@ const EmergencyDataSingleList: React.FC<Props> = ({ emergencyData }) => {
         } else {
             return 'bg-black text-white'
         }
+    }
+
+    const renderEmergencyInfoBadge = (
+        isDispatcher: boolean,
+        responseTime: number
+    ): JSX.Element => {
+        const maxResponseTime: number = 20
+        const flooredResponseTime = Math.floor(responseTime) * 2
+
+        return (
+            <>
+                {isDispatcher && (
+                    <span className="badge text-[11px] badge-icon border-0 shadow-none bg-indigo-500 text-white">
+                        <Icon
+                            name="fluent:person-call-16-filled"
+                            className="mr-1 text-[15px]"
+                        />
+                        Dispatcher
+                    </span>
+                )}
+                <span
+                    className={`badge text-[11px] badge-icon border-0 shadow-none ${badgeClassesByDuration(flooredResponseTime)}`}
+                >
+                    {flooredResponseTime <= maxResponseTime ? (
+                        <div className="flex items-center">
+                            <HiClock className="mr-1 text-[15px]" />
+                            <span> {flooredResponseTime} </span>
+                            <span className="ml-1">min</span>
+                        </div>
+                    ) : (
+                        <div className="flex items-center">
+                            <span> luar jangkauan </span>
+                        </div>
+                    )}
+                </span>
+            </>
+        )
     }
 
     const onContactClick = (type: string, contactNumber: any, e: any): void => {
@@ -63,6 +85,10 @@ const EmergencyDataSingleList: React.FC<Props> = ({ emergencyData }) => {
         }
     }
 
+    useEffect(() => {
+        console.log(emergencyData)
+    }, [data])
+
     return (
         <div>
             <div className="mx-3 mb-2 cursor-pointer">
@@ -72,12 +98,15 @@ const EmergencyDataSingleList: React.FC<Props> = ({ emergencyData }) => {
                     <div className="">
                         <div className="flex items-start space-x-3">
                             <div className="w-10 h-10 bg-white border border-neutral-100 p-1.5 rounded-lg flex items-center justify-center">
-                                <Image
-                                    src={emergencyData?.logo}
-                                    alt="Organization logo"
-                                    width={40}
-                                    height={40}
-                                />
+                                {
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                        src={emergencyData?.organization_logo}
+                                        alt="Organization logo"
+                                        width={40}
+                                        height={40}
+                                    />
+                                }
                             </div>
                             <div className="w-full">
                                 <div className="flex justify-between">
@@ -86,18 +115,14 @@ const EmergencyDataSingleList: React.FC<Props> = ({ emergencyData }) => {
                                             {emergencyData?.name}
                                         </h3>
                                         <p className="text-gray-500 leading-normal text-sm">
-                                            {emergencyData?.organization}
+                                            {emergencyData?.organization_name}
                                         </p>
                                     </div>
-                                    <div>
-                                        <span
-                                            className={` badge text-[10px] badge-icon border-0 shadow-none ${badgeClassesByDuration(emergencyData?.responseTime?.duration)}`}
-                                        >
-                                            {parseResponseTime(
-                                                emergencyData?.responseTime
-                                                    ?.duration
-                                            )}
-                                        </span>
+                                    <div className="flex items-center gap-2">
+                                        {renderEmergencyInfoBadge(
+                                            emergencyData?.is_dispatcher,
+                                            tripData?.duration
+                                        )}
                                     </div>
                                 </div>
 
@@ -106,13 +131,16 @@ const EmergencyDataSingleList: React.FC<Props> = ({ emergencyData }) => {
                                     <span className="flex items-center gap-1">
                                         <Icon name="mingcute:location-fill" />
                                         <span className="m-0 leading-none">
-                                            {emergencyData?.address?.regency}
+                                            {emergencyData?.address?.regency
+                                                .replace(/kabupaten\s*/i, '')
+                                                .trim()
+                                                .toLowerCase()}
                                         </span>
                                     </span>
                                     <span className="flex items-center gap-1">
                                         <Icon name="mdi:circle-outline" />
                                         <span className="m-0 leading-none">
-                                            {emergencyData?.typeOfService}
+                                            {emergencyData?.type_of_service}
                                         </span>
                                     </span>
                                 </div>

@@ -124,7 +124,7 @@ export default function OnboardingPage() {
                     onClick={nextStep}
                     className="w-full bg-black text-white py-3 rounded-xl text-sm font-medium"
                 >
-                    {isLast ? 'Finish' : 'Get started'}
+                    {isLast ? 'Finish' : 'Next'}
                 </button>
 
                 <button onClick={skip} className="text-gray-400 text-sm">

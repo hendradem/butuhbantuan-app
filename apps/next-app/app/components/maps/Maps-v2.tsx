@@ -15,15 +15,17 @@ import useEmergencyData from '@/store/useEmergencyData'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
 import useSearchSheet from '@/store/useSearchSeet'
+import { availableCityService } from '@/store/api/services/availablecity.service'
+import toast from 'react-hot-toast'
 
 type MapsProps = {
     updateLatestLocation?: () => void
 }
 
 enum EMERGENCY_TYPE {
-    FIRE = 'Fire',
+    FIRE = 'Damkar',
     AMBULANCE = 'Ambulance',
-    SAR = 'Sar',
+    SAR = 'SAR',
     HOSPITAL = 'Hospital',
 }
 
@@ -86,13 +88,15 @@ const MapsV2: React.FC<MapsProps> = () => {
             filteredLocations.map((marker: any) => {
                 const el = document.createElement('div')
 
-                if (marker.organizationType == EMERGENCY_TYPE.AMBULANCE) {
+                if (marker.organization_type == EMERGENCY_TYPE.AMBULANCE) {
                     el.className = 'ambulance-marker'
-                } else if (marker.organizationType == EMERGENCY_TYPE.FIRE) {
+                } else if (marker.organization_type == EMERGENCY_TYPE.FIRE) {
                     el.className = 'fire-fighter-marker'
-                } else if (marker.organizationType == EMERGENCY_TYPE.SAR) {
+                } else if (marker.organization_type == EMERGENCY_TYPE.SAR) {
                     el.className = 'sar-marker'
-                } else if (marker.organizationType == EMERGENCY_TYPE.HOSPITAL) {
+                } else if (
+                    marker.organization_type == EMERGENCY_TYPE.HOSPITAL
+                ) {
                     el.className = 'hospital-marker'
                 }
 
@@ -126,6 +130,23 @@ const MapsV2: React.FC<MapsProps> = () => {
         }
     }
 
+    const handleMapLoad = (): void => {
+        getCurrentLocation((location: any) => {
+            const userLatitude = location?.lat
+            const userLongitude = location?.lng
+
+            if (userLatitude && userLongitude) {
+                toast.success('Layanan Tersedia', { duration: 900 })
+                refetchAddressInfo()
+                setUserLatitudeAfterGeolocated(userLatitude)
+                setUserLongitudeAfterGeolocated(userLongitude)
+                drawCurrentMarkerLocation(userLongitude, userLatitude)
+                getMatrixOfLocations(userLongitude, userLatitude)
+                // getAvailableRegion(currentRegionName, currentRegionName)
+            }
+        })
+    }
+
     const handleMapClick = (e: any) => {
         exploreSheet.onClose()
         detailSheet.onClose()
@@ -137,7 +158,11 @@ const MapsV2: React.FC<MapsProps> = () => {
         // get address info to update address and filter emergency data - [NOTE: Directly use location.service fetcher]
         getAddressInfo(lng, lat).then((res) => {
             const address = res[0]?.place_name
-            updateFullAddress(address)
+            const regency = res[0]?.context[2]?.text
+
+            if (address && regency) {
+                getAvailableRegion(address, regency)
+            }
         })
 
         // remove existing route layer
@@ -149,7 +174,7 @@ const MapsV2: React.FC<MapsProps> = () => {
         // update selected emergency data
         detailSheet.onOpen()
         detailSheet.setDetailSheetData({
-            emergencyType: marker.EmergencyType,
+            emergencyType: marker.emergency_type,
             emergency: marker,
         })
 
@@ -181,7 +206,7 @@ const MapsV2: React.FC<MapsProps> = () => {
             userLocationMarker[0].remove()
         }
 
-        new mapboxgl.Marker(el) // render a marker
+        new mapboxgl.Marker(el) // render current marker
             .setLngLat([longitude, latitude])
             .addTo(mapContainer)
 
@@ -281,22 +306,37 @@ const MapsV2: React.FC<MapsProps> = () => {
         setMapContainerState(mapContainer) // set mapContainer state to gobal state
 
         mapContainer.on('load', () => {
-            getCurrentLocation((location: any) => {
-                const userLatitude = location?.lat
-                const userLongitude = location?.lng
-
-                if (userLatitude && userLongitude) {
-                    refetchAddressInfo()
-                    setUserLatitudeAfterGeolocated(userLatitude)
-                    setUserLongitudeAfterGeolocated(userLongitude)
-                    drawCurrentMarkerLocation(userLongitude, userLatitude)
-                    getMatrixOfLocations(userLongitude, userLatitude)
-                }
-            })
+            handleMapLoad()
         })
 
         mapContainer.on('click', (e: any) => {
             handleMapClick(e)
+        })
+    }
+
+    const getAvailableRegion = async (
+        fullAddress: string,
+        regencyName: string
+    ) => {
+        if (!regencyName && !fullAddress) return
+
+        updateFullAddress(fullAddress) // update global state
+
+        await availableCityService.getByName(regencyName).then((res) => {
+            console.log(regencyName)
+
+            if (res.data.length > 0) {
+                const regencyID = res.data[0].regency_id
+
+                console.log(res)
+                toast.success('Layanan Tersedia', {
+                    duration: 500,
+                })
+            } else {
+                toast.error('Layanan Belum Tersedia', {
+                    duration: 500,
+                })
+            }
         })
     }
 
