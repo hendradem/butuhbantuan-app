@@ -1,11 +1,7 @@
 import React from 'react'
 import Icon from '../../ui/Icon'
 
-interface ServiceLoadingProps {
-    currentUserRegency: string
-}
-
-const ServiceLoading = ({ currentUserRegency }: ServiceLoadingProps) => {
+const ServiceLoading = () => {
     const reloadPage = () => {
         window.location.reload()
     }
@@ -22,12 +18,8 @@ const ServiceLoading = ({ currentUserRegency }: ServiceLoadingProps) => {
 
                 <div>
                     <h2 className="text-center text-black text-base font-semibold leading-relaxed pb-1">
-                        Menyiapkan layanan untukmu
+                        Menyiapkan layanan
                     </h2>
-                    <p className="text-center text-black text-sm font-normal leading-snug pb-4">
-                        Sedang menyiapkan layanan untuk <br /> daerah{' '}
-                        {currentUserRegency}
-                    </p>
                     <div className="flex flex-col gap-2 mt-4">
                         <p className="text-center text-black text-sm font-normal leading-snug pb-4">
                             Silakan hidupkan GPS untuk mendapatkan layanan,

@@ -1,5 +1,5 @@
 import React from 'react'
-import Onboarding from '@/components/onboarding/OnboardingPage'
+import Onboarding from '@/components/onboarding/UserOnboarding'
 
 const OnboardingPage = () => {
     return (

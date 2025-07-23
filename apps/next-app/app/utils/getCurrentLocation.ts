@@ -1,3 +1,5 @@
+const defaultCoordinates = { lat: -6.7063945, lng: 107.5294926 }
+
 export function getCurrentLocation(
     callback: (location: { lat: number; lng: number; error?: string }) => void
 ) {
@@ -12,19 +14,27 @@ export function getCurrentLocation(
             (err) => {
                 switch (err.code) {
                     case err.PERMISSION_DENIED:
-                        callback({ lat: 0, lng: 0, error: 'permission_denied' })
+                        callback({
+                            lat: defaultCoordinates.lat,
+                            lng: defaultCoordinates.lng,
+                            error: 'permission_denied',
+                        })
                         console.log('Location permission denied')
                         break
                     case err.POSITION_UNAVAILABLE:
                         callback({
-                            lat: 0,
-                            lng: 0,
+                            lat: defaultCoordinates.lat,
+                            lng: defaultCoordinates.lng,
                             error: 'position_unavailable',
                         })
                         console.log('Location information is unavailable.')
                         break
                     case err.TIMEOUT:
-                        callback({ lat: 0, lng: 0, error: 'timeout' })
+                        callback({
+                            lat: defaultCoordinates.lat,
+                            lng: defaultCoordinates.lng,
+                            error: 'timeout',
+                        })
                         console.log('The request location timed out.')
                         break
                     default:

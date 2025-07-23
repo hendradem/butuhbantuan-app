@@ -9,16 +9,19 @@ type SelectedEmergencyDataType = {
 
 type State = {
     emergencyData: EmergencyDataType[]
+    dispatcherData: any
     selectedEmergencyData: SelectedEmergencyDataType
 }
 
 type Actions = {
     updateEmergencyData: (data: EmergencyDataType[]) => void
+    updateDispatcherData: (data: any) => void
     updateSelectedEmergencyData: (data: SelectedEmergencyDataType) => void
 }
 
 const useEmergencyData = create<State & Actions>((set) => ({
     emergencyData: [],
+    dispatcherData: [],
     selectedEmergencyData: {
         selectedEmergencyData: {} as any,
         selectedEmergencyType: null,
@@ -26,6 +29,7 @@ const useEmergencyData = create<State & Actions>((set) => ({
     },
     updateEmergencyData: (data) => set({ emergencyData: data }),
     updateSelectedEmergencyData: (data) => set({ selectedEmergencyData: data }),
+    updateDispatcherData: (data) => set({ dispatcherData: data }),
 }))
 
 export default useEmergencyData

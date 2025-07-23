@@ -42,8 +42,8 @@ const AvailableServiceList: React.FC<PropsType> = ({
                             />
                         </div>
                         <div className="mx-3">
-                            <h3 className="text-center text-[12px] mt-1 text-neutral-600 font-medium leading-[1.3]">
-                                {service?.emergency_type_name}
+                            <h3 className="text-center text-[13px] mt-1 text-neutral-600 font-medium leading-[1.3]">
+                                {service?.name}
                             </h3>
                         </div>
                     </div>
@@ -65,7 +65,7 @@ const AvailableServiceList: React.FC<PropsType> = ({
                                     />
                                 </div>
                                 <div className="mx-3">
-                                    <h3 className="text-center text-[12px] mt-1 text-neutral-600 font-medium leading-[1.3]">
+                                    <h3 className="text-center text-[13px] mt-1 text-neutral-600 font-medium leading-[1.3]">
                                         Lainnya
                                     </h3>
                                 </div>

@@ -39,7 +39,7 @@ const SearchResult = ({
 
             <div>
                 {locationResult.length > 0 && (
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-2 mt-4">
                         <span className="text-gray-800 text-[15px] font-medium">
                             Hasil pencarian
                         </span>

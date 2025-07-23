@@ -1,31 +1,24 @@
 'use client'
-import React, { useRef, useState } from 'react'
+import React from 'react'
 import { useEmergencyTypeApi } from '@/store/api/emergency-type.api'
 import PreviewSearchBox from '../search/preview/PreviewSearchBox'
 import useDetailSheet from '@/store/useDetailSheet'
-import useEmergencyData from '@/store/useEmergencyData'
 import useExploreSheet from '@/store/useExploreSheet'
 import AvailableServiceList from './AvailableServiceList'
+import { filterEmergencyByService } from '@/utils/filterEmergencyByService'
 
 const BottomMenu = () => {
     const { emergencyTypeData, emergencyTypeLoading } = useEmergencyTypeApi()
     const { setDetailSheetData } = useDetailSheet()
     const { setSheetData: setExploreSheetData, onOpen: openExploreSheet } =
         useExploreSheet()
-    const { emergencyData } = useEmergencyData()
 
-    const handleServiceClick = (service?: any) => {
-        const serviceID = service?.id
-        const filteredEmergencies = emergencyData.filter((item: any) => {
-            return +item.id === serviceID
-        })
-        setDetailSheetData({
-            emergencyType: service,
-            emergency: filteredEmergencies,
-        })
+    const handleServiceClick = async (service?: any) => {
+        const serviceName = service?.name
+        const filteredEmergencyByService = filterEmergencyByService(serviceName)
         setExploreSheetData({
             emergencyType: service,
-            emergency: filteredEmergencies,
+            emergency: filteredEmergencyByService,
         })
         openExploreSheet()
     }
@@ -43,7 +36,7 @@ const BottomMenu = () => {
     }
 
     return (
-        <div className="sticky bottom-0 left-0 z-50 w-full h-[100%] py-5 rounded-t-xl bg-white border-t-slate-200">
+        <div className="sticky bottom-0 left-0 z-50 w-full h-[100%] py-5 rounded-t-xl bg-white border-t-slate-200 bottom-menu-shadow">
             <div className="sheet-wrapper">
                 <div className="sheet-header mx-4">
                     <PreviewSearchBox />

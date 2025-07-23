@@ -2,18 +2,31 @@ import { create } from 'zustand'
 import { getCurrentLocation } from '@/utils/getCurrentLocation'
 import { getAddressInfo } from './api/services/location.service'
 
+type Region = {
+    id: string
+    name: string
+}
+
 interface State {
     lat: number
     long: number
     fullAddress: string
     isRefetchMatrix: boolean
+    isGetCurrentLocation: boolean
+    currentRegion: {
+        regency: Region
+        province?: Region
+    }
 }
 
 type Action = {
     updateCoordinate: (lat: State['lat'], long: State['long']) => void
     updateFullAddress: (fullAddress: State['fullAddress']) => void
     updateRefetchMatrix: () => void
-    getAndSetCurrentLocation: () => void
+    updateIsGetCurrentLocation: (
+        isGetCurrentLocation: State['isGetCurrentLocation']
+    ) => void
+    setCurrentRegion: (region: { regency: Region; province: Region }) => void
 }
 
 const useUserLocationData = create<State & Action>()((set) => ({
@@ -21,6 +34,11 @@ const useUserLocationData = create<State & Action>()((set) => ({
     long: 0,
     fullAddress: '',
     isRefetchMatrix: false,
+    isGetCurrentLocation: false,
+    currentRegion: {
+        regency: { id: '', name: '' },
+        province: { id: '', name: '' },
+    },
 
     updateCoordinate: (lat: number, long: number) => {
         set(() => ({ lat: lat, long: long }))
@@ -31,22 +49,10 @@ const useUserLocationData = create<State & Action>()((set) => ({
     updateRefetchMatrix: () => {
         set((state) => ({ isRefetchMatrix: !state.isRefetchMatrix }))
     },
-    getAndSetCurrentLocation: () => {
-        getCurrentLocation(async (location: any) => {
-            const lat = location.lat
-            const long = location.lng
-
-            set(() => ({ lat, long }))
-
-            try {
-                const res = await getAddressInfo(long, lat)
-                const address = res[0]?.place_name || ''
-                set(() => ({ fullAddress: address }))
-            } catch (err) {
-                console.error('Error getting address info:', err)
-            }
-        })
+    updateIsGetCurrentLocation: (isGetCurrentLocation: boolean) => {
+        set(() => ({ isGetCurrentLocation: isGetCurrentLocation }))
     },
+    setCurrentRegion: (region) => set({ currentRegion: region }),
 }))
 
 export default useUserLocationData

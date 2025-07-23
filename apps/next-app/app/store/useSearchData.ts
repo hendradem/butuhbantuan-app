@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 
 interface SearchData {
+    lat: number
+    lng: number
     isActive: boolean
     isLoading: boolean
     searchResults: []
@@ -9,9 +11,12 @@ interface SearchData {
     setIsLoading: (isLoading: boolean) => void
     setIsActive: (isActive: boolean) => void
     setSearchQuery: (searchQuery: string) => void
+    updateSearchCoordinate: (lat: number, lng: number) => void
 }
 
 const useSearchData = create<SearchData>((set) => ({
+    lat: 0,
+    lng: 0,
     isActive: false,
     isLoading: false,
     searchQuery: '',
@@ -20,6 +25,7 @@ const useSearchData = create<SearchData>((set) => ({
     setIsLoading: (isLoading: boolean) => set({ isLoading }),
     setIsActive: (isActive: boolean) => set({ isActive }),
     setSearchQuery: (searchQuery: string) => set({ searchQuery }),
+    updateSearchCoordinate: (lat: number, lng: number) => set({ lat, lng }),
 }))
 
 export default useSearchData

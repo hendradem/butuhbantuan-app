@@ -25,7 +25,10 @@ export const getDirectionsRoute = async (
 export const getDistanceMatrix = async (
     origin: [number, number],
     destinations: any[]
+    // isServiceAvailable: boolean
 ): Promise<any[]> => {
+    // if (!isServiceAvailable) return []
+
     try {
         // Validate inputs
         if (!origin || !Array.isArray(origin) || origin.length !== 2) {
@@ -139,6 +142,36 @@ export const getDistanceMatrix = async (
                 const durationB = parseInt(b.responseTime.duration) || Infinity
                 return durationA - durationB
             })
+
+        // Filter and sort destinations
+        // return destinationsWithTime
+        //     .filter(({ responseTime, is_dispatcher }) => {
+        //         const durationValue = parseInt(responseTime.duration)
+
+        //         // Always include if dispatcher
+        //         if (is_dispatcher === true) return true
+
+        //         // Otherwise include if duration is a number and <= 30
+        //         return !isNaN(durationValue) && Math.floor(durationValue) <= 60
+        //     })
+        //     .sort((a, b) => {
+        //         const durationA = parseInt(a.responseTime.duration)
+        //         const durationB = parseInt(b.responseTime.duration)
+
+        //         // Ensure dispatcher with valid duration is sorted correctly
+        //         const valueA = !isNaN(durationA)
+        //             ? durationA
+        //             : a.is_dispatcher
+        //               ? 9999
+        //               : Infinity
+        //         const valueB = !isNaN(durationB)
+        //             ? durationB
+        //             : b.is_dispatcher
+        //               ? 9999
+        //               : Infinity
+
+        //         return valueA - valueB
+        //     })
     } catch (error) {
         console.error('Error fetching distance matrix:', error)
         return [] // Return empty array instead of throwing

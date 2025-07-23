@@ -1,23 +1,18 @@
 'use client'
 import React, { useState, useEffect } from 'react'
 import useUserLocationData from '@/store/useUserLocationData'
-import { getCurrentLocation } from '@/utils/getCurrentLocation'
-import { getAddressInfo } from '@/store/api/services/location.service'
 import useMapBox from '@/store/useMapBox'
 import useSearchSheet from '@/store/useSearchSeet'
 import Icon from '../../ui/Icon'
 
 const PreviewSearchBox = () => {
     const searchSheet = useSearchSheet()
-    const { fullAddress } = useUserLocationData()
-    const { onRebuild: rebuildMap } = useMapBox()
-    const { updateCoordinate, getAndSetCurrentLocation } = useUserLocationData()
+    const { fullAddress, updateIsGetCurrentLocation } = useUserLocationData()
     const [currentUserAddress, setCurrentUserAddress] = useState<string>('')
 
     const handleGetCurrentLocation = (e: any): void => {
         e.preventDefault()
-        getAndSetCurrentLocation()
-        rebuildMap()
+        updateIsGetCurrentLocation(true)
     }
 
     const handleSearchBoxClick = () => {

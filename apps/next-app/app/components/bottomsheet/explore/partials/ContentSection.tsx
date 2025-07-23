@@ -1,21 +1,17 @@
 import React, { useState } from 'react'
 import EmergencyDataList from '../../partials/EmergencyDataList'
 import useExploreSheet from '@/store/useExploreSheet'
-import useMapBox from '@/store/useMapBox'
-import { getDirectionsRoute } from '@/utils/mapboxMatrix'
 import useUserLocationData from '@/store/useUserLocationData'
 import useEmergencyData from '@/store/useEmergencyData'
-import EmptyState from '@/components/commons/EmptyState'
-import useSearchSheet from '@/store/useSearchSeet'
+import useEmergency from '@/store/useEmergency'
+import useLeaflet from '@/store/useLeaflet'
 
 const ContentSection = () => {
-    const exploreSheet = useExploreSheet()
-    const searchSheet = useSearchSheet()
-    const emergencyData = exploreSheet.sheetData?.emergency
-    const userLatitude = useUserLocationData((state) => state.lat)
-    const userLongitude = useUserLocationData((state) => state.long)
-    const { updateDirectionRoute } = useMapBox()
-    const { updateSelectedEmergencyData } = useEmergencyData()
+    const { sheetData } = useExploreSheet()
+    const { dispatcherData } = useEmergencyData()
+    const { lat: userLat, long: userLong } = useUserLocationData()
+    const { setSelectedEmergency } = useEmergency()
+    const { updateLeafletRouting } = useLeaflet()
 
     const [selectedEmergencyName, setSelectedEmergencyName] = useState('')
 
@@ -23,63 +19,31 @@ const ContentSection = () => {
         const emergencyName = emergency?.name
         setSelectedEmergencyName(emergencyName)
 
-        updateSelectedEmergencyData({
-            selectedEmergencyData: emergency,
-            selectedEmergencySource: 'map',
+        // update global state
+        setSelectedEmergency(emergency.emergencyData)
+        updateLeafletRouting({
+            startPoint: {
+                lat: emergency?.coordinates[1],
+                lng: emergency?.coordinates[0],
+            },
+            routeEndPoint: {
+                lat: userLat,
+                lng: userLong,
+            },
         })
-
-        const directions = await getDirectionsRoute(
-            [emergency?.coordinates[0], emergency?.coordinates[1]], // emergency coordinates
-            [userLongitude, userLatitude] // user coordinates from store
-        )
-        updateDirectionRoute(directions)
-    }
-
-    const handleOpenSearchSheet = () => {
-        exploreSheet.onClose()
-        searchSheet.onOpen()
-    }
-
-    const ctaComponent = () => {
-        return (
-            <div className="flex items-center justify-center mt-2">
-                <button
-                    onClick={() => handleOpenSearchSheet()}
-                    type="button"
-                    className="btn-dark"
-                >
-                    Ubah pencarian
-                </button>
-                <button
-                    onClick={() => exploreSheet.onClose()}
-                    type="button"
-                    className="btn-base"
-                >
-                    Cari di maps
-                </button>
-            </div>
-        )
     }
 
     return (
         <div>
             <div className="sheet-body search-result-wrapper bg-neutral-50 overflow-y-scroll">
-                <div>
-                    {emergencyData?.length == 0 && (
-                        <EmptyState
-                            size="xxs"
-                            title="Data Tidak Ditemukan"
-                            cta={ctaComponent()}
-                        />
-                    )}
-                </div>
-                <div className="max-h-[210px] pt-3 overflow-y-scroll">
+                <div className="max-h-[280px] bg-white pt-3 pb-8 overflow-y-scroll">
                     <EmergencyDataList
-                        emergencyData={emergencyData}
+                        emergencyData={sheetData?.emergency}
                         handleSelectedEmergency={async (emergency: any) => {
                             handleSelectedEmergency(emergency)
                         }}
                         selectedEmergencyName={selectedEmergencyName}
+                        dispatcherData={dispatcherData.data}
                     />
                 </div>
             </div>

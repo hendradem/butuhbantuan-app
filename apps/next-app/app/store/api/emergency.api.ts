@@ -1,49 +1,88 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { emergencyService } from './services/emergency.service'
-import { toastService } from '@/libs/toast'
+import { toast } from 'react-hot-toast'
+import { getNearestDataWithEstimation } from '@/utils/turf'
+import useEmergency from '../useEmergency'
+import useUserLocationData from '../useUserLocationData'
+import { getAllTripEstimations } from '@/utils/turf'
+import { reverseGeocoding } from './services/geocoding.service'
+import { availableCityService } from './services/availablecity.service'
+import { resolveRegionFromCoords } from '@/utils/geocoding'
 
-export const useEmergencyApi = () => {
-    const queryClient = useQueryClient()
+export const getEmergencyData = async ([lat, lng]: any) => {
+    const { setFilteredEmergency } = useEmergency.getState()
 
-    const getAll = useQuery(['emergency'], emergencyService.getAll, {
-        onSuccess: (data) => {},
-        // onError: () => toastService.error('Gagal mengambil data emergency'),
-    })
+    try {
+        const toastId = toast.loading('Mencari layanan...')
+        const regionData = await resolveRegionFromCoords(lat, lng)
 
-    // if (getAll.isLoading) {
-    //     toastService.showLoading('Mencarikan data untukmu')
-    // }
+        if (regionData) {
+            const response = await emergencyService.getByProvince(
+                regionData?.provinceID
+            )
+            const emergencyList = response.data
+            const userLocation: [number, number] = [lng, lat] // turf.js uses [lng, lat]
+            const calculatedData = await getNearestDataWithEstimation(
+                emergencyList,
+                userLocation
+            )
 
-    const create = useMutation(emergencyService.create, {
-        // onMutate: () => toastService.showLoading('Menyimpan data...'),
-        onSuccess: () => {
-            queryClient.invalidateQueries(['emergency'])
-        },
-        onError: () => {},
-    })
+            toast.success(`Layanan tersedia di ${regionData?.regionName}`, {
+                id: toastId,
+                duration: 500,
+            })
 
-    const update = useMutation(
-        ({ id, data }: { id: string; data: any }) =>
-            emergencyService.update(id, data),
-        {
-            // onMutate: () => toastService.showLoading('Mengupdate data...'),
-            onSuccess: () => {},
-            onError: () => {},
+            console.log('nearest emergency data', calculatedData)
+            setFilteredEmergency(calculatedData)
+
+            if (calculatedData.length == 0) {
+                console.log('datanya kosong')
+                setFilteredEmergency([])
+                getEmergencyDispatcher()
+            }
+
+            return calculatedData
+        } else {
+            toast.error(`Layanan belum tersedia`, {
+                id: toastId,
+                duration: 400,
+            })
+            setFilteredEmergency([])
+            return null
         }
-    )
+    } catch (error) {
+        console.error('Error fetching emergency data:', error)
+        toast.error('Gagal mengambil data')
+        return null
+    }
+}
 
-    const remove = useMutation((id: string) => emergencyService.delete(id), {
-        // onMutate: () => toastService.showLoading('Menghapus data...'),
-        onSuccess: () => {},
-        onError: () => {},
-    })
+export const getEmergencyDispatcher = async () => {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 
-    return {
-        getEmergencyData: getAll.data,
-        emergencyDataLoading: getAll.isLoading,
-        refetchEmergencyData: getAll.refetch,
-        createEmergencyData: create,
-        updateEmergencyData: update,
-        deleteEmergencyData: remove,
+    const { setFilteredEmergency } = useEmergency.getState()
+    try {
+        const {
+            currentRegion: {
+                regency: { id: regencyID } = {},
+                province: { id: provinceID = '' } = {},
+            },
+            long: userLong,
+            lat: userLat,
+        } = useUserLocationData.getState()
+
+        if (!regencyID || !userLat || !userLong) {
+            throw new Error('Lokasi pengguna belum lengkap')
+        }
+
+        const res = await emergencyService.getDispatcher(regencyID, provinceID)
+        const calculatedData = await getAllTripEstimations(res.data, [
+            userLong,
+            userLat,
+        ])
+
+        setFilteredEmergency(calculatedData)
+    } catch (err) {
+        console.error('Gagal memuat dispatcher:', err)
+        toast.error('Gagal memuat dispatcher')
     }
 }

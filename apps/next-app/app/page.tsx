@@ -1,8 +1,8 @@
 'use client'
 import React, { useEffect, useState } from 'react'
 import useOnboardingStore from './store/useOnboarding'
-import GetLocationPage from './components/onboarding/GetLocationPage'
-import OnboardingPage from './components/onboarding/OnboardingPage'
+import UserOnboarding from './components/onboarding/UserOnboarding'
+import EmergencyPage from './(pages)/emergency/page'
 
 export default function Home() {
     const isOnboarding = useOnboardingStore((state) => state.isOnboarding)
@@ -27,7 +27,7 @@ export default function Home() {
 
     return (
         <div className="w-full bg-white">
-            {shouldOnboarding ? <OnboardingPage /> : <GetLocationPage />}
+            {shouldOnboarding ? <UserOnboarding /> : <EmergencyPage />}
         </div>
     )
 }

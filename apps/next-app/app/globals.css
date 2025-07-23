@@ -7,6 +7,10 @@ body {
     background-color: #fff;
 }
 
+.leaflet-routing-container {
+    display: none !important;
+}
+
 /* bottom sheet */
 @media (min-width: 600px) {
     :root {
@@ -68,6 +72,9 @@ body {
     .modal {
         @apply fixed z-20 bg-black bg-opacity-20 w-full h-screen backdrop-blur-sm flex items-center justify-center;
     }
+    .default-toast {
+        @apply rounded-xl bg-[#333] text-white
+    }
 
     /* buttons */ 
     .btn-base {
@@ -120,7 +127,7 @@ body {
 }
 
 /* maps */
-.marker {
+.current-location-marker {
     background-image: url('../public/assets/icons/current-location-blue.svg');
     padding: 10px;
     background-size: contain;
@@ -311,4 +318,12 @@ to {
     background-color: #ffffff;
     border-radius: 10px;
     border: 3px none #ffffff;
+}
+
+
+
+/* box shadow */
+
+.bottom-menu-shadow {
+    box-shadow: rgba(0, 0, 0, 0.25) 0px 14px 28px, rgba(0, 0, 0, 0.22) 0px 10px 10px;
 }

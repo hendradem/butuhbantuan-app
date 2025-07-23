@@ -26,7 +26,7 @@ const steps = [
     },
 ]
 
-export default function OnboardingPage() {
+export default function UseOnboarding() {
     const [stepIndex, setStepIndex] = useState(0)
     const [shouldAnimate, setShouldAnimate] = useState(true)
     const isLast = stepIndex === steps.length - 1
@@ -124,7 +124,7 @@ export default function OnboardingPage() {
                     onClick={nextStep}
                     className="w-full bg-black text-white py-3 rounded-xl text-sm font-medium"
                 >
-                    {isLast ? 'Finish' : 'Get started'}
+                    {isLast ? 'Finish' : 'Next'}
                 </button>
 
                 <button onClick={skip} className="text-gray-400 text-sm">
