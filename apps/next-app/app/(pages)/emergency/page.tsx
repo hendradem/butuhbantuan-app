@@ -1,5 +1,5 @@
 'use client'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Maps from '@/components/maps/leaflet/Leaflet'
 import BottomMenu from '@/components/menu/BottomMenu'
@@ -17,9 +17,12 @@ export default function EmergencyPage() {
     }, [])
 
     useEffect(() => {
-        setRealViewportHeight()
-        window.addEventListener('resize', setRealViewportHeight)
-        return () => window.removeEventListener('resize', setRealViewportHeight)
+        if (typeof window !== 'undefined') {
+            setRealViewportHeight()
+            window.addEventListener('resize', setRealViewportHeight)
+            return () =>
+                window.removeEventListener('resize', setRealViewportHeight)
+        }
     }, [])
 
     return (
