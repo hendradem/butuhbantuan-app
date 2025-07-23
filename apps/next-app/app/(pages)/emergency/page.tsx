@@ -10,9 +10,11 @@ export default function EmergencyPage() {
     const router = useRouter()
 
     useEffect(() => {
-        const checkIsUserVisited = localStorage.getItem('onboarding')
-        if (!checkIsUserVisited) {
-            router.replace('/')
+        if (typeof window !== 'undefined') {
+            const checkIsUserVisited = localStorage.getItem('onboarding')
+            if (!checkIsUserVisited) {
+                router.replace('/')
+            }
         }
     }, [])
 
