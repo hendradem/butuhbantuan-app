@@ -58,7 +58,7 @@ const EmergencyDataList: React.FC<Props> = ({
                         </div>
                     ) : (
                         <div className="flex items-center">
-                            <span> null </span>
+                            <span> +20 min </span>
                         </div>
                     )}
                 </span>

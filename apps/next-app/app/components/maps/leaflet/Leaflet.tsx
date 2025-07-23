@@ -2,8 +2,8 @@
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import { useEffect, useState, useRef } from 'react'
-import RoutingMachine from './routing'
+import { useEffect, useState } from 'react'
+import MapRoutingHandler from './map-routing-handler'
 import MapClickHandler from './map-click-handler'
 import useErrorSheet from '@/store/useErrorSheet'
 import useUserLocationData from '@/store/useUserLocationData'
@@ -45,6 +45,7 @@ export default function LeafletMaps() {
     const { onClose: closeExploreSheet } = useExploreSheet()
     const { updateLeafletRouting, resetLeafletRouting } = useLeaflet()
     const mapZoom = useLeaflet((state) => state.zoom)
+    const setMapZoom = useLeaflet((state) => state.setMapZoom)
     const {
         onOpen: openDetailSheet,
         onClose: closeDetailSheet,
@@ -58,6 +59,7 @@ export default function LeafletMaps() {
         closeDetailSheet()
         closeConfirmationSheet()
         getNearestEmergencyData(latlng)
+        setMapZoom(12)
     }
 
     const getNearestEmergencyData = async (latlng: [number, number]) => {
@@ -69,8 +71,6 @@ export default function LeafletMaps() {
     }
     const handlerEmergencyMarkerClick = (emergency: any) => {
         const markerData = emergency?.emergencyData
-
-        console.log(emergency)
 
         closeDetailSheet()
         setDetailSheetData({
@@ -125,7 +125,7 @@ export default function LeafletMaps() {
             {clickedLatLng && (
                 <MapContainer
                     center={[clickedLatLng?.[0], clickedLatLng?.[1]]}
-                    zoom={mapZoom}
+                    // zoom={mapZoom}
                     scrollWheelZoom={true}
                     style={{
                         width: '100%',
@@ -143,9 +143,9 @@ export default function LeafletMaps() {
                         attribution='&copy; <a href="butuhbantuan.com">Butuhbantuan</a>'
                     />
 
-                    <RoutingMachine />
+                    <MapRoutingHandler />
                     <MapClickHandler onClick={handleMapClick} />
-                    <MapViewHandler latlng={clickedLatLng} zoom={mapZoom} />
+                    <MapViewHandler latlng={clickedLatLng} />
 
                     {clickedLatLng && !isErrorSheetOpen && (
                         <Marker

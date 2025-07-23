@@ -14,7 +14,6 @@ const axiosConfig = {
 export const emergencyTypeService = {
     getAll: async () => {
         const res = await axios.get(BASE_URL, axiosConfig)
-        console.log(res.data)
         return res.data
     },
     getById: async (id: string) => {

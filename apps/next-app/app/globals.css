@@ -40,6 +40,16 @@ body {
     box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.15);
 }
 
+@layer base {
+    *:focus {
+      @apply outline-none ring-0;
+    }
+    
+    * {
+        -webkit-tap-highlight-color: transparent;
+      }
+  }
+
 @layer layout {
     .default-layout {
         @apply min-h-screen max-w-md mx-auto flex flex-col;

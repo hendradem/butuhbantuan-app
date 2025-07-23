@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 
 type State = {
+    fitBounds: L.LatLngBoundsExpression | null
+    mapBoxContainer: any
     zoom: number
     routeStartPoint: { lat: number; lng: number }
     routeEndPoint: { lat: number; lng: number }
-    mapBoxContainer: any
 }
 
 type Action = {
@@ -12,10 +13,13 @@ type Action = {
     updateLeafletRouting: (routingData: any) => void
     resetLeafletRouting: () => void
     setMapZoom: (zoom: State['zoom']) => void
+    setFitBounds: (bounds: State['fitBounds']) => void
+    resetFitBounds: () => void
 }
 
 const useLeaflet = create<State & Action>()((set) => ({
-    zoom: 15,
+    zoom: 13,
+    fitBounds: null,
     mapBoxContainer: {},
     routeStartPoint: { lat: 0, lng: 0 },
     routeEndPoint: { lat: 0, lng: 0 },
@@ -44,6 +48,9 @@ const useLeaflet = create<State & Action>()((set) => ({
     setMapZoom: (zoom) => {
         set(() => ({ zoom: zoom }))
     },
+    setFitBounds: (bounds: L.LatLngBoundsExpression | null) =>
+        set({ fitBounds: bounds }),
+    resetFitBounds: () => set({ fitBounds: null }),
 }))
 
 export default useLeaflet

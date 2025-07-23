@@ -1,22 +1,20 @@
 import { useEffect } from 'react'
 import { useMap } from 'react-leaflet'
+import useLeaflet from '@/store/useLeaflet'
 
 interface MapViewHandlerProps {
     latlng: [number, number]
-    zoom: number
 }
 
-const MapViewHandler: React.FC<MapViewHandlerProps> = ({
-    latlng,
-    zoom = 15,
-}: any) => {
+const MapViewHandler: React.FC<MapViewHandlerProps> = ({ latlng }: any) => {
     const map = useMap()
+    const mapZoom = useLeaflet((state) => state.zoom)
 
     useEffect(() => {
         if (latlng) {
-            map.setView(latlng, zoom)
+            map.setView(latlng, mapZoom)
         }
-    }, [latlng, zoom])
+    }, [latlng, mapZoom])
 
     return null
 }

@@ -26,16 +26,16 @@ export const getEmergencyData = async ([lat, lng]: any) => {
                 userLocation
             )
 
+            calculatedData.sort((a, b) => a.trip.duration - b.trip.duration)
+
+            setFilteredEmergency(calculatedData)
+
             toast.success(`Layanan tersedia di ${regionData?.regionName}`, {
                 id: toastId,
                 duration: 500,
             })
 
-            console.log('nearest emergency data', calculatedData)
-            setFilteredEmergency(calculatedData)
-
             if (calculatedData.length == 0) {
-                console.log('datanya kosong')
                 setFilteredEmergency([])
                 getEmergencyDispatcher()
             }

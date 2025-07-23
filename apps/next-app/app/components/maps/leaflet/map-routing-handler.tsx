@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useMap } from 'react-leaflet'
-import L from 'leaflet'
+import Leaflet from 'leaflet'
 import 'leaflet-routing-machine'
 import toast from 'react-hot-toast'
 import useLeaflet from '@/store/useLeaflet'
@@ -10,16 +10,17 @@ const RoutingMachine = () => {
 
     const routeStartPoint = useLeaflet((state) => state.routeStartPoint)
     const routeEndPoint = useLeaflet((state) => state.routeEndPoint)
+    const setMapZoom = useLeaflet((state) => state.setMapZoom)
 
     useEffect(() => {
         if (!map || !routeStartPoint.lat || !routeEndPoint.lat) return
 
         const toastId = toast.loading('Getting route')
 
-        const routingControl = (L as any).Routing.control({
+        const routingControl = (Leaflet as any).Routing.control({
             waypoints: [
-                L.latLng(routeStartPoint.lat, routeStartPoint.lng),
-                L.latLng(routeEndPoint.lat, routeEndPoint.lng),
+                Leaflet.latLng(routeStartPoint.lat, routeStartPoint.lng),
+                Leaflet.latLng(routeEndPoint.lat, routeEndPoint.lng),
             ],
             routeWhileDragging: false,
             addWaypoints: false,
@@ -39,13 +40,17 @@ const RoutingMachine = () => {
 
         routingControl.on('routesfound', function (e: any) {
             const route = e.routes[0]
-            if (route && route.bounds) {
-                map.fitBounds(route.bounds, {
-                    padding: [40, 40],
+            const coords = route.coordinates // Array of LatLng
+
+            if (coords && coords.length > 0) {
+                const bounds = Leaflet.latLngBounds(coords)
+                map.fitBounds(bounds, {
+                    padding: [100, 100],
                     maxZoom: 16,
                     animate: true,
                 })
             }
+
             toast.success('Route found', { id: toastId })
         })
 

@@ -2,14 +2,12 @@
 import React from 'react'
 import { useEmergencyTypeApi } from '@/store/api/emergency-type.api'
 import PreviewSearchBox from '../search/preview/PreviewSearchBox'
-import useDetailSheet from '@/store/useDetailSheet'
 import useExploreSheet from '@/store/useExploreSheet'
 import AvailableServiceList from './AvailableServiceList'
 import { filterEmergencyByService } from '@/utils/filterEmergencyByService'
 
 const BottomMenu = () => {
     const { emergencyTypeData, emergencyTypeLoading } = useEmergencyTypeApi()
-    const { setDetailSheetData } = useDetailSheet()
     const { setSheetData: setExploreSheetData, onOpen: openExploreSheet } =
         useExploreSheet()
 

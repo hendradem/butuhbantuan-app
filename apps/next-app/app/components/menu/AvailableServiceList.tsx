@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useState } from 'react'
 import toast from 'react-hot-toast'
 import Icon from '../ui/Icon'
+import useLeaflet from '@/store/useLeaflet'
 
 interface PropsType {
     emergencyTypeData: any
@@ -11,15 +12,26 @@ const AvailableServiceList: React.FC<PropsType> = ({
     emergencyTypeData,
     handleServiceClick,
 }) => {
+    const [reset, setReset] = useState(false)
+    const setMapZoom = useLeaflet((state) => state.setMapZoom)
+
     const handleUnavailableServiceClick = () => {
-        toast.error('Under Development', {
-            style: {
-                borderRadius: '20px',
-                background: '#333',
-                color: '#fff',
-            },
-            duration: 500,
-        })
+        if (reset) {
+            setMapZoom(17)
+            setReset(false)
+        } else {
+            setMapZoom(10)
+            setReset(true)
+        }
+
+        // toast.error('Under Development', {
+        //     style: {
+        //         borderRadius: '20px',
+        //         background: '#333',
+        //         color: '#fff',
+        //     },
+        //     duration: 500,
+        // })
     }
 
     return (
