@@ -1,13 +1,17 @@
 'use client'
 import React, { useEffect } from 'react'
-import Maps from '@/components/maps/leaflet/Leaflet'
 import BottomMenu from '@/components/menu/BottomMenu'
 import AddToHomeScreenBanner from '@/components/commons/AddToHomeScreenBanner'
 import { setRealViewportHeight } from '@/utils/setViewportHeight'
+import dynamic from 'next/dynamic'
+
+const Maps = dynamic(() => import('@/components/maps/leaflet/Leaflet'), {
+    ssr: false,
+})
 
 export default function EmergencyPage() {
     useEffect(() => {
-        if (window) {
+        if (typeof window !== 'undefined') {
             setRealViewportHeight()
             window.addEventListener('resize', setRealViewportHeight)
             return () =>
