@@ -4,38 +4,6 @@ import { HiClock } from 'react-icons/hi2'
 import useConfirmationSheet from '@/store/useConfirmationSheet'
 import Icon from '@/components/ui/Icon'
 
-// const emergencyData = {
-//     id: '1c157c31-eb0e-4b4f-8b1a-7f59cf4d6d17',
-//     name: 'PSC 119 SES',
-//     organization_name: 'Dinkes Kab. Sleman',
-//     organization_type: 'Ambulance',
-//     organization_logo:
-//         'https://res.cloudinary.com/djzrlqubf/image/upload/v1705744061/butuhbantuan/xteksibif5uschl27nbe.png',
-//     description: 'Layanan ambulans 24 jam di wilayah Sleman.',
-//     coordinates: ['110.3469', '-7.7063'],
-//     type_of_service: 'Emergency, Transport',
-//     emergency_type: {
-//         id: 1,
-//         name: 'Ambulance',
-//         is_active: false,
-//         icon: 'mynaui:ambulance-solid',
-//     },
-//     address: {
-//         district_id: '3404130',
-//         district: 'SLEMAN',
-//         regency_id: '3404',
-//         regency: 'KABUPATEN SLEMAN',
-//         province_id: '34',
-//         province: 'DI YOGYAKARTA',
-//         full_address: 'Jl. Dr. Radjiman, Sleman',
-//     },
-//     contact: {
-//         email: 'sleman@pmi.com',
-//         whatsapp: '085161131368',
-//         phone: '02748689000',
-//     },
-// }
-
 interface Props {
     dispatcherData: any
 }

@@ -1,16 +1,3 @@
-// /** @type {import('next').NextConfig} */
-// const nextConfig = {
-//   images: {
-//     domains: ["res.cloudinary.com", "bprugm.co.id"],
-//   },
-//   reactStrictMode: false,
-
-// };
-
-// module.exports = nextConfig;
-
-
-
 const {
   PHASE_DEVELOPMENT_SERVER,
   PHASE_PRODUCTION_BUILD,
@@ -20,13 +7,13 @@ const {
 module.exports = async (phase) => {
   /** @type {import("next").NextConfig} */
 
-// Your current or future configuration 
-
   const nextConfig = {
   images: {
     domains: ["res.cloudinary.com", "bprugm.co.id"],
   },
-  reactStrictMode: false,
+  // reactStrictMode: false,
+  reactStrictMode: true,
+
 
 };
 

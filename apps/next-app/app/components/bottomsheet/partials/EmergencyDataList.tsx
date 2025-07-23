@@ -2,11 +2,10 @@ import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { HiClock } from 'react-icons/hi2'
 import useConfirmationSheet from '@/store/useConfirmationSheet'
-import EmptyState from '@/components/commons/EmptyState'
 import useExploreSheet from '@/store/useExploreSheet'
 import useSearchSheet from '@/store/useSearchSeet'
-import DispatcherList from './DispatcherList'
 import Icon from '../../ui/Icon'
+import { cityNameFormat } from '@/utils/cityNameFormat'
 
 interface Props {
     emergencyData: any
@@ -59,7 +58,7 @@ const EmergencyDataList: React.FC<Props> = ({
                         </div>
                     ) : (
                         <div className="flex items-center">
-                            <span> luar jangkauan </span>
+                            <span> null </span>
                         </div>
                     )}
                 </span>
@@ -125,19 +124,6 @@ const EmergencyDataList: React.FC<Props> = ({
 
     return (
         <div>
-            {/* {emergencyData.length === 0 && (
-                <>
-                    <EmptyState
-                        size="xxs"
-                        title="Data Tidak Ditemukan"
-                        description="Data tidak ditemukan, silakan hubungi dispatcher di bawah ini."
-                        cta={ctaComponent()}
-                    />
-
-                    <DispatcherList dispatcherData={dispatcherData[0]} />
-                </>
-            )} */}
-
             {emergencyData?.map((emergency: any, emergencyIndex: number) => {
                 const data = emergency.emergencyData
                 const tripDuration = emergency.trip.duration
@@ -188,13 +174,9 @@ const EmergencyDataList: React.FC<Props> = ({
                                             <span className="flex items-center gap-1">
                                                 <Icon name="mingcute:location-fill" />
                                                 <span className="m-0 leading-none">
-                                                    {data?.address.regency
-                                                        .replace(
-                                                            /kabupaten\s*/i,
-                                                            ''
-                                                        )
-                                                        .trim()
-                                                        .toLowerCase()}
+                                                    {cityNameFormat(
+                                                        data?.address.regency
+                                                    )}
                                                 </span>
                                             </span>
                                             <span className="flex items-center gap-1">

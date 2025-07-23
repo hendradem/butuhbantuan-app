@@ -37,7 +37,15 @@ const RoutingMachine = () => {
             instructions: false,
         }).addTo(map)
 
-        routingControl.on('routesfound', () => {
+        routingControl.on('routesfound', function (e: any) {
+            const route = e.routes[0]
+            if (route && route.bounds) {
+                map.fitBounds(route.bounds, {
+                    padding: [40, 40],
+                    maxZoom: 16,
+                    animate: true,
+                })
+            }
             toast.success('Route found', { id: toastId })
         })
 

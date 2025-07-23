@@ -1,10 +1,5 @@
 import axios from 'axios'
 import config from '@/config'
-import useUserLocationData from '@/store/useUserLocationData'
-import toast from 'react-hot-toast'
-import { getAllTripEstimations } from '@/utils/turf'
-import useEmergency from '@/store/useEmergency'
-
 const BASE_URL = `${config.BACKEND_HOST}/emergency`
 
 const axiosConfig = {

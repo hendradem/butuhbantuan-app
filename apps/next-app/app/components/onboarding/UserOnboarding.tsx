@@ -26,7 +26,7 @@ const steps = [
     },
 ]
 
-export default function OnboardingPage() {
+export default function UseOnboarding() {
     const [stepIndex, setStepIndex] = useState(0)
     const [shouldAnimate, setShouldAnimate] = useState(true)
     const isLast = stepIndex === steps.length - 1

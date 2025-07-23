@@ -25,13 +25,13 @@ func ReverseGeocoding(ctx *fiber.Ctx) error {
 		})
 	}
 
-	mapboxGeocodingUrlRequest := fmt.Sprintf("%s/reverse?format=json&lat=%s&lon=%s&zoom=18&addressdetails=1",
+	urlRequest := fmt.Sprintf("%s/reverse?format=json&lat=%s&lon=%s&zoom=18&addressdetails=1",
 		os.Getenv("NOMINATIM_URL"),
 		latitude,
 		longitude,
 	)
 
-	resp, err := http.Get(mapboxGeocodingUrlRequest)
+	resp, err := http.Get(urlRequest)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"status":  "error",

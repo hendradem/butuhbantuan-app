@@ -16,10 +16,6 @@ const BottomMenu = () => {
     const handleServiceClick = async (service?: any) => {
         const serviceName = service?.name
         const filteredEmergencyByService = filterEmergencyByService(serviceName)
-        // setDetailSheetData({
-        //     emergencyType: service,
-        //     emergency: filteredEmergencyByService,
-        // })
         setExploreSheetData({
             emergencyType: service,
             emergency: filteredEmergencyByService,
@@ -40,7 +36,7 @@ const BottomMenu = () => {
     }
 
     return (
-        <div className="sticky bottom-0 left-0 z-50 w-full h-[100%] py-5 rounded-t-xl bg-white border-t-slate-200">
+        <div className="sticky bottom-0 left-0 z-50 w-full h-[100%] py-5 rounded-t-xl bg-white border-t-slate-200 bottom-menu-shadow">
             <div className="sheet-wrapper">
                 <div className="sheet-header mx-4">
                     <PreviewSearchBox />

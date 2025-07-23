@@ -58,7 +58,7 @@ const CoreSheet: React.FC<Props> = ({
             <div>
                 {isOverlay && isOpen && (
                     <div
-                        className="default-layout fixed inset-0 backdrop-blur-sm bg-black/30 transition-all duration-200 ease-in-out"
+                        className="fixed inset-0 z-[9998] backdrop-blur-sm bg-black/50 transition-all duration-200 ease-in-out"
                         onClick={
                             disableOverlayClick ? undefined : handleOverlayClick
                         }
@@ -72,7 +72,7 @@ const CoreSheet: React.FC<Props> = ({
                     snapPoints={snapPoints}
                     onSnap={handleSnap}
                     disableDrag={!draggable}
-                    className={`mx-auto flex flex-col border-x border-neutral-100 max-w-md`}
+                    className={`mx-auto flex flex-col max-w-md`}
                     style={{
                         zIndex: 9999,
                         transition: 'transform 0.3s ease-out',

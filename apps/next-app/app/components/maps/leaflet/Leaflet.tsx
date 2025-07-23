@@ -9,13 +9,14 @@ import useErrorSheet from '@/store/useErrorSheet'
 import useUserLocationData from '@/store/useUserLocationData'
 import toast from 'react-hot-toast'
 import useEmergency from '@/store/useEmergency'
-import { getUserLocation } from '@/utils/getUserLocation'
+import { getUserLocation } from '@/utils/geocoding'
 import useExploreSheet from '@/store/useExploreSheet'
 import useLeaflet from '@/store/useLeaflet'
 import useDetailSheet from '@/store/useDetailSheet'
 import useConfirmationSheet from '@/store/useConfirmationSheet'
 import MapViewHandler from './map-view-handler'
 import useSearchData from '@/store/useSearchData'
+import { getEmergencyData } from '@/store/api/emergency.api'
 
 const markerIcon = (marker_type: string) => {
     const classNameMap: Record<string, string> = {
@@ -35,16 +36,15 @@ const markerIcon = (marker_type: string) => {
 
 export default function LeafletMaps() {
     const [clickedLatLng, setClickedLatLng] = useState<any>(null)
-    const { onOpen: openErrorSheet, setErrorMessage } = useErrorSheet()
+    const isErrorSheetOpen = useErrorSheet((state) => state.isOpen)
     const { lat: addressLat, lng: addressLng } = useSearchData()
-    const [emergencyData, setEmergencyData] = useState<any>([])
     const { onClose: closeConfirmationSheet } = useConfirmationSheet()
     const filteredEmergency = useEmergency((state) => state.filteredEmergency)
-    const { getEmergencyData, getEmergencyDispatcher } = useEmergency()
     const { isGetCurrentLocation, updateIsGetCurrentLocation } =
         useUserLocationData()
     const { onClose: closeExploreSheet } = useExploreSheet()
     const { updateLeafletRouting, resetLeafletRouting } = useLeaflet()
+    const mapZoom = useLeaflet((state) => state.zoom)
     const {
         onOpen: openDetailSheet,
         onClose: closeDetailSheet,
@@ -62,28 +62,22 @@ export default function LeafletMaps() {
 
     const getNearestEmergencyData = async (latlng: [number, number]) => {
         try {
-            await getEmergencyData(latlng)
+            getEmergencyData(latlng)
         } catch (err) {
             toast.error('Terjadi kesalahan saat mengambil data.')
         }
     }
-
-    const getDispatcherData = async () => {
-        try {
-            await getEmergencyDispatcher()
-        } catch (err) {
-            toast.error('Terjadi kesalahan saat mengambil data.')
-        }
-    }
-
     const handlerEmergencyMarkerClick = (emergency: any) => {
         const markerData = emergency?.emergencyData
 
-        openDetailSheet()
+        console.log(emergency)
+
+        closeDetailSheet()
         setDetailSheetData({
             emergencyType: markerData.emergency_type,
             emergency: emergency,
         })
+        openDetailSheet()
 
         updateLeafletRouting({
             startPoint: {
@@ -103,15 +97,12 @@ export default function LeafletMaps() {
 
     const getCurrentUserLocation = async () => {
         const locationResult = await getUserLocation()
-        if (locationResult?.error !== 'null') {
-            setErrorMessage(locationResult?.error || '')
-            openErrorSheet()
-            return
-        }
 
-        const { lat, long } = locationResult.data
-        setClickedLatLng([lat, long])
-        handleMapClick([lat, long])
+        if (locationResult?.data) {
+            const { lat, long } = locationResult?.data
+            setClickedLatLng([lat, long])
+            handleMapClick([lat, long])
+        }
     }
 
     useEffect(() => {
@@ -129,20 +120,12 @@ export default function LeafletMaps() {
         getCurrentUserLocation()
     }, [])
 
-    useEffect(() => {
-        if (filteredEmergency.length === 0) {
-            getDispatcherData() // Get dispatcher data
-        } else {
-            setEmergencyData(filteredEmergency)
-        }
-    }, [filteredEmergency])
-
     return (
         <>
             {clickedLatLng && (
                 <MapContainer
                     center={[clickedLatLng?.[0], clickedLatLng?.[1]]}
-                    zoom={13}
+                    zoom={mapZoom}
                     scrollWheelZoom={true}
                     style={{
                         width: '100%',
@@ -157,14 +140,14 @@ export default function LeafletMaps() {
                         // url="https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png"
                         // url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
                         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
-                        attribution='Map tiles by <a href="butuhbantuan.com">Butuhbantuan</a>'
+                        attribution='&copy; <a href="butuhbantuan.com">Butuhbantuan</a>'
                     />
 
+                    <RoutingMachine />
                     <MapClickHandler onClick={handleMapClick} />
+                    <MapViewHandler latlng={clickedLatLng} zoom={mapZoom} />
 
-                    <MapViewHandler latlng={clickedLatLng} zoom={13} />
-
-                    {clickedLatLng && (
+                    {clickedLatLng && !isErrorSheetOpen && (
                         <Marker
                             position={clickedLatLng}
                             icon={markerIcon('current-location-marker')}
@@ -198,8 +181,6 @@ export default function LeafletMaps() {
                               )
                           })
                         : null}
-
-                    {<RoutingMachine />}
                 </MapContainer>
             )}
         </>

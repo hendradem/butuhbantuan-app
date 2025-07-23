@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react'
-import Image from 'next/image'
 import { HiClock } from 'react-icons/hi2'
 import useConfirmationSheet from '@/store/useConfirmationSheet'
 import Icon from '../../../ui/Icon'
+import { cityNameFormat } from '@/utils/cityNameFormat'
 
 interface Props {
     data: any
@@ -85,10 +85,6 @@ const EmergencyDataSingleList: React.FC<Props> = ({ data }) => {
         }
     }
 
-    useEffect(() => {
-        console.log(emergencyData)
-    }, [data])
-
     return (
         <div>
             <div className="mx-3 mb-2 cursor-pointer">
@@ -119,10 +115,11 @@ const EmergencyDataSingleList: React.FC<Props> = ({ data }) => {
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        {renderEmergencyInfoBadge(
-                                            emergencyData?.is_dispatcher,
-                                            tripData?.duration
-                                        )}
+                                        {emergencyData &&
+                                            renderEmergencyInfoBadge(
+                                                emergencyData?.is_dispatcher,
+                                                tripData?.duration
+                                            )}
                                     </div>
                                 </div>
 
@@ -131,10 +128,11 @@ const EmergencyDataSingleList: React.FC<Props> = ({ data }) => {
                                     <span className="flex items-center gap-1">
                                         <Icon name="mingcute:location-fill" />
                                         <span className="m-0 leading-none">
-                                            {emergencyData?.address?.regency
-                                                .replace(/kabupaten\s*/i, '')
-                                                .trim()
-                                                .toLowerCase()}
+                                            {emergencyData &&
+                                                cityNameFormat(
+                                                    emergencyData?.address
+                                                        ?.regency
+                                                )}
                                         </span>
                                     </span>
                                     <span className="flex items-center gap-1">

@@ -16,6 +16,10 @@ const imageSizeClasses = {
 const ErrorSheet = () => {
     const { isOpen, onClose, errorMessage } = useErrorSheet()
 
+    const handleRefresh = (): void => {
+        window.location.href = '/'
+    }
+
     const renderErrorMessage = (errorStatus: string) => {
         if (errorStatus === 'permission_denied') {
             return (
@@ -68,6 +72,7 @@ const ErrorSheet = () => {
                                         size="md"
                                         variant="black"
                                         className="rounded-full py-2.5"
+                                        onClick={() => handleRefresh()}
                                     >
                                         Reload Page
                                     </Button>
