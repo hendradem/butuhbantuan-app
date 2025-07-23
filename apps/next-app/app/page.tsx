@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react'
 import useOnboardingStore from './store/useOnboarding'
 import UserOnboarding from './components/onboarding/UserOnboarding'
-import EmergencyPage from './(pages)/emergency/page'
+import Emergency from './components/emergency/Emergency'
 
 export default function Home() {
     const isOnboarding = useOnboardingStore((state) => state.isOnboarding)
@@ -27,7 +27,7 @@ export default function Home() {
 
     return (
         <div className="w-full bg-white">
-            {shouldOnboarding ? <UserOnboarding /> : <EmergencyPage />}
+            {shouldOnboarding ? <UserOnboarding /> : <Emergency />}
         </div>
     )
 }
