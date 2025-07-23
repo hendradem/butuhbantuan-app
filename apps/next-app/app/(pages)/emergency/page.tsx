@@ -1,23 +1,11 @@
 'use client'
 import React, { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Maps from '@/components/maps/leaflet/Leaflet'
 import BottomMenu from '@/components/menu/BottomMenu'
 import AddToHomeScreenBanner from '@/components/commons/AddToHomeScreenBanner'
 import { setRealViewportHeight } from '@/utils/setViewportHeight'
 
 export default function EmergencyPage() {
-    const router = useRouter()
-
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const checkIsUserVisited = localStorage.getItem('onboarding')
-            if (!checkIsUserVisited) {
-                router.replace('/')
-            }
-        }
-    }, [])
-
     useEffect(() => {
         if (typeof window !== 'undefined') {
             setRealViewportHeight()
