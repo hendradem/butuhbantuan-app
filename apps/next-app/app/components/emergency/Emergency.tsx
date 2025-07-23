@@ -7,12 +7,12 @@ import { setRealViewportHeight } from '@/utils/setViewportHeight'
 
 export default function Emergency() {
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            setRealViewportHeight()
-            window.addEventListener('resize', setRealViewportHeight)
-            return () =>
-                window.removeEventListener('resize', setRealViewportHeight)
-        }
+        // if (typeof window !== 'undefined') {
+        //     setRealViewportHeight()
+        //     window.addEventListener('resize', setRealViewportHeight)
+        //     return () =>
+        //         window.removeEventListener('resize', setRealViewportHeight)
+        // }
     }, [])
 
     return (
