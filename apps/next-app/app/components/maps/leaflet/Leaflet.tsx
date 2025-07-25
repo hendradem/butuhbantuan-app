@@ -44,7 +44,6 @@ export default function LeafletMaps() {
         useUserLocationData()
     const { onClose: closeExploreSheet } = useExploreSheet()
     const { updateLeafletRouting, resetLeafletRouting } = useLeaflet()
-    const mapZoom = useLeaflet((state) => state.zoom)
     const setMapZoom = useLeaflet((state) => state.setMapZoom)
     const {
         onOpen: openDetailSheet,
@@ -125,7 +124,6 @@ export default function LeafletMaps() {
             {clickedLatLng && (
                 <MapContainer
                     center={[clickedLatLng?.[0], clickedLatLng?.[1]]}
-                    // zoom={mapZoom}
                     scrollWheelZoom={true}
                     style={{
                         width: '100%',

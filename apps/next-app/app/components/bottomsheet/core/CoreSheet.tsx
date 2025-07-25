@@ -81,26 +81,25 @@ const CoreSheet: React.FC<Props> = ({
                 >
                     <Sheet.Container
                         style={{
-                            boxShadow:
-                                '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+                            boxShadow: 'rgba(0, 0, 0, 0.15) 0px 2px 8px',
                             borderTopLeftRadius: 20,
                             borderTopRightRadius: 20,
                         }}
                     >
                         {header && <Sheet.Header>{header}</Sheet.Header>}
                         <Sheet.Content
-                        // style={{
-                        //     paddingBottom: ref.current?.y,
-                        //     ...(scrollable
-                        //         ? {
-                        //               overflowY: 'scroll',
-                        //               maxHeight: 'calc(100vh - 100px)',
-                        //           }
-                        //         : {
-                        //               overflow: 'hidden',
-                        //               height: '100%',
-                        //           }),
-                        // }}
+                            style={{
+                                paddingBottom: ref.current?.y,
+                                ...(scrollable
+                                    ? {
+                                          overflowY: 'scroll',
+                                          maxHeight: 'calc(100vh - 100px)',
+                                      }
+                                    : {
+                                          overflow: 'hidden',
+                                          height: '100%',
+                                      }),
+                            }}
                         >
                             {children}
                         </Sheet.Content>

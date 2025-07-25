@@ -11,14 +11,12 @@ interface Props {
     emergencyData: any
     handleSelectedEmergency: (emergency: any) => {}
     selectedEmergencyName: string
-    dispatcherData: any[]
 }
 
 const EmergencyDataList: React.FC<Props> = ({
     emergencyData,
     handleSelectedEmergency,
     selectedEmergencyName,
-    dispatcherData,
 }) => {
     const exploreSheet = useExploreSheet()
     const searchSheet = useSearchSheet()
@@ -39,12 +37,11 @@ const EmergencyDataList: React.FC<Props> = ({
         return (
             <>
                 {isDispatcher && (
-                    <span className="badge text-[11px] badge-icon border-0 shadow-none bg-indigo-500 text-white">
+                    <span className="badge rounded-full text-[11px] badge-icon border-0 shadow-none bg-blue-500 text-white">
                         <Icon
                             name="fluent:person-call-16-filled"
-                            className="mr-1 text-[15px]"
+                            className="text-[15px]"
                         />
-                        Dispatcher
                     </span>
                 )}
                 <span
@@ -81,8 +78,6 @@ const EmergencyDataList: React.FC<Props> = ({
     const onContactClick = (type: string, contactNumber: any, e: any): void => {
         e.stopPropagation() // Prevent the event from propagating to the parent element
         openConfirmationSheet()
-
-        // const convertedPhoneNumber = convertPhoneNumber(contactNumber)
 
         switch (type) {
             case 'whatsapp':
@@ -137,13 +132,11 @@ const EmergencyDataList: React.FC<Props> = ({
                         }}
                     >
                         <div
-                            className={`p-3 border border-neutral-100 shadow-sm rounded-[10px] bg-white w-full
-                                        ${selectedEmergencyName === data.name ? ' border border-neutral-200' : ''}
-                                    `}
+                            className={`p-3 border border-neutral-100 shadow-sm rounded-[10px] bg-white w-full ${selectedEmergencyName === data.name ? ' border border-neutral-200' : ''}`}
                         >
-                            <div className="">
-                                <div className="flex items-start space-x-3">
-                                    <div className="w-10 h-10 bg-white border border-neutral-100 p-1.5 rounded-lg flex items-center justify-center">
+                            <div>
+                                <div className="flex gap-2">
+                                    <div className="card-image w-10 h-10 bg-white border border-neutral-100 p-1.5 rounded-lg flex items-center justify-center">
                                         <Image
                                             alt="Organization logo"
                                             width={40}
@@ -151,26 +144,28 @@ const EmergencyDataList: React.FC<Props> = ({
                                             src={data.organization_logo}
                                         />
                                     </div>
-                                    <div className="w-full">
-                                        <div className="flex justify-between items-center">
-                                            <div>
-                                                <h3 className="font-semibold leading-none text-gray-900">
-                                                    {data?.name}
-                                                </h3>
-                                                <p className="text-gray-500 leading-normal text-sm">
-                                                    {data?.organization_name}
-                                                </p>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                {renderEmergencyInfoBadge(
-                                                    data.is_dispatcher,
-                                                    tripDuration
-                                                )}
+                                    <div className="card-content bg-white w-full">
+                                        <div className="emergency-name-and-duration flex justify-between items-center">
+                                            <h3 className="font-semibold leading-none text-gray-900">
+                                                {data?.name}
+                                            </h3>
+
+                                            <div className="flex items-center gap-1">
+                                                {emergencyData &&
+                                                    renderEmergencyInfoBadge(
+                                                        data?.is_dispatcher,
+                                                        tripDuration
+                                                    )}
                                             </div>
                                         </div>
 
-                                        {/* Stats */}
-                                        <div className="flex mt-1 items-center text-gray-500 text-sm gap-2">
+                                        <div className="emergency-organization-name">
+                                            <p className="text-gray-500 leading-normal text-sm">
+                                                {data?.organization_name}
+                                            </p>
+                                        </div>
+
+                                        <div className="emergency-info flex mt-2 items-center text-gray-500 text-sm gap-2">
                                             <span className="flex items-center gap-1">
                                                 <Icon name="mingcute:location-fill" />
                                                 <span className="m-0 leading-none">
@@ -237,7 +232,7 @@ const EmergencyDataList: React.FC<Props> = ({
                                                 name="mdi:phone"
                                                 className="w-5 h-5 mr-2"
                                             />
-                                            Telephone
+                                            Telfon
                                         </button>
                                     </div>
                                 </div>

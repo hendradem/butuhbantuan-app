@@ -59,7 +59,7 @@ body {
 /* reusable tailwind classes */
 @layer components {
     .badge {
-        @apply bg-white text-gray-800 border border-gray-100 rounded-full text-xs font-medium px-1.5 pr-2 py-1;
+        @apply bg-white text-gray-800 border border-gray-100 rounded-full text-xs font-medium p-[2px] px-2 pr-2;
     }
     .badge-icon {
         @apply flex items-center;
@@ -137,17 +137,6 @@ body {
 }
 
 /* maps */
-.current-location-marker {
-    background-image: url('../public/assets/icons/current-location-blue.svg');
-    padding: 10px;
-    background-size: contain;
-    background-repeat: no-repeat;
-    width: 25px;
-    height: 25px;
-    border-radius: 50%;
-    cursor: pointer;
-}
-
 .debounce-effect {
     opacity: 0;
     animation: fadeIn 0.5s ease forwards;
@@ -160,13 +149,23 @@ to {
 }
 }
 
+.current-location-marker {
+    background-image: url('../public/assets/icons/current-location-blue.svg');
+    padding: 10px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
 .ambulance-marker {
     background-image: url('../public/assets/icons/ambulance-logo.svg');
     background-color: #1e1e1e;
     color: black;
-    box-shadow:
-        0 4px 6px -1px rgb(0 0 0 / 0.1),
-        0 2px 4px -2px rgb(0 0 0 / 0.1);
+    box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+    border: 2.5px solid #fff;
     background-size: 12px 12px;
     background-position: center;
     background-repeat: no-repeat;
@@ -180,9 +179,8 @@ to {
     background-image: url('../public/assets/icons/fire-fighter-logo.svg');
     background-color: #ef4444;
     color: white;
-    box-shadow:
-        0 4px 6px -1px rgb(0 0 0 / 0.1),
-        0 2px 4px -2px rgb(0 0 0 / 0.1);
+    box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+    border: 2.5px solid #fff;
     background-size: 12px 12px;
     background-position: center;
     background-repeat: no-repeat;
@@ -196,9 +194,8 @@ to {
     background-image: url('../public/assets/icons/hospital-logo.svg');
     background-color: #8b5cf6;
     color: white;
-    box-shadow:
-        0 4px 6px -1px rgb(0 0 0 / 0.1),
-        0 2px 4px -2px rgb(0 0 0 / 0.1);
+    box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+    border: 2.5px solid #fff;
     background-size: 12px 12px;
     background-position: center;
     background-repeat: no-repeat;
@@ -212,9 +209,8 @@ to {
     background-image: url('../public/assets/icons/sar-logo.svg');
     background-color: #f97316;
     color: white;
-    box-shadow:
-        0 4px 6px -1px rgb(0 0 0 / 0.1),
-        0 2px 4px -2px rgb(0 0 0 / 0.1);
+    box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+    border: 2.5px solid #fff;
     background-size: 12px 12px;
     background-position: center;
     background-repeat: no-repeat;
