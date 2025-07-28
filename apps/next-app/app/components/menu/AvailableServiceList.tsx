@@ -17,7 +17,7 @@ const AvailableServiceList: React.FC<PropsType> = ({
 
     const handleUnavailableServiceClick = () => {
         toast.error('Service coming soon', {
-            duration: 500,
+            duration: 600,
         })
     }
 
