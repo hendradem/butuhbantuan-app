@@ -16,7 +16,7 @@ const AvailableServiceList: React.FC<PropsType> = ({
     const setMapZoom = useLeaflet((state) => state.setMapZoom)
 
     const handleUnavailableServiceClick = () => {
-        toast.error('Coming soon', {
+        toast.error('Service coming soon', {
             duration: 500,
         })
     }
