@@ -47,11 +47,11 @@ const ErrorSheet = () => {
     }
 
     return (
-        <div className="bg-red-200">
+        <div data-testid="error-sheet" className="bg-red-200">
             <CoreSheet
                 isOpen={isOpen}
                 isOverlay
-                header={<HeaderSection handleClose={onClose} />}
+                header={<HeaderSection />}
                 snapPoints={[400, 0]}
             >
                 <div className="sheet">

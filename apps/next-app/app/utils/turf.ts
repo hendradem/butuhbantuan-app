@@ -11,8 +11,6 @@ export const getNearestData = (
         const to = point([+e.coordinates[0], +e.coordinates[1]]) // Note: [lng, lat]
         const dist = turfDistance(from, to, { units: 'kilometers' })
 
-        console.log(dist)
-
         return dist <= maxDistanceKm
     })
 

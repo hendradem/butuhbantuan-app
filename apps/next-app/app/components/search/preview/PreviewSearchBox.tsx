@@ -1,7 +1,6 @@
 'use client'
 import React, { useState, useEffect } from 'react'
 import useUserLocationData from '@/store/useUserLocationData'
-import useMapBox from '@/store/useMapBox'
 import useSearchSheet from '@/store/useSearchSeet'
 import Icon from '../../ui/Icon'
 

@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import toast from 'react-hot-toast'
 import Icon from '../ui/Icon'
 import useLeaflet from '@/store/useLeaflet'
 
@@ -23,15 +22,6 @@ const AvailableServiceList: React.FC<PropsType> = ({
             setMapZoom(10)
             setReset(true)
         }
-
-        // toast.error('Under Development', {
-        //     style: {
-        //         borderRadius: '20px',
-        //         background: '#333',
-        //         color: '#fff',
-        //     },
-        //     duration: 500,
-        // })
     }
 
     return (

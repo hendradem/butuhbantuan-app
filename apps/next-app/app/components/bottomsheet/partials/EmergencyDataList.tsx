@@ -6,6 +6,7 @@ import useExploreSheet from '@/store/useExploreSheet'
 import useSearchSheet from '@/store/useSearchSeet'
 import Icon from '../../ui/Icon'
 import { cityNameFormat } from '@/utils/cityNameFormat'
+import { truncateText } from '@/utils/textTruncate'
 
 interface Props {
     emergencyData: any
@@ -120,8 +121,8 @@ const EmergencyDataList: React.FC<Props> = ({
     return (
         <div>
             {emergencyData?.map((emergency: any, emergencyIndex: number) => {
-                const data = emergency.emergencyData
-                const tripDuration = emergency.trip.duration
+                const data = emergency?.emergencyData
+                const tripDuration = emergency?.trip?.duration
 
                 return (
                     <div
@@ -135,19 +136,25 @@ const EmergencyDataList: React.FC<Props> = ({
                             className={`p-3 border border-neutral-100 shadow-sm rounded-[10px] bg-white w-full ${selectedEmergencyName === data.name ? ' border border-neutral-200' : ''}`}
                         >
                             <div>
-                                <div className="flex gap-2">
-                                    <div className="card-image w-10 h-10 bg-white border border-neutral-100 p-1.5 rounded-lg flex items-center justify-center">
-                                        <Image
-                                            alt="Organization logo"
-                                            width={40}
-                                            height={40}
-                                            src={data.organization_logo}
-                                        />
+                                <div className="flex">
+                                    <div className="w-[15%]">
+                                        <div className="w-10 h-10 card-image bg-white border border-neutral-100 p-1.5 rounded-lg flex items-center justify-center">
+                                            <Image
+                                                alt="Organization logo"
+                                                width={40}
+                                                height={40}
+                                                src={data?.organization_logo}
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="card-content bg-white w-full">
-                                        <div className="emergency-name-and-duration flex justify-between items-center">
+                                    <div className="w-[85%] card-content">
+                                        <div className="emergency-name-and-duration flex justify-between items-center truncate">
                                             <h3 className="font-semibold leading-none text-gray-900">
-                                                {data?.name}
+                                                {data &&
+                                                    truncateText(
+                                                        data?.name,
+                                                        18
+                                                    )}
                                             </h3>
 
                                             <div className="flex items-center gap-1">
@@ -160,17 +167,21 @@ const EmergencyDataList: React.FC<Props> = ({
                                         </div>
 
                                         <div className="emergency-organization-name">
-                                            <p className="text-gray-500 leading-normal text-sm">
-                                                {data?.organization_name}
+                                            <p className="text-gray-500 leading-normal truncate text-sm">
+                                                {data &&
+                                                    truncateText(
+                                                        data?.organization_name,
+                                                        30
+                                                    )}
                                             </p>
                                         </div>
 
-                                        <div className="emergency-info flex mt-2 items-center text-gray-500 text-sm gap-2">
+                                        <div className="emergency-info flex mt-2 items-center text-gray-500 text-sm gap-2 truncate">
                                             <span className="flex items-center gap-1">
                                                 <Icon name="mingcute:location-fill" />
                                                 <span className="m-0 leading-none">
                                                     {cityNameFormat(
-                                                        data?.address.regency
+                                                        data?.address?.regency
                                                     )}
                                                 </span>
                                             </span>
@@ -189,6 +200,7 @@ const EmergencyDataList: React.FC<Props> = ({
                                 <div className="card-footer mt-4">
                                     <div className="flex gap-2">
                                         <button
+                                            data-testid="whatsapp-button"
                                             onClick={(e) => {
                                                 onContactClick(
                                                     'whatsapp',
@@ -212,6 +224,7 @@ const EmergencyDataList: React.FC<Props> = ({
                                             Whatsapp
                                         </button>
                                         <button
+                                            data-testid="phone-button"
                                             onClick={(e) => {
                                                 onContactClick(
                                                     'phone',

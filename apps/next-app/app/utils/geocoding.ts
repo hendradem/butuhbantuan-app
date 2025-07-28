@@ -2,7 +2,6 @@ import { getCurrentLocation } from '@/utils/getCurrentLocation'
 import useUserLocationData from '@/store/useUserLocationData'
 import useErrorSheet from '@/store/useErrorSheet'
 import useLeaflet from '@/store/useLeaflet'
-import toast from 'react-hot-toast'
 import { reverseGeocoding } from '@/store/api/services/geocoding.service'
 import { availableCityService } from '@/store/api/services/availablecity.service'
 

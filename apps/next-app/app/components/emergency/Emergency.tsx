@@ -25,13 +25,14 @@ export default function EmergencyPage() {
             className="relative h-screen bg-white overflow-hidden"
             style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
         >
-            <div className="banner">
+            <div data-testid="banner-wrapper" className="banner">
                 <AddToHomeScreenBanner />
             </div>
-            <div className="h-[78%] bg-neutral-100">
+            <div data-testid="maps-wrapper" className="h-[78%] bg-neutral-100">
                 <Maps />
             </div>
             <div
+                data-testid="bottom-menu-wrapper"
                 className="h-[22%] left-0 right-0 z-50 bg-transparent absolute bottom-0"
                 style={{ zIndex: 100 }}
             >

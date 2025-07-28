@@ -8,7 +8,7 @@
       "webworker"
     ],
     "types": [
-      "@serwist/next/typings"
+      "@serwist/next/typings", "jest"
     ],
     "allowSyntheticDefaultImports": true,
     "allowJs": true,
@@ -29,7 +29,7 @@
       }
     ],
     "paths": {
-      "@/*": ["./app/*"]
+      "@/*": ["./app/*"], 
     }
   },
   "include": [

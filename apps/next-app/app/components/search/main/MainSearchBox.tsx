@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useMemo, useEffect } from 'react'
-import debounce from 'lodash.debounce'
+import { debounce } from '@/utils/debounce'
 import useUserLocationData from '@/store/useUserLocationData'
 import { useAddressLocation } from '@/store/api/location.api'
 import useSearchData from '@/store/useSearchData'

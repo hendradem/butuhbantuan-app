@@ -76,8 +76,8 @@ export default function LeafletMaps() {
             emergencyType: markerData.emergency_type,
             emergency: emergency,
         })
-        openDetailSheet()
 
+        openDetailSheet()
         updateLeafletRouting({
             startPoint: {
                 lat: +markerData.coordinates[1],
@@ -123,6 +123,7 @@ export default function LeafletMaps() {
         <>
             {clickedLatLng && (
                 <MapContainer
+                    data-testid="leaflet-map-container"
                     center={[clickedLatLng?.[0], clickedLatLng?.[1]]}
                     scrollWheelZoom={true}
                     style={{

@@ -45,7 +45,7 @@ const RoutingMachine = () => {
             if (coords && coords.length > 0) {
                 const bounds = Leaflet.latLngBounds(coords)
                 map.fitBounds(bounds, {
-                    padding: [150, 150],
+                    padding: [100, 100],
                     maxZoom: 15,
                     animate: true,
                 })

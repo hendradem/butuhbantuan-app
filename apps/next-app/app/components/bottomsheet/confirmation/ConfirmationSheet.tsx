@@ -23,14 +23,14 @@ const ConfirmationSheet = () => {
 
         switch (callType) {
             case 'whatsapp':
-                toast.success('Akan dihubungkan ke whatsapp testing', {
+                toast.success('Akan dihubungkan ke whatsapp', {
                     style: {
                         borderRadius: '20px',
                         background: '#333',
                         color: '#fff',
                     },
                 })
-                window.open(`https://wa.me/${6287808885333}`, '_blank')
+                window.open(`https://wa.me/${convertedPhoneNumber}`, '_blank')
                 break
             case 'phone':
                 window.open(`tel:${+callNumber}`, '_blank')
@@ -39,66 +39,65 @@ const ConfirmationSheet = () => {
     }
 
     return (
-        <div>
-            <div>
-                <CoreSheet
-                    isOpen={isOpen}
-                    isOverlay
-                    header={
-                        <HeaderSection handleClose={closeConfirmationSheet} />
-                    }
-                    snapPoints={[400, 0]}
-                >
-                    <div className="sheet">
-                        <ConfirmationState
-                            size="xs"
-                            title={`Anda akan diarahkan ke ${callType === 'phone' ? 'telfon seluler' : 'WhatsApp'}`}
-                            description="Gunakan hanya untuk keadaan darurat dan dilarang keras untuk menyalahgunakan nomor ini."
-                            cta={
-                                <div className="flex items-center justify-center gap-1">
-                                    {callType === 'whatsapp' && (
-                                        <button
-                                            className="btn-whatsapp btn-lg"
-                                            onClick={(e: any) => {
-                                                onContactClick(e)
-                                            }}
-                                        >
-                                            <Icon
-                                                name="mingcute:chat-1-fill"
-                                                className="w-5 h-5 mr-2"
-                                            />
-                                            Whatsapp
-                                        </button>
-                                    )}
-
-                                    {callType === 'phone' && (
-                                        <button
-                                            className="btn-call btn-lg"
-                                            onClick={(e: any) => {
-                                                onContactClick(e)
-                                            }}
-                                        >
-                                            <Icon
-                                                name="mingcute:phone-call-fill"
-                                                className="w-5 h-5 mr-2"
-                                            />
-                                            Telfon
-                                        </button>
-                                    )}
-
+        <div data-testid="confirmation-sheet">
+            <CoreSheet
+                isOpen={isOpen}
+                isOverlay
+                header={<HeaderSection handleClose={closeConfirmationSheet} />}
+                snapPoints={[400, 0]}
+            >
+                <div className="sheet">
+                    <ConfirmationState
+                        size="xs"
+                        title={`Anda akan diarahkan ke ${callType === 'phone' ? 'telfon seluler' : 'WhatsApp'}`}
+                        description="Gunakan hanya untuk keadaan darurat dan dilarang keras untuk menyalahgunakan nomor ini."
+                        cta={
+                            <div className="flex items-center justify-center gap-1">
+                                {callType === 'whatsapp' && (
                                     <button
-                                        onClick={() => closeConfirmationSheet()}
-                                        type="button"
-                                        className="btn-dark w-full"
+                                        data-testid="confirmation-whatsapp-button"
+                                        className="btn-whatsapp btn-lg"
+                                        onClick={(e: any) => {
+                                            onContactClick(e)
+                                        }}
                                     >
-                                        Cancel
+                                        <Icon
+                                            name="mingcute:chat-1-fill"
+                                            className="w-5 h-5 mr-2"
+                                        />
+                                        Whatsapp
                                     </button>
-                                </div>
-                            }
-                        />
-                    </div>
-                </CoreSheet>
-            </div>
+                                )}
+
+                                {callType === 'phone' && (
+                                    <button
+                                        data-testid="confirmation-call-button"
+                                        className="btn-call btn-lg"
+                                        onClick={(e: any) => {
+                                            onContactClick(e)
+                                        }}
+                                    >
+                                        <Icon
+                                            name="mingcute:phone-call-fill"
+                                            className="w-5 h-5 mr-2"
+                                        />
+                                        Telfon
+                                    </button>
+                                )}
+
+                                <button
+                                    data-testid="confirmation-cancel-button"
+                                    onClick={() => closeConfirmationSheet()}
+                                    type="button"
+                                    className="btn-dark w-full"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        }
+                    />
+                </div>
+            </CoreSheet>
         </div>
     )
 }

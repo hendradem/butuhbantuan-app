@@ -1,5 +1,5 @@
 import React from 'react'
-import Icon from '@/components/ui/Icon'
+import Icon from '../../../ui/Icon'
 
 interface PropTypes {
     data: any
@@ -10,29 +10,35 @@ const HeaderSection: React.FC<PropTypes> = ({
     data,
     handleCloseDetailSheet,
 }) => {
+    const emergencyData = data?.emergency?.emergencyData
+    const emergencyType = data?.emergencyType
+    const tripData = data?.emergency?.trip
+
     return (
-        <div>
+        emergencyData &&
+        emergencyType && (
             <div className="sheet-header border-b py-3 px-3 bg-white border-neutral-100 rounded-t-[40px] flex items-center justify-between">
                 <div className="flex gap-2 mt-1 items-center rounded-t-[40px]">
                     <div
                         className={`flex items-center justify-center w-10 h-10 rounded-xl bg-red-50`}
                     >
                         <Icon
-                            name={`${data?.emergencyType?.icon}`}
+                            name={`${emergencyType?.icon}`}
                             className={`text-red-500 text-xl`}
                         />
                     </div>
                     <div>
                         <h1 className="text-md leading-none m-0 text-neutral-800 font-semibold">
-                            {data?.emergency?.emergencyData.name}
+                            {emergencyData.name}
                         </h1>
                         <p className="m-0 mt-1 leading-none text-[14px] text-neutral-500">
-                            {Math.floor(data?.emergency?.trip?.duration) * 2}{' '}
-                            menit dari lokasimu saat ini
+                            {Math.floor(tripData.duration) * 2} menit dari
+                            lokasimu saat ini
                         </p>
                     </div>
                 </div>
                 <button
+                    data-testid="close-detail-sheet-button"
                     onClick={() => handleCloseDetailSheet()}
                     type="button"
                     className="bg-neutral-100 flex items-center justify-center w-8 h-8 rounded-full"
@@ -43,7 +49,7 @@ const HeaderSection: React.FC<PropTypes> = ({
                     />
                 </button>
             </div>
-        </div>
+        )
     )
 }
 

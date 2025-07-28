@@ -7,18 +7,20 @@ import ContentSection from './partials/ContentSection'
 
 const ExploreDetailSheet = () => {
     const { isOpen } = useExploreSheet()
-
-    const snapPoints = [330, 0]
+    const snapPoints = [280, 0]
 
     return (
-        <div>
+        <div data-testid="explore-detail-sheet">
             <div className="w-full absolute">
                 <CoreSheet
                     isOpen={isOpen}
                     snapPoints={snapPoints}
                     header={<HeaderSection />}
                 >
-                    <div className="sheet-content">
+                    <div
+                        data-testid="explore-detail-sheet-content"
+                        className="sheet-content"
+                    >
                         <ContentSection />
                     </div>
                 </CoreSheet>

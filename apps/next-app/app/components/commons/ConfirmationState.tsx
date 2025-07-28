@@ -1,5 +1,4 @@
 import React from 'react'
-import { Plus } from 'lucide-react'
 import Image from 'next/image'
 
 type Props = {
@@ -23,7 +22,10 @@ const ConfirmationState: React.FC<Props> = ({
     size,
 }) => {
     return (
-        <div className=" bg-white flex items-center justify-center px-8 py-3">
+        <div
+            data-testid="confirmation-sheet-content"
+            className=" bg-white flex items-center justify-center px-8 py-3"
+        >
             <div className="text-center max-w-md">
                 {/* File Folder Illustration */}
                 <div className="mb-3 relative flex items-center justify-center">

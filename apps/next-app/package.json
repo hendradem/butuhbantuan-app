@@ -6,6 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "lint": "next lint --max-warnings 0",
     "check-types": "tsc --noEmit"
   },
@@ -62,11 +65,22 @@
     "zustand": "^4.3.8"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/react-hooks": "^8.0.1",
+    "@testing-library/user-event": "^14.6.1",
     "@types/google-map-react": "^2.1.7",
+    "@types/jest": "^30.0.0",
     "@types/leaflet": "^1.9.20",
     "@types/lodash.debounce": "^4.0.9",
     "@types/mapbox__mapbox-gl-geocoder": "^4.7.7",
     "@types/react-helmet": "^6.1.11",
-    "serwist": "^9.0.14"
+    "@vitejs/plugin-react": "^4.7.0",
+    "jest": "^30.0.5",
+    "jest-environment-jsdom": "^30.0.5",
+    "jsdom": "^26.1.0",
+    "serwist": "^9.0.14",
+    "vite-tsconfig-paths": "^5.1.4"
   }
 }

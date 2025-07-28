@@ -4,6 +4,7 @@ import useConfirmationSheet from '@/store/useConfirmationSheet'
 import Icon from '../../../ui/Icon'
 import { cityNameFormat } from '@/utils/cityNameFormat'
 import Image from 'next/image'
+import { truncateText } from '@/utils/textTruncate'
 
 interface Props {
     data: any
@@ -92,25 +93,27 @@ const EmergencyDataSingleList: React.FC<Props> = ({ data }) => {
                     className={`p-3  shadow-sm rounded-[10px] bg-white w-full border border-neutral-200`}
                 >
                     <div>
-                        <div className="flex gap-2">
-                            <div className="card-image w-10 h-10 bg-white border border-neutral-100 p-1.5 rounded-lg flex items-center justify-center">
-                                {emergencyData && (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <Image
-                                        alt="Organization logo"
-                                        width={40}
-                                        height={40}
-                                        src={
-                                            emergencyData?.organization_logo ??
-                                            ''
-                                        }
-                                    />
-                                )}
+                        <div className="flex">
+                            <div className="w-[15%]">
+                                <div className="card-image w-10 h-10 bg-white border border-neutral-100 p-1.5 rounded-lg flex items-center justify-center">
+                                    {emergencyData && (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <Image
+                                            alt="Organization logo"
+                                            width={40}
+                                            height={40}
+                                            src={
+                                                emergencyData?.organization_logo ??
+                                                ''
+                                            }
+                                        />
+                                    )}
+                                </div>
                             </div>
-                            <div className="card-content bg-white w-full">
-                                <div className="emergency-name-and-duration flex justify-between items-center">
+                            <div className="w-[85%] card-content">
+                                <div className="emergency-name-and-duration flex justify-between items-center truncate">
                                     <h3 className="font-semibold leading-none text-gray-900">
-                                        {emergencyData?.name}
+                                        {truncateText(emergencyData?.name, 18)}
                                     </h3>
 
                                     <div className="flex items-center gap-2">
@@ -123,12 +126,15 @@ const EmergencyDataSingleList: React.FC<Props> = ({ data }) => {
                                 </div>
 
                                 <div className="emergency-organization-name">
-                                    <p className="text-gray-500 leading-normal text-sm">
-                                        {emergencyData?.organization_name}
+                                    <p className="text-gray-500 leading-normal truncate text-sm">
+                                        {truncateText(
+                                            emergencyData?.organization_name,
+                                            28
+                                        )}
                                     </p>
                                 </div>
 
-                                <div className="emergency-info flex mt-2 items-center text-gray-500 text-sm gap-2">
+                                <div className="emergency-info flex mt-2 items-center text-gray-500 text-sm gap-2 truncate">
                                     <span className="flex items-center gap-1">
                                         <Icon name="mingcute:location-fill" />
                                         <span className="m-0 leading-none">

@@ -34,7 +34,10 @@ const BottomMenu = () => {
     }
 
     return (
-        <div className="sticky bottom-0 left-0 z-50 w-full h-[100%] py-5 rounded-t-xl bg-white border-t-slate-200 bottom-menu-shadow">
+        <div
+            data-testid="bottom-menu"
+            className="sticky bottom-0 left-0 z-50 w-full h-[100%] py-5 rounded-t-xl bg-white border-t-slate-200 bottom-menu-shadow"
+        >
             <div className="sheet-wrapper">
                 <div className="sheet-header mx-4">
                     <PreviewSearchBox />

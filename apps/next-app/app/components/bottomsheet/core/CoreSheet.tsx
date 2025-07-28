@@ -58,6 +58,7 @@ const CoreSheet: React.FC<Props> = ({
             <div>
                 {isOverlay && isOpen && (
                     <div
+                        data-testid="overlay"
                         className="fixed inset-0 z-[9998] backdrop-blur-sm bg-black/50 transition-all duration-200 ease-in-out"
                         onClick={
                             disableOverlayClick ? undefined : handleOverlayClick
@@ -65,6 +66,7 @@ const CoreSheet: React.FC<Props> = ({
                     ></div>
                 )}
                 <Sheet
+                    data-testid="core-sheet"
                     ref={ref}
                     isOpen={isOpen}
                     onClose={onClose}
@@ -80,6 +82,7 @@ const CoreSheet: React.FC<Props> = ({
                     }}
                 >
                     <Sheet.Container
+                        data-testid="core-sheet-container"
                         style={{
                             boxShadow: 'rgba(0, 0, 0, 0.15) 0px 2px 8px',
                             borderTopLeftRadius: 20,

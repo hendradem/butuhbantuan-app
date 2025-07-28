@@ -76,6 +76,7 @@ export default function UseOnboarding() {
     return (
         <div
             {...swipeHandlers}
+            data-testid="user-onboarding"
             className="min-h-screen flex flex-col p-6 text-center justify-end"
         >
             <div className="flex h-[400px] items-center justify-center select-none cursor-move">

@@ -34,7 +34,7 @@ const ContentSection = () => {
     return (
         <div>
             <div className="sheet-body w-full search-result-wrapper">
-                <div className="max-h-[280px] pt-3 pb-8 overflow-y-scroll">
+                <div className="max-h-[280px] pt-3 pb-[80px] overflow-y-scroll">
                     <EmergencyDataList
                         emergencyData={sheetData?.emergency}
                         handleSelectedEmergency={async (emergency: any) => {
