@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import Icon from '../ui/Icon'
 import useLeaflet from '@/store/useLeaflet'
+import toast from 'react-hot-toast'
 
 interface PropsType {
     emergencyTypeData: any
@@ -15,13 +16,9 @@ const AvailableServiceList: React.FC<PropsType> = ({
     const setMapZoom = useLeaflet((state) => state.setMapZoom)
 
     const handleUnavailableServiceClick = () => {
-        if (reset) {
-            setMapZoom(17)
-            setReset(false)
-        } else {
-            setMapZoom(10)
-            setReset(true)
-        }
+        toast.error('Coming soon', {
+            duration: 500,
+        })
     }
 
     return (
