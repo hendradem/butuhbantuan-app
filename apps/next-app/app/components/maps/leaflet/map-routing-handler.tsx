@@ -10,7 +10,6 @@ const RoutingMachine = () => {
 
     const routeStartPoint = useLeaflet((state) => state.routeStartPoint)
     const routeEndPoint = useLeaflet((state) => state.routeEndPoint)
-    const setMapZoom = useLeaflet((state) => state.setMapZoom)
 
     useEffect(() => {
         if (!map || !routeStartPoint.lat || !routeEndPoint.lat) return

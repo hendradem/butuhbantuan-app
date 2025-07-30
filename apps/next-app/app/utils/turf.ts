@@ -50,12 +50,9 @@ export const getNearestDataWithEstimation = (
         .map((e: any) => {
             const from = point(userLocation)
             const to = point([+e.coordinates[0], +e.coordinates[1]])
-
             const distanceKm = turfDistance(from, to, { units: 'kilometers' })
 
-            // Filter early if too far
             if (distanceKm > maxDistanceKm) return null
-
             const durationMinutes = (distanceKm / averageSpeedKmh) * 60
 
             return {
@@ -66,5 +63,5 @@ export const getNearestDataWithEstimation = (
                 },
             }
         })
-        .filter(Boolean) // Remove nulls
+        .filter(Boolean)
 }

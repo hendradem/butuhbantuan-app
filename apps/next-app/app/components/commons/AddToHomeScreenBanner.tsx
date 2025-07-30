@@ -23,7 +23,6 @@ const AddToHomeScreenBanner = () => {
         }
 
         const handleAppInstalled = () => {
-            console.log('App installed')
             hideBannerPermanently()
         }
 
@@ -68,7 +67,6 @@ const AddToHomeScreenBanner = () => {
     }
 
     const handleDismissClick = () => {
-        console.log('User dismissed banner manually')
         hideBannerPermanently()
     }
 

@@ -1,9 +1,7 @@
 const {
   PHASE_DEVELOPMENT_SERVER,
   PHASE_PRODUCTION_BUILD,
-} = require("next/constants");
- 
-
+} = require("next/constants"); 
 
 /** @type {(phase: string, defaultConfig: import("next").NextConfig) => Promise<import("next").NextConfig>} */
 module.exports = async (phase) => {
@@ -12,8 +10,7 @@ module.exports = async (phase) => {
   const nextConfig = {
   images: {
     domains: ["res.cloudinary.com", "bprugm.co.id"],
-  },
-  // reactStrictMode: false,
+  }, 
   reactStrictMode: true,
 
 
