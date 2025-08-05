@@ -77,8 +77,14 @@ jobs:
             echo "🔁 Moving to project directory..."
             cd /var/www/butuhbantuan-app || exit 1
 
+            echo "📦 Stashing local changes (if any)..."
+            git stash push --include-untracked -m "Auto stash before pull" || true
+
             echo "🔄 Pulling latest changes..."
             git pull origin master || exit 1
+
+            echo "📦 Applying stashed changes (if any)..."
+            git stash pop || true
 
             echo "📦 Installing frontend dependencies..."
             cd apps/next-app || exit 1
@@ -98,5 +104,32 @@ jobs:
             pm2 restart next-app || pm2 start "pnpm start" --name next-app || exit 1
 
             echo "✅ Deployment completed successfully."
+
+
+          # script: |
+          #   echo "🔁 Moving to project directory..."
+          #   cd /var/www/butuhbantuan-app || exit 1
+
+          #   echo "🔄 Pulling latest changes..."
+          #   git pull origin master || exit 1
+
+          #   echo "📦 Installing frontend dependencies..."
+          #   cd apps/next-app || exit 1
+          #   pnpm install || exit 1
+
+          #   echo "🛠️ Building frontend..."
+          #   pnpm build || exit 1
+
+          #   echo "🚀 Restarting backend with PM2..."
+          #   cd ../backend || exit 1
+          #   go build -o my-backend ./cmd/api || exit 1
+          #   pm2 delete backend || true
+          #   pm2 start ./my-backend --name backend || exit 1
+
+          #   echo "🚀 Restarting frontend with PM2..."
+          #   cd ../next-app || exit 1
+          #   pm2 restart next-app || pm2 start "pnpm start" --name next-app || exit 1
+
+          #   echo "✅ Deployment completed successfully."
 
 
