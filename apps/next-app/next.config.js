@@ -6,14 +6,11 @@ const {
 /** @type {(phase: string, defaultConfig: import("next").NextConfig) => Promise<import("next").NextConfig>} */
 module.exports = async (phase) => {
   /** @type {import("next").NextConfig} */
-
   const nextConfig = {
   images: {
     domains: ["res.cloudinary.com", "bprugm.co.id"],
   }, 
   reactStrictMode: true,
-
-
 };
 
   if (phase === PHASE_DEVELOPMENT_SERVER || phase === PHASE_PRODUCTION_BUILD) {
