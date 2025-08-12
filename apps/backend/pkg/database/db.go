@@ -14,40 +14,40 @@ var DB *gorm.DB
 
 var emergencySeed = []entity.Emergency{
 	{
-		Name:             "Ambulance Bali",
-		OrganizationName: "Bali Emergency Health Services",
-		OrganizationType: "Private",
-		Description:      "24/7 ambulance services across Bali.",
-		IsVerified:       false,
-		OrganizationLogo: "https://example.com/logo2.png",
-		Latitude:         -7.7063,
-		Longitude:        110.345,
-		Email:            "ambulance@balihealth.com",
-		Phone:            "036123456",
-		Whatsapp:         "6289876543210",
-		District:         "Denpasar",
-		Regency:          "Denpasar",
-		Province:         "Bali",
-		FullAddress:      "Jl. Sunset Road No.88, Denpasar",
-		TypeOfService:    "Medical Emergency",
-	},
-	{
-		Name:             "PMI Sleman",
-		OrganizationName: "Bali Emergency Health Services",
-		OrganizationType: "Private",
-		Description:      "24/7 ambulance services across Bali.",
-		IsVerified:       false,
-		OrganizationLogo: "https://example.com/logo2.png",
-		Latitude:         -7.7186,
-		Longitude:        110.3539,
+		Name:             "PMI Kab. Sleman",
+		OrganizationName: "Palang Merah Indonesia",
+		OrganizationType: "Ambulance",
+		Description:      "24/7",
+		IsVerified:       true,
+		OrganizationLogo: "https://res.cloudinary.com/djzrlqubf/image/upload/v1705744061/butuhbantuan/xteksibif5uschl27nbe.png",
+		Latitude:         "-7.7063",
+		Longitude:        "110.345",
 		Email:            "sleman@pmi.com",
-		Phone:            "036123459",
-		Whatsapp:         "6289876543211",
-		District:         "Denpasar",
+		Phone:            "02748689000",
+		Whatsapp:         "085161131368",
+		District:         "Tridadi",
 		Regency:          "Sleman",
 		Province:         "DIY",
-		FullAddress:      "Jl. Sunset Road No.88, Denpasar",
-		TypeOfService:    "Medical Emergency",
+		FullAddress:      "Jl. Dr. Radjiman, Sleman",
+		TypeOfService:    "Emergency, Transport",
+	},
+	{
+		Name:             "Ambulance MPD Peduli",
+		OrganizationName: "MPD Peduli",
+		OrganizationType: "Ambulance",
+		Description:      "24/7",
+		IsVerified:       true,
+		OrganizationLogo: "https://res.cloudinary.com/djzrlqubf/image/upload/v1705744433/butuhbantuan/iicqfihmm4uocius8cbe.png",
+		Latitude:         "-7.7607825",
+		Longitude:        "110.3741967",
+		Email:            "peduli@mpd.com",
+		Phone:            "02748689030",
+		Whatsapp:         "085161131348",
+		District:         "Mlati",
+		Regency:          "Sleman",
+		Province:         "DIY",
+		FullAddress:      "Jl. Pogung Raya, Mlati",
+		TypeOfService:    "Emergency, Transport",
 	},
 }
 
@@ -75,7 +75,7 @@ func InitDB() *gorm.DB {
 }
 
 func RunMigrations() {
-	err := DB.AutoMigrate(&entity.Emergency{}, &entity.EmergencyType{})
+	err := DB.AutoMigrate(&entity.Emergency{}, &entity.EmergencyType{}, &entity.AvailableServiceCity{})
 
 	if err != nil {
 		log.Fatal("failed to migrate database", err)
