@@ -1,19 +1,23 @@
-import axios from "axios";
-import config from "@/app/config";
+import axios from 'axios'
+import config from '@/config'
 
-const BASE_URL = `${config.BACKEND_HOST}/master/available-city-service`;
+const APIURL = `${config.BACKEND_HOST}/service/available-region`
 
 const axiosConfig = {
-  headers: {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "*",
-    "Access-Control-Allow-Credentials": "true",
-  },
-};
+    headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Allow-Credentials': 'true',
+    },
+}
 
 export const availableCityService = {
-  getAll: async () => {
-    const res = await axios.get(BASE_URL, axiosConfig);
-    return res.data;
-  },
-};
+    getAll: async () => {
+        const res = await axios.get(APIURL, axiosConfig)
+        return res.data
+    },
+    getByName: async (regionName: string) => {
+        const res = await axios.get(`${APIURL}/${regionName}`, axiosConfig)
+        return res.data
+    },
+}

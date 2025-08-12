@@ -1,26 +1,40 @@
-const useUserLocation = () => {
-    const latitude = window.localStorage.getItem('lat')
-    const longitude = window.localStorage.getItem('long')
-    const address = window.localStorage.getItem('address')
-    const urbanVillage = window.localStorage.getItem('urban_village')
-    const currentUserLocation = { latitude, longitude, address, urbanVillage }
+import { useState } from 'react'
+import { getCurrentLocation } from '@/utils/getCurrentLocation'
+import { getAddressInfo } from '@/store/api/services/location.service'
 
-    const setUserLocation = (
-        latState: number,
-        longState: number,
-        address?: string | undefined,
-        urbanVillage?: string | undefined
-    ): void => {
-        window.localStorage.setItem('lat', latState?.toString())
-        window.localStorage.setItem('long', longState?.toString())
-        window.localStorage.setItem('address', address?.toString() || '')
-        window.localStorage.setItem(
-            'urban_village',
-            urbanVillage?.toString() || ''
-        )
+type Coordinates = { lat: number; long: number }
+
+export const useCurrentLocation = (
+    updateCoordinate: (lat: number, lng: number) => void
+) => {
+    const [currentUserAddress, setCurrentUserAddress] = useState<string>('')
+
+    const handleGetCurrentLocation = async (e?: React.SyntheticEvent) => {
+        e?.preventDefault()
+
+        getCurrentLocation(async (location: any) => {
+            const coordinates: Coordinates = {
+                lat: location.lat,
+                long: location.lng,
+            }
+
+            updateCoordinate(coordinates.lat, coordinates.long)
+
+            try {
+                const res = await getAddressInfo(
+                    coordinates.long,
+                    coordinates.lat
+                )
+                const address = res[0]?.place_name || ''
+                setCurrentUserAddress(address)
+            } catch (error) {
+                console.error('Failed to get address info:', error)
+            }
+        })
     }
 
-    return { setUserLocation, currentUserLocation }
+    return {
+        handleGetCurrentLocation,
+        currentUserAddress,
+    }
 }
-
-export default useUserLocation

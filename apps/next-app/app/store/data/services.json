@@ -1,6 +1,6 @@
 [
     {
-        "id": 0,
+        "id": 1,
         "type": "emergency",
         "name": "Ambulance",
         "icon": "lucide:ambulance",
@@ -8,7 +8,7 @@
         "colorSecondary": "blue-50"       
     },
     {
-        "id": 1,
+        "id": 2,
         "type": "emergency",
         "name": "Pemadam",
         "icon": "material-symbols:fire-truck-outline-rounded",
@@ -16,19 +16,11 @@
         "colorSecondary": "red-50"       
     },
     {
-        "id": 2,
+        "id": 3,
         "type": "emergency",
         "name": "Tim SAR",
         "icon": "fa6-solid:car-burst",
         "colorMain": "orange-500",
         "colorSecondary": "orange-50"       
-    },
-    {
-        "id": 3,
-        "type": "non-emergency",
-        "name": "Bengkel",
-        "icon": "mdi:car-wrench",
-        "colorMain": "green-500",
-        "colorSecondary": "green-50"       
     }
 ]

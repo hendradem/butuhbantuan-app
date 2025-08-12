@@ -3,31 +3,36 @@ package mapper
 import (
 	"butuhbantuan/internal/dto"
 	"butuhbantuan/internal/model/entity"
-	"strconv"
 )
 
 func MapEmergencyServiceToResponse(e entity.Emergency) dto.EmergencyServiceResponse {
-	lat, _ := strconv.ParseFloat(e.Latitude, 64)
-	lng, _ := strconv.ParseFloat(e.Longitude, 64)
-
 	res := dto.EmergencyServiceResponse{
-		ID:               strconv.FormatUint(uint64(e.ID), 10),
+		ID:               e.UUID.String(),
 		Name:             e.Name,
 		OrganizationName: e.OrganizationName,
 		OrganizationType: e.OrganizationType,
 		Logo:             e.OrganizationLogo,
 		Description:      e.Description,
-		Coordinates:      [2]float64{lng, lat},
+		Coordinates:      [2]string{e.Longitude, e.Latitude},
 		TypeOfService:    e.TypeOfService,
+		IsDispatcher:     e.IsDispatcher,
 	}
 
-	res.Address.District = e.District
-	res.Address.Regency = e.Regency
-	res.Address.Province = e.Province
+	res.EmergencyType.ID = e.EmergencyType.ID
+	res.EmergencyType.EmergencyTypeName = e.EmergencyType.Name
+	res.EmergencyType.Icon = e.EmergencyType.Icon
+
+	res.Address.DistrictID = e.District.ID
+	res.Address.District = e.District.Name
+	res.Address.RegencyID = e.Regency.ID
+	res.Address.Regency = e.Regency.Name
+	res.Address.ProvinceID = e.Province.ID
+	res.Address.Province = e.Province.Name
 	res.Address.FullAddress = e.FullAddress
 
-	res.Contact.Whatsapp = e.Whatsapp
+	res.Contact.Email = e.Email
 	res.Contact.Phone = e.Phone
+	res.Contact.Whatsapp = e.Whatsapp
 
 	return res
 }

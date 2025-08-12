@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 const { resolve } = require("node:path");
 
 const project = resolve(process.cwd(), "tsconfig.json");
@@ -38,6 +39,8 @@ module.exports = {
   ],
 };
 =======
+=======
+>>>>>>> 6b922f49fc712b0ac112b37d3528c7afe5dd39e0
 import js from "@eslint/js";
 import eslintConfigPrettier from "eslint-config-prettier";
 import tseslint from "typescript-eslint";
@@ -77,4 +80,7 @@ export const config = [
     },
   },
 ];
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 6b922f49fc712b0ac112b37d3528c7afe5dd39e0

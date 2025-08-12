@@ -11,9 +11,143 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func GetEmergency(ctx *fiber.Ctx) error {
+func GetAllEmergency(ctx *fiber.Ctx) error {
 	var emergencies []entity.Emergency
-	result := database.DB.Find(&emergencies)
+
+	result := database.DB.
+		Preload("EmergencyType").
+		Preload("Province").
+		Preload("Regency").
+		Find(&emergencies)
+
+	if result.Error != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "failed to get emergency data",
+			"data":    result.Error,
+		})
+	}
+
+	// 	✅ Map to DTO
+	var response []dto.EmergencyServiceResponse
+	for _, e := range emergencies {
+		response = append(response, mapper.MapEmergencyServiceToResponse(e))
+	}
+
+	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":  "success",
+		"message": "success to get emergency data",
+		"data":    response,
+	})
+}
+
+func GetEmergencyDispatcher(ctx *fiber.Ctx) error {
+	var emergencies []entity.Emergency
+	regencyID := ctx.Params("regencyID")
+	provinceID := ctx.Params("provinceID")
+
+	result := database.DB.Preload("EmergencyType").
+		Preload("Province").
+		Preload("Regency").
+		Preload("District").
+		Where("is_dispatcher = ?", true).
+		Where("regency_id = ? OR (province_id = ? AND is_province_dispatcher = ?)", regencyID, provinceID, true).
+		Find(&emergencies)
+
+	if result.Error != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "failed to get dispatcher emergencies",
+			"data":    result.Error.Error(),
+		})
+	}
+
+	// ✅ Map to DTO
+	var response []dto.EmergencyServiceResponse
+	for _, e := range emergencies {
+		response = append(response, mapper.MapEmergencyServiceToResponse(e))
+	}
+
+	// ✅ Return DTO-based JSON
+	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":  "success",
+		"message": "success to get emergency dispatcher data",
+		"data":    response,
+	})
+}
+
+func GetAllEmergencyByProvince(ctx *fiber.Ctx) error {
+	var emergencies []entity.Emergency
+
+	provinceID := ctx.Params("provinceID")
+
+	result := database.DB.
+		Preload("Province").
+		Preload("EmergencyType").
+		Preload("Regency").
+		Preload("District").
+		Where("province_id = ?", provinceID).Find(&emergencies)
+
+	if result.Error != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "failed to get emergencies",
+			"data":    result.Error.Error(),
+		})
+	}
+
+	// ✅ Map to DTO
+	var response []dto.EmergencyServiceResponse
+	for _, e := range emergencies {
+		response = append(response, mapper.MapEmergencyServiceToResponse(e))
+	}
+
+	// ✅ Return DTO-based JSON
+	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":  "success",
+		"message": "success to get emergencies data",
+		"data":    response,
+	})
+}
+
+func GetEmergencyByRegion(ctx *fiber.Ctx) error {
+	regencyID := ctx.Params("regencyID")
+	var emergencies []entity.Emergency
+
+	result := database.DB.
+		Preload("Province").
+		Preload("EmergencyType").
+		Preload("Regency").
+		Preload("District").
+		Where("regency_id = ? OR is_province_dispatcher = ?", regencyID, true).Find(&emergencies)
+
+	if result.Error != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "failed to get emergencies",
+			"data":    result.Error.Error(),
+		})
+	}
+
+	// ✅ Map to DTO
+	var response []dto.EmergencyServiceResponse
+	for _, e := range emergencies {
+		response = append(response, mapper.MapEmergencyServiceToResponse(e))
+	}
+
+	// ✅ Return DTO-based JSON
+	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":  "success",
+		"message": "success to get emergencies data",
+		"data":    response,
+	})
+}
+
+func GetEmergencyByType(ctx *fiber.Ctx) error {
+	emergencyTypeID := ctx.Params("emergencyTypeID")
+	var emergencies []entity.Emergency
+
+	result := database.DB.Where("emergency_type_id = ?", emergencyTypeID).Find(&emergencies)
 
 	if result.Error != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -83,6 +217,7 @@ func AddEmergency(ctx *fiber.Ctx) error {
 		Name:             emergency.Name,
 		OrganizationName: emergency.OrganizationName,
 		OrganizationType: emergency.OrganizationType,
+		EmergencyTypeID:  emergency.EmergencyTypeID,
 		Description:      emergency.Description,
 		IsVerified:       emergency.IsVerified,
 		OrganizationLogo: emergency.OrganizationLogo,
@@ -91,11 +226,12 @@ func AddEmergency(ctx *fiber.Ctx) error {
 		Email:            emergency.Email,
 		Phone:            emergency.Phone,
 		Whatsapp:         emergency.Whatsapp,
-		District:         emergency.District,
-		Regency:          emergency.Regency,
-		Province:         emergency.Province,
+		DistrictID:       emergency.DistrictID,
+		RegencyID:        emergency.RegencyID,
+		ProvinceID:       emergency.ProvinceID,
 		FullAddress:      emergency.FullAddress,
 		TypeOfService:    emergency.TypeOfService,
+		IsDispatcher:     emergency.IsDispatcher,
 	}
 
 	result := database.DB.Create(&newEmergency)

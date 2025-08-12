@@ -2,6 +2,7 @@
   "name": "@repo/eslint-config",
   "version": "0.0.0",
 <<<<<<< HEAD
+<<<<<<< HEAD
   "private": true,
   "files": [
     "library.js",
@@ -17,6 +18,8 @@
     "@typescript-eslint/eslint-plugin": "^7.1.0",
     "typescript": "5.5.4"
 =======
+=======
+>>>>>>> 6b922f49fc712b0ac112b37d3528c7afe5dd39e0
   "type": "module",
   "private": true,
   "exports": {
@@ -36,6 +39,9 @@
     "globals": "^16.0.0",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.31.0"
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 6b922f49fc712b0ac112b37d3528c7afe5dd39e0
   }
 }
