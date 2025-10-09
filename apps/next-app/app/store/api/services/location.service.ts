@@ -45,7 +45,7 @@ export const getAddressInfo = async (
         const geocodingResponse = response.data.data
         return geocodingResponse?.features || null // ✅ Return null if features is undefined
     } catch (error) {
-        console.error('Geocoding API error:', error)
+        console.log('Geocoding API error:', error)
         return null // ✅ Return null on error
     }
 }
