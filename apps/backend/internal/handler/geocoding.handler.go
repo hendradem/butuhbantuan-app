@@ -31,7 +31,21 @@ func ReverseGeocoding(ctx *fiber.Ctx) error {
 		longitude,
 	)
 
-	resp, err := http.Get(urlRequest)
+	// Create custom request
+	req, err := http.NewRequest("GET", urlRequest, nil)
+	if err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Failed to create request",
+			"data":    err,
+		})
+	}
+
+	// IMPORTANT: Nominatim requires a custom User-Agent
+	req.Header.Set("User-Agent", "ButuhBantuan/1.0 (contact: mufindlabs@gmail.com)")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"status":  "error",
