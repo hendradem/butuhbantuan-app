@@ -1,0 +1,102 @@
+{
+  "name": "@eslint/config-inspector",
+  "type": "module",
+  "version": "1.4.2",
+  "description": "A visual tool for inspecting and understanding your ESLint flat configs",
+  "license": "Apache-2.0",
+  "funding": "https://opencollective.com/eslint",
+  "homepage": "https://github.com/eslint/config-inspector#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eslint/config-inspector.git"
+  },
+  "bugs": "https://github.com/eslint/config-inspector/issues",
+  "bin": {
+    "@eslint/config-inspector": "./bin.mjs",
+    "eslint-config-inspector": "./bin.mjs"
+  },
+  "files": [
+    "*.mjs",
+    "dist"
+  ],
+  "peerDependencies": {
+    "eslint": "^8.50.0 || ^9.0.0"
+  },
+  "dependencies": {
+    "ansis": "^4.2.0",
+    "bundle-require": "^5.1.0",
+    "cac": "^6.7.14",
+    "chokidar": "^4.0.3",
+    "esbuild": "^0.27.0",
+    "h3": "^1.15.4",
+    "tinyglobby": "^0.2.15",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^6.2.0",
+    "@eslint/config-array": "^0.23.0",
+    "@iconify-json/carbon": "^1.2.14",
+    "@iconify-json/file-icons": "^1.2.2",
+    "@iconify-json/logos": "^1.2.10",
+    "@iconify-json/ph": "^1.2.2",
+    "@iconify-json/simple-icons": "^1.2.59",
+    "@iconify-json/svg-spinners": "^1.2.4",
+    "@iconify-json/twemoji": "^1.2.4",
+    "@iconify-json/vscode-icons": "^1.2.35",
+    "@nodelib/fs.walk": "^3.0.1",
+    "@nuxt/eslint": "^1.10.0",
+    "@shikijs/langs-precompiled": "^3.15.0",
+    "@shikijs/transformers": "^3.15.0",
+    "@types/connect": "^3.4.38",
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/utils": "^8.47.0",
+    "@unocss/eslint-config": "^66.5.6",
+    "@unocss/nuxt": "^66.5.6",
+    "@voxpelli/config-array-find-files": "^1.2.2",
+    "@vueuse/nuxt": "^14.0.0",
+    "eslint": "^9.39.1",
+    "find-up": "^8.0.0",
+    "floating-vue": "^5.2.2",
+    "fuse.js": "^7.1.0",
+    "get-port-please": "^3.2.0",
+    "lint-staged": "^16.2.6",
+    "minimatch": "^10.1.1",
+    "mlly": "^1.8.0",
+    "mrmime": "^2.0.1",
+    "nuxt": "^4.2.1",
+    "nuxt-eslint-auto-explicit-import": "^0.1.1",
+    "open": "^11.0.0",
+    "pathe": "^2.0.3",
+    "rolldown": "^1.0.0-beta.50",
+    "rollup": "^4.53.2",
+    "shiki": "^3.15.0",
+    "simple-git-hooks": "^2.13.1",
+    "textmate-grammar-glob": "^0.0.1",
+    "tsdown": "^0.16.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.10",
+    "vue-tsc": "^3.1.4"
+  },
+  "resolutions": {
+    "@nuxt/vite-builder": "https://pkg.pr.new/@nuxt/vite-builder@33682",
+    "esbuild": "catalog:",
+    "nitropack": "catalog:",
+    "rolldown": "catalog:",
+    "rollup": "catalog:",
+    "vite": "catalog:"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged"
+  },
+  "lint-staged": {
+    "*": "eslint --fix"
+  },
+  "scripts": {
+    "build": "nuxt build && tsdown",
+    "dev": "nuxt dev",
+    "start": "node bin.mjs",
+    "lint": "nuxt prepare && eslint .",
+    "test": "vitest",
+    "typecheck": "nuxt typecheck"
+  }
+}

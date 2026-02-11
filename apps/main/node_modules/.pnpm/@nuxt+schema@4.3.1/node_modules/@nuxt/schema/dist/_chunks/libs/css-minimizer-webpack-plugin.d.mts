@@ -1,0 +1,9 @@
+import "child_process";
+import "buffer";
+import "http";
+import "https";
+import "inspector";
+import "net";
+import "url";
+import "vm";
+import "worker_threads";

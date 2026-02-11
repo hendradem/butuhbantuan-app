@@ -1,0 +1,1 @@
+import{a as e,i as t,n,o as r,r as i,s as a,t as o}from"./t-DYl0qC9V.js";export{o as Argument,n as Command,i as Option,t as RootCommand,e as ShellCompDirective,a as default,r as script};
