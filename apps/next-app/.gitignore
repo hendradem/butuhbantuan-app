@@ -1,2 +1,4 @@
-.env
 .next
+.env
+.env.local
+.env.production
