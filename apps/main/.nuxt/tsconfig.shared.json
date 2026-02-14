@@ -104,10 +104,10 @@
         "../../../node_modules/.pnpm/nuxt@4.3.1_@parcel+watcher@2.5.6_@vue+compiler-sfc@3.5.28_cac@6.7.14_db0@0.3.4_eslint@10.0.0__ypfahc6ntn4wbyrsgkjfgmzwwu/node_modules/nuxt/dist/app/compat/vue-demi"
       ],
       "#ui": [
-        "../../../node_modules/.pnpm/@nuxt+ui@4.4.0_@tiptap+extensions@3.19.0_@tiptap+core@3.19.0_@tiptap+pm@3.19.0__@tiptap+pm@3._ghpt5nnwwtxntso622dp3cboom/node_modules/@nuxt/ui/dist/runtime"
+        "../../../node_modules/.pnpm/@nuxt+ui@4.4.0_@tiptap+extensions@3.19.0_@tiptap+core@3.19.0_@tiptap+pm@3.19.0__@tiptap+pm@3._2x7jvt3kovsbvxkesde3ninb3i/node_modules/@nuxt/ui/dist/runtime"
       ],
       "#ui/*": [
-        "../../../node_modules/.pnpm/@nuxt+ui@4.4.0_@tiptap+extensions@3.19.0_@tiptap+core@3.19.0_@tiptap+pm@3.19.0__@tiptap+pm@3._ghpt5nnwwtxntso622dp3cboom/node_modules/@nuxt/ui/dist/runtime/*"
+        "../../../node_modules/.pnpm/@nuxt+ui@4.4.0_@tiptap+extensions@3.19.0_@tiptap+core@3.19.0_@tiptap+pm@3.19.0__@tiptap+pm@3._2x7jvt3kovsbvxkesde3ninb3i/node_modules/@nuxt/ui/dist/runtime/*"
       ],
       "#color-mode-options": [
         "./color-mode-options.mjs"

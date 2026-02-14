@@ -1,0 +1,26 @@
+[
+    {
+        "id": 1,
+        "type": "emergency",
+        "name": "Ambulance",
+        "icon": "lucide:ambulance",
+        "colorMain": "blue-500",
+        "colorSecondary": "blue-50"       
+    },
+    {
+        "id": 2,
+        "type": "emergency",
+        "name": "Pemadam",
+        "icon": "material-symbols:fire-truck-outline-rounded",
+        "colorMain": "red-500",
+        "colorSecondary": "red-50"       
+    },
+    {
+        "id": 3,
+        "type": "emergency",
+        "name": "Tim SAR",
+        "icon": "fa6-solid:car-burst",
+        "colorMain": "orange-500",
+        "colorSecondary": "orange-50"       
+    }
+]
