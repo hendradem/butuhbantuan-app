@@ -1,0 +1,4 @@
+
+import { viteNodeFetch } from "file:///Users/wahyu/Documents/Dev/Projects/butuhbantuan-monorepo/node_modules/.pnpm/@nuxt+vite-builder@4.3.1_eslint@10.0.0_jiti@2.6.1__lightningcss@1.31.1_magicast@0.5.2_nuxt@4._6tqmtiy5dznjilvpxxfrj5hwa4/node_modules/@nuxt/vite-builder/dist/vite-node.mjs"
+export default () => viteNodeFetch.getManifest()
+    

@@ -1,41 +1,20 @@
 {
   "name": "butuhbantuan-monorepo",
-  "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "packageManager": "pnpm@9.2.0",
+  "version": "1.0.0",
+  "private": true, 
+  "description": "",
+  "main": "index.js",
   "scripts": {
+    "dev": "turbo run dev --parallel",
     "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "check-types": "turbo run check-types"
+    "lint": "turbo run lint"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.3.0",
-    "@types/react": "18.2.0",
-    "@types/react-dom": "18.2.0",
-    "@vitejs/plugin-react": "^4.7.0",
-    "@vitest/coverage-istanbul": "^3.2.4",
-    "@vitest/coverage-v8": "3.2.4",
-    "jsdom": "^26.1.0",
-    "prettier": "^3.5.3",
-    "react": "19.0.0-rc.1",
-    "react-dom": "19.0.0-rc.1",
-    "turbo": "^2.5.3",
-    "typescript": "5.8.2",
-    "vitest": "^3.2.4"
-  },
-  "packageManager": "pnpm@9.0.0",
-  "engines": {
-    "node": ">=18"
-  },
-  "pnpm": {
-    "overrides": {
-      "@types/react": "18.2.0",
-      "@types/react-dom": "18.2.0"
-    }
+    "turbo": "^2.8.6"
   }
 }
+
