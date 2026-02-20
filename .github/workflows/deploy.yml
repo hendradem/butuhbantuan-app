@@ -80,12 +80,13 @@ jobs:
             tar -xzf next-build.tar.gz
             rm next-build.tar.gz
 
-            mkdir -p .next
-            mv static .next/
+            # Pastikan .next ada (harusnya sudah ada dari tar)
+            ls -la
 
-            pm2 restart backend || pm2 start /var/www/butuhbantuan-app/backend/api --name backend
+            pm2 delete backend || true
+            pm2 start /var/www/butuhbantuan-app/backend/api --name backend
 
             pm2 delete next-app || true
-            pm2 start standalone/server.js --name next-app
+            pm2 start .next/standalone/server.js --name next-app
 
             pm2 save
