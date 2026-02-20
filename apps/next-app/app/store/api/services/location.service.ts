@@ -1,51 +1,52 @@
-import config from '@/config'
-import axios from 'axios'
+import config from "@/config";
+import axios from "axios";
 
-const GEOCODING_URL_API = `${config.BACKEND_HOST}/directions/geocoding`
-const GEOLOCATION_BASE_URL = `${config.BACKEND_HOST}/directions/geolocation`
+const GEOCODING_URL_API = `${config.BACKEND_HOST}/directions/geocoding`;
+const GEOLOCATION_BASE_URL = `${config.BACKEND_HOST}/directions/geolocation`;
 
 const axiosConfig = {
-    headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': '*',
-        'Access-Control-Allow-Credentials': 'true',
-    },
-}
+  headers: {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "*",
+    "Access-Control-Allow-Credentials": "true",
+  },
+};
 
 export const getAddressLocation = async (
-    locationQuery: string
+  locationQuery: string
 ): Promise<any> => {
-    if (!locationQuery) {
-        return null
-    }
+  if (!locationQuery) {
+    return null;
+  }
 
-    const response = await axios.get(
-        `${GEOLOCATION_BASE_URL}?searchQuery=${locationQuery}`,
-        axiosConfig
-    )
+  const response = await axios.get(
+    `${GEOLOCATION_BASE_URL}?searchQuery=${locationQuery}`,
+    axiosConfig
+  );
 
-    const geoapifySearchResponse = response?.data?.data
-    return geoapifySearchResponse
-}
+  const geoapifySearchResponse = response?.data?.data;
+  console.log(geoapifySearchResponse);
+  return geoapifySearchResponse;
+};
 
 export const getAddressInfo = async (
-    longitude: number | string,
-    latitude: number | string
+  longitude: number | string,
+  latitude: number | string
 ): Promise<any> => {
-    if (!longitude || !latitude) {
-        return null
-    }
+  if (!longitude || !latitude) {
+    return null;
+  }
 
-    try {
-        const response = await axios.get(
-            `${GEOCODING_URL_API}?longitude=${longitude}&latitude=${latitude}`,
-            axiosConfig
-        )
+  try {
+    const response = await axios.get(
+      `${GEOCODING_URL_API}?longitude=${longitude}&latitude=${latitude}`,
+      axiosConfig
+    );
 
-        const geocodingResponse = response.data.data
-        return geocodingResponse?.features || null // ✅ Return null if features is undefined
-    } catch (error) {
-        console.log('Geocoding API error:', error)
-        return null // ✅ Return null on error
-    }
-}
+    const geocodingResponse = response.data.data;
+    return geocodingResponse?.features || null; // ✅ Return null if features is undefined
+  } catch (error) {
+    console.log("Geocoding API error:", error);
+    return null; // ✅ Return null on error
+  }
+};

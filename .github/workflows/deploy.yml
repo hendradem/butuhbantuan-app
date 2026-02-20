@@ -1,0 +1,78 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # ================= BACKEND =================
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Build Go binary
+        run: |
+          cd services/backend
+          go mod tidy
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o api ./cmd/api
+
+      # ================= NEXT =================
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build Next app
+        run: pnpm build --filter=next-app
+
+      # ================= UPLOAD =================
+      - name: Upload backend binary
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_PRIVATE_KEY }}
+          source: services/backend/api
+          target: /var/www/butuhbantuan-app/services/backend/
+          overwrite: true
+
+      - name: Upload Next build
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_PRIVATE_KEY }}
+          source: |
+            apps/next-app/.next
+            apps/next-app/package.json
+            apps/next-app/public
+          target: /var/www/butuhbantuan-app/apps/next-app/
+          overwrite: true
+
+      # ================= RESTART =================
+      - name: Restart services
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_PRIVATE_KEY }}
+          script: |
+            pm2 restart backend || pm2 start /var/www/butuhbantuan-app/services/backend/api --name backend
+            cd /var/www/butuhbantuan-app/apps/next-app
+            pm2 restart next-app || pm2 start "pnpm start" --name next-app
+            pm2 save
