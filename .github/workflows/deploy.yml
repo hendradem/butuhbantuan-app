@@ -49,9 +49,11 @@ jobs:
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           source: services/backend/api
           target: /var/www/butuhbantuan-app/backend/
+          strip_components: 2
           overwrite: true
 
       # ================= UPLOAD NEXT (STANDALONE ONLY) =================
+
       - name: Upload Next standalone
         uses: appleboy/scp-action@v0.1.4
         with:
@@ -63,6 +65,7 @@ jobs:
             apps/next-app/.next/static
             apps/next-app/public
           target: /var/www/butuhbantuan-app/frontend/
+          strip_components: 3
           overwrite: true
 
       # ================= RESTART SERVICES =================
