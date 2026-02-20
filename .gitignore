@@ -7,6 +7,14 @@
 .cache
 dist
 
+apps/next-app/.next
+.turbo
+node_modules
+dist
+.output
+.nuxt
+.cache
+
 # Node dependencies
 node_modules
 

@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # ================= SERVICES - BACKEND  =================
+      # ================= SERVICES - BACKEND =================
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -35,12 +35,12 @@ jobs:
         run: npm install -g pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
-      - name: Build Next app
+      - name: Build Next app (standalone)
         run: pnpm build --filter=next-app
 
-      # ================= UPLOAD =================
+      # ================= UPLOAD BACKEND =================
       - name: Upload backend binary
         uses: appleboy/scp-action@v0.1.4
         with:
@@ -48,23 +48,24 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           source: services/backend/api
-          target: /var/www/butuhbantuan-app/services/backend/
+          target: /var/www/butuhbantuan-app/backend/
           overwrite: true
 
-      - name: Upload Next build
+      # ================= UPLOAD NEXT (STANDALONE ONLY) =================
+      - name: Upload Next standalone
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           source: |
-            apps/next-app/.next
-            apps/next-app/package.json
+            apps/next-app/.next/standalone
+            apps/next-app/.next/static
             apps/next-app/public
-          target: /var/www/butuhbantuan-app/apps/next-app/
+          target: /var/www/butuhbantuan-app/frontend/
           overwrite: true
 
-      # ================= RESTART =================
+      # ================= RESTART SERVICES =================
       - name: Restart services
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -72,7 +73,12 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           script: |
-            pm2 restart backend || pm2 start /var/www/butuhbantuan-app/services/backend/api --name backend
-            cd /var/www/butuhbantuan-app/apps/next-app
-            pm2 restart next-app || pm2 start "pnpm start" --name next-app
+            mkdir -p /var/www/butuhbantuan-app/frontend/.next
+            mv /var/www/butuhbantuan-app/frontend/static /var/www/butuhbantuan-app/frontend/.next/
+
+            pm2 restart backend || pm2 start /var/www/butuhbantuan-app/backend/api --name backend
+
+            pm2 delete next-app || true
+            pm2 start /var/www/butuhbantuan-app/frontend/standalone/server.js --name next-app
+
             pm2 save

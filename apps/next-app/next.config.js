@@ -13,14 +13,14 @@ module.exports = async (phase) => {
   reactStrictMode: true,
 };
 
-  if (phase === PHASE_DEVELOPMENT_SERVER || phase === PHASE_PRODUCTION_BUILD) {
-    const withSerwist = (await import("@serwist/next")).default({
-      swSrc: "app/service-worker/app-worker.ts",
-      swDest: "public/sw.js",
-      reloadOnOnline: true,
-    });
-    return withSerwist(nextConfig);
-  }
+if (phase === PHASE_DEVELOPMENT_SERVER || phase === PHASE_PRODUCTION_BUILD) {
+  const withSerwist = (await import("@serwist/next")).default({
+    swSrc: "app/service-worker/app-worker.ts",
+    swDest: "public/sw.js",
+    reloadOnOnline: true,
+  });
+  return withSerwist(nextConfig);
+}
 
   return nextConfig;
 };
