@@ -40,7 +40,7 @@ jobs:
       - name: Build Next app (standalone)
         run: pnpm build --filter=next-app
 
-      # ================= UPLOAD BACKEND =================
+      # ================= UPLOAD SERVICE BACKEND =================
       - name: Upload backend binary
         uses: appleboy/scp-action@v0.1.4
         with:
@@ -52,7 +52,7 @@ jobs:
           strip_components: 2
           overwrite: true
 
-      # ================= UPLOAD NEXT (STANDALONE ONLY) =================
+      # ================= UPLOAD FE NEXT (STANDALONE ONLY) =================
 
       - name: Upload Next standalone
         uses: appleboy/scp-action@v0.1.4
