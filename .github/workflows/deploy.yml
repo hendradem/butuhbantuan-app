@@ -38,9 +38,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build Next app (standalone)
-        run: pnpm build --filter=next-app
+        run: |
+          pnpm build --filter=next-app
+          cd apps/next-app
+          tar -czf next-build.tar.gz .next/standalone .next/static public
 
-      # ================= UPLOAD SERVICE BACKEND =================
+      # ================= UPLOAD BACKEND =================
       - name: Upload backend binary
         uses: appleboy/scp-action@v0.1.4
         with:
@@ -52,20 +55,16 @@ jobs:
           strip_components: 2
           overwrite: true
 
-      # ================= UPLOAD FE NEXT (STANDALONE ONLY) =================
-
-      - name: Upload Next standalone
+      # ================= UPLOAD NEXT TAR =================
+      - name: Upload Next build archive
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
-          source: |
-            apps/next-app/.next/standalone
-            apps/next-app/.next/static
-            apps/next-app/public
+          source: apps/next-app/next-build.tar.gz
           target: /var/www/butuhbantuan-app/frontend/
-          strip_components: 3
+          strip_components: 2
           overwrite: true
 
       # ================= RESTART SERVICES =================
@@ -76,12 +75,17 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           script: |
-            mkdir -p /var/www/butuhbantuan-app/frontend/.next
-            mv /var/www/butuhbantuan-app/frontend/static /var/www/butuhbantuan-app/frontend/.next/
+            cd /var/www/butuhbantuan-app/frontend
+
+            tar -xzf next-build.tar.gz
+            rm next-build.tar.gz
+
+            mkdir -p .next
+            mv static .next/
 
             pm2 restart backend || pm2 start /var/www/butuhbantuan-app/backend/api --name backend
 
             pm2 delete next-app || true
-            pm2 start /var/www/butuhbantuan-app/frontend/standalone/server.js --name next-app
+            pm2 start standalone/server.js --name next-app
 
             pm2 save
