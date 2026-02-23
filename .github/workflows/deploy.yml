@@ -78,7 +78,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           source: apps/next-app/next-build.tar.gz
-          target: /var/www/butuhbantuan-app/frontend/next-build.tar.gz
+          target: /var/www/butuhbantuan-app/
           overwrite: true
 
       # ================= RESTART =================
@@ -91,19 +91,25 @@ jobs:
           script: |
             set -e
 
+            APP_DIR=/var/www/butuhbantuan-app
+            FRONTEND_DIR=$APP_DIR/frontend
+            BACKEND_DIR=$APP_DIR/backend
+
             # Ensure backend executable
-            chmod +x /var/www/butuhbantuan-app/backend/api
+            chmod +x $BACKEND_DIR/api
 
-            # Extract frontend cleanly
-            cd /var/www/butuhbantuan-app/frontend
-            rm -rf .next
-            tar -xzf next-build.tar.gz
-            rm next-build.tar.gz
+            # Clean frontend
+            rm -rf $FRONTEND_DIR/.next
+            mkdir -p $FRONTEND_DIR
 
-            # Backend (zero downtime)
-            pm2 reload backend || pm2 start /var/www/butuhbantuan-app/backend/api --name backend
+            # Extract tar directly into frontend
+            tar -xzf $APP_DIR/next-build.tar.gz -C $FRONTEND_DIR
+            rm $APP_DIR/next-build.tar.gz
 
-            # Frontend (zero downtime)
-            pm2 reload next-app || pm2 start /var/www/butuhbantuan-app/frontend/.next/standalone/server.js --name next-app
+            # Backend
+            pm2 reload backend || pm2 start $BACKEND_DIR/api --name backend
+
+            # Frontend
+            pm2 reload next-app || pm2 start $FRONTEND_DIR/.next/standalone/server.js --name next-app
 
             pm2 save
