@@ -98,7 +98,7 @@ jobs:
           retention-days: 1
 
   # ────────────────────────────────────────────
-  # 3. Deploy both artifacts to VPSs
+  # 3. Deploy both artifacts to VPS
   # ────────────────────────────────────────────
   deploy:
     runs-on: ubuntu-latest
