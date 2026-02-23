@@ -6,7 +6,7 @@ on:
       - master
 
 env:
-  APP_DIR: /var/www/butuhbantuan-app
+  APP_DIR: /var/www/butuhbantuan-apps
 
 jobs:
   # ────────────────────────────────────────────
@@ -78,11 +78,15 @@ jobs:
       - name: Package standalone output
         run: |
           set -e
-          NEXT_DIR=apps/next-app/.next
+          APP=apps/next-app
+          NEXT_DIR=$APP/.next
 
-          # Copy static assets and public into the standalone bundle
+          # The standalone dir is self-contained EXCEPT for these two which
+          # must be copied in manually per Next.js docs:
+          #   - .next/static  → standalone/.next/static
+          #   - public/       → standalone/public
           cp -r $NEXT_DIR/static $NEXT_DIR/standalone/.next/static
-          [ -d apps/next-app/public ] && cp -r apps/next-app/public $NEXT_DIR/standalone/public || true
+          [ -d $APP/public ] && cp -r $APP/public $NEXT_DIR/standalone/public || true
 
           tar -czf next-build.tar.gz -C $NEXT_DIR/standalone .
           ls -lah next-build.tar.gz
@@ -114,8 +118,6 @@ jobs:
           name: frontend-build
           path: artifacts/frontend
 
-      # Upload to ~/deploy_tmp (home dir — always writable) then move via SSH.
-      # This avoids scp-action failing on permission-restricted /var/www paths.
       - name: Upload backend binary
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -148,16 +150,9 @@ jobs:
             BACKEND_DIR=${{ env.APP_DIR }}/backend
             FRONTEND_DIR=${{ env.APP_DIR }}/frontend
 
-            # Ensure target dirs exist.
-            # NOTE: On first run, your deploy user must own APP_DIR.
-            # Run this once on your VPS manually:
-            #   sudo mkdir -p /var/www/butuhbantuan-app
-            #   sudo chown -R butuhbantuan:butuhbantuan /var/www/butuhbantuan-app
             mkdir -p "$BACKEND_DIR" "$FRONTEND_DIR"
 
             # ── Backend ───────────────────────────────────────
-            # scp-action mirrors the source path under ~/deploy_tmp,
-            # so the binary lands at ~/deploy_tmp/artifacts/backend/api
             mv ~/deploy_tmp/artifacts/backend/api "$BACKEND_DIR/api"
             chmod +x "$BACKEND_DIR/api"
 
@@ -169,13 +164,24 @@ jobs:
             # ── Cleanup ───────────────────────────────────────
             rm -rf ~/deploy_tmp
 
-            # ── Restart via PM2 ───────────────────────────────
-            pm2 describe backend > /dev/null 2>&1 \
-              && pm2 restart backend \
-              || pm2 start "$BACKEND_DIR/api" --name backend --interpreter none
+            # ── Restart Backend ───────────────────────────────
+            # Delete stale PM2 process first to ensure --interpreter none
+            # is always applied correctly (PM2 caches the old config otherwise)
+            pm2 delete backend 2>/dev/null || true
+            pm2 start "$BACKEND_DIR/api" \
+              --name backend \
+              --interpreter none \
+              --restart-delay 3000 \
+              --max-restarts 5
 
-            pm2 describe next-app > /dev/null 2>&1 \
-              && pm2 restart next-app \
-              || pm2 start "$FRONTEND_DIR/server.js" --name next-app
+            # ── Restart Frontend ──────────────────────────────
+            # Delete stale PM2 process to pick up fresh server.js path
+            pm2 delete next-app 2>/dev/null || true
+            pm2 start "$FRONTEND_DIR/server.js" \
+              --name next-app \
+              --interpreter node \
+              --restart-delay 3000 \
+              --max-restarts 5 \
+              -e PORT=3000
 
             pm2 save
