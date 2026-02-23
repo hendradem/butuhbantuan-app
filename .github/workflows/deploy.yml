@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # ================= SERVICES - BACKEND =================
+      # ================= BACKEND BUILD =================
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -25,7 +25,7 @@ jobs:
           go mod tidy
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o api ./cmd/api
 
-      # ================= APPS - NEXT =================
+      # ================= FRONTEND BUILD =================
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -43,6 +43,17 @@ jobs:
           cd apps/next-app
           tar -czf next-build.tar.gz .next/standalone .next/static public
 
+      # ================= PREPARE VPS =================
+      - name: Prepare directories
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_PRIVATE_KEY }}
+          script: |
+            mkdir -p /var/www/butuhbantuan-app/backend
+            mkdir -p /var/www/butuhbantuan-app/frontend
+
       # ================= UPLOAD BACKEND =================
       - name: Upload backend binary
         uses: appleboy/scp-action@v0.1.4
@@ -51,11 +62,10 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           source: services/backend/api
-          target: /var/www/butuhbantuan-app/backend/
-          strip_components: 2
+          target: /var/www/butuhbantuan-app/backend/api
           overwrite: true
 
-      # ================= UPLOAD NEXT TAR =================
+      # ================= UPLOAD NEXT =================
       - name: Upload Next build archive
         uses: appleboy/scp-action@v0.1.4
         with:
@@ -64,10 +74,9 @@ jobs:
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           source: apps/next-app/next-build.tar.gz
           target: /var/www/butuhbantuan-app/frontend/
-          strip_components: 2
           overwrite: true
 
-      # ================= RESTART SERVICES =================
+      # ================= RESTART =================
       - name: Restart services
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -76,17 +85,13 @@ jobs:
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           script: |
             cd /var/www/butuhbantuan-app/frontend
-
             tar -xzf next-build.tar.gz
             rm next-build.tar.gz
 
-            # Pastikan .next ada (harusnya sudah ada dari tar)
-            ls -la
+            # Backend
+            pm2 reload backend || pm2 start /var/www/butuhbantuan-app/backend/api --name backend
 
-            pm2 delete backend || true
-            pm2 start /var/www/butuhbantuan-app/backend/api --name backend
-
-            pm2 delete next-app || true
-            pm2 start .next/standalone/server.js --name next-app
+            # Frontend
+            pm2 reload next-app || pm2 start .next/standalone/server.js --name next-app
 
             pm2 save
