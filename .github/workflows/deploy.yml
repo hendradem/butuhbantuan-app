@@ -26,7 +26,7 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
           go build -ldflags="-s -w" -o api ./cmd/api
 
-      # 4️⃣ Upload binary LANGSUNG ke folder VPS
+      # 4️⃣ Upload bin file to VPS
       - name: Upload binary
         uses: appleboy/scp-action@v0.1.4
         with:
