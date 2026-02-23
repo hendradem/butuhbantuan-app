@@ -56,10 +56,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           script: |
-            pm2 reload backend || pm2 start /var/www/butuhbantuan-app/backend/api \
-              --name backend \
-              --interpreter none \
-              --cwd /var/www/butuhbantuan-app/backend
+            pm2 reload backend || pm2 start /var/www/butuhbantuan-app/backend/api
 
             pm2 save
 
