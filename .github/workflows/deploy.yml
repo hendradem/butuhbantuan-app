@@ -10,25 +10,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ================= CHECKOUT =================
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      # 1️⃣ Checkout
+      - uses: actions/checkout@v4
 
-      # ================= SETUP GO =================
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      # 2️⃣ Setup Go
+      - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
 
-      # ================= BUILD =================
-      - name: Build Go Binary
+      # 3️⃣ Build binary
+      - name: Build Go
         run: |
           cd services/backend
           go mod tidy
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
           go build -ldflags="-s -w" -o api ./cmd/api
 
-      # ================= PREPARE VPS =================
+      # 4️⃣ Ensure directory exists
       - name: Prepare VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -38,19 +36,20 @@ jobs:
           script: |
             mkdir -p /var/www/butuhbantuan-app/backend
 
-      # ================= UPLOAD BINARY =================
-      - name: Upload Binary
+      # 5️⃣ Upload ONLY the binary (no folder structure)
+      - name: Upload binary
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           source: services/backend/api
-          target: /var/www/butuhbantuan-app/backend/
+          target: /var/www/butuhbantuan-app/backend/api
+          strip_components: 2
           overwrite: true
 
-      # ================= RESTART =================
-      - name: Restart Backend
+      # 6️⃣ Restart service
+      - name: Restart backend
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -63,3 +62,5 @@ jobs:
               --cwd /var/www/butuhbantuan-app/backend
 
             pm2 save
+
+            pm2 startup
