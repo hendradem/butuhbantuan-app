@@ -21,9 +21,11 @@ jobs:
 
       - name: Build Go binary
         run: |
+          set -e
           cd services/backend
           go mod tidy
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o api ./cmd/api
+          ls -lah api
 
       # ================= FRONTEND BUILD =================
       - name: Setup Node
@@ -39,9 +41,12 @@ jobs:
 
       - name: Build Next app (standalone)
         run: |
-          pnpm build --filter=next-app
+          set -e
+          pnpm --filter next-app build
           cd apps/next-app
-          tar -czf next-build.tar.gz .next/standalone .next/static public
+          ls -lah
+          tar -czf next-build.tar.gz .next public
+          ls -lah next-build.tar.gz
 
       # ================= PREPARE VPS =================
       - name: Prepare directories
@@ -73,7 +78,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           source: apps/next-app/next-build.tar.gz
-          target: /var/www/butuhbantuan-app/frontend/
+          target: /var/www/butuhbantuan-app/frontend/next-build.tar.gz
           overwrite: true
 
       # ================= RESTART =================
@@ -84,14 +89,21 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           script: |
+            set -e
+
+            # Ensure backend executable
+            chmod +x /var/www/butuhbantuan-app/backend/api
+
+            # Extract frontend cleanly
             cd /var/www/butuhbantuan-app/frontend
+            rm -rf .next
             tar -xzf next-build.tar.gz
             rm next-build.tar.gz
 
-            # Backend
+            # Backend (zero downtime)
             pm2 reload backend || pm2 start /var/www/butuhbantuan-app/backend/api --name backend
 
-            # Frontend
-            pm2 reload next-app || pm2 start .next/standalone/server.js --name next-app
+            # Frontend (zero downtime)
+            pm2 reload next-app || pm2 start /var/www/butuhbantuan-app/frontend/.next/standalone/server.js --name next-app
 
             pm2 save
