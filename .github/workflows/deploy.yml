@@ -75,16 +75,13 @@ jobs:
       - name: Build Next app (standalone)
         run: pnpm --filter next-app build
 
-      # next/standalone is self-contained but needs static assets copied in.
-      # See: https://nextjs.org/docs/app/api-reference/next-config-js/output#automatically-copying-traced-files
       - name: Package standalone output
         run: |
           set -e
           NEXT_DIR=apps/next-app/.next
 
-          # Copy static assets into the standalone bundle so it is self-contained
+          # Copy static assets and public into the standalone bundle
           cp -r $NEXT_DIR/static $NEXT_DIR/standalone/.next/static
-          # Copy public folder if it exists
           [ -d apps/next-app/public ] && cp -r apps/next-app/public $NEXT_DIR/standalone/public || true
 
           tar -czf next-build.tar.gz -C $NEXT_DIR/standalone .
@@ -117,32 +114,29 @@ jobs:
           name: frontend-build
           path: artifacts/frontend
 
-      # Upload backend binary
-      - name: Upload backend to VPS
+      # Upload to ~/deploy_tmp (home dir — always writable) then move via SSH.
+      # This avoids scp-action failing on permission-restricted /var/www paths.
+      - name: Upload backend binary
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
-          source: artifacts/backend/api
-          target: ${{ env.APP_DIR }}/backend/
-          strip_components: 2 # strips "artifacts/backend/" prefix
+          source: "artifacts/backend/api"
+          target: "~/deploy_tmp/"
           overwrite: true
 
-      # Upload Next.js archive
-      - name: Upload frontend archive to VPS
+      - name: Upload frontend archive
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
-          source: artifacts/frontend/next-build.tar.gz
-          target: ${{ env.APP_DIR }}/
-          strip_components: 2 # strips "artifacts/frontend/" prefix
+          source: "artifacts/frontend/next-build.tar.gz"
+          target: "~/deploy_tmp/"
           overwrite: true
 
-      # Extract archive and restart services — single SSH connection
-      - name: Extract & restart services
+      - name: Install & restart services
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -154,25 +148,34 @@ jobs:
             BACKEND_DIR=${{ env.APP_DIR }}/backend
             FRONTEND_DIR=${{ env.APP_DIR }}/frontend
 
-            # ── Prepare dirs ──────────────────────────────────
+            # Ensure target dirs exist.
+            # NOTE: On first run, your deploy user must own APP_DIR.
+            # Run this once on your VPS manually:
+            #   sudo mkdir -p /var/www/butuhbantuan-apps
+            #   sudo chown -R <your-ssh-user>:<your-ssh-user> /var/www/butuhbantuan-apps
             mkdir -p "$BACKEND_DIR" "$FRONTEND_DIR"
 
             # ── Backend ───────────────────────────────────────
+            # scp-action mirrors the source path under ~/deploy_tmp,
+            # so the binary lands at ~/deploy_tmp/artifacts/backend/api
+            mv ~/deploy_tmp/artifacts/backend/api "$BACKEND_DIR/api"
             chmod +x "$BACKEND_DIR/api"
 
             # ── Frontend ──────────────────────────────────────
-            # Wipe old deployment, then extract fresh standalone bundle
             rm -rf "$FRONTEND_DIR"
             mkdir -p "$FRONTEND_DIR"
-            tar -xzf "${{ env.APP_DIR }}/next-build.tar.gz" -C "$FRONTEND_DIR"
-            rm "${{ env.APP_DIR }}/next-build.tar.gz"
+            tar -xzf ~/deploy_tmp/artifacts/frontend/next-build.tar.gz -C "$FRONTEND_DIR"
+
+            # ── Cleanup ───────────────────────────────────────
+            rm -rf ~/deploy_tmp
 
             # ── Restart via PM2 ───────────────────────────────
-            # startOrReload: starts if not running, reloads (zero-downtime) if running
-            pm2 startOrReload "$BACKEND_DIR/api" --name backend  --interpreter none || \
-              pm2 restart backend
+            pm2 describe backend > /dev/null 2>&1 \
+              && pm2 restart backend \
+              || pm2 start "$BACKEND_DIR/api" --name backend --interpreter none
 
-            pm2 startOrReload "$FRONTEND_DIR/server.js" --name next-app || \
-              pm2 restart next-app
+            pm2 describe next-app > /dev/null 2>&1 \
+              && pm2 restart next-app \
+              || pm2 start "$FRONTEND_DIR/server.js" --name next-app
 
             pm2 save
