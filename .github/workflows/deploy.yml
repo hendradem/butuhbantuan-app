@@ -154,7 +154,7 @@ jobs:
 
             # ── Backend ───────────────────────────────────────
             mv ~/deploy_tmp/artifacts/backend/api "$BACKEND_DIR/api"
-            chmod +x "$BACKEND_DIR/api"
+            # chmod +x "$BACKEND_DIR/api"
 
             # ── Frontend ──────────────────────────────────────
             rm -rf "$FRONTEND_DIR"
