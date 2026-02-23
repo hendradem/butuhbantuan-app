@@ -1,144 +1,56 @@
-name: Deploy Production
+name: Deploy Backend Production
 
 on:
   push:
     branches:
       - master
 
-env:
-  APP_DIR: /var/www/butuhbantuan-apps
-
 jobs:
-  # ────────────────────────────────────────────
-  # 1. Build Go binary
-  # ────────────────────────────────────────────
-  build-backend:
+  deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repo
+      # ================= CHECKOUT =================
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ================= SETUP GO =================
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-          cache-dependency-path: services/backend/go.sum
 
-      - name: Build Go binary
+      # ================= BUILD =================
+      - name: Build Go Binary
         run: |
-          set -e
           cd services/backend
           go mod tidy
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o api ./cmd/api
-          ls -lah api
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+          go build -ldflags="-s -w" -o api ./cmd/api
 
-      - name: Upload backend artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-binary
-          path: services/backend/api
-          retention-days: 1
-
-  # ────────────────────────────────────────────
-  # 2. Build Next.js standalone bundle
-  # ────────────────────────────────────────────
-  build-frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          run_install: false
-
-      - name: Get pnpm store path
-        id: pnpm-cache
-        run: echo "dir=$(pnpm store path)" >> $GITHUB_OUTPUT
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-cache.outputs.dir }}
-          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: pnpm-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build Next app (standalone)
-        run: pnpm --filter next-app build
-
-      - name: Package standalone output
-        run: |
-          set -e
-          APP=apps/next-app
-          NEXT_DIR=$APP/.next
-
-          # The standalone dir is self-contained EXCEPT for these two which
-          # must be copied in manually per Next.js docs:
-          #   - .next/static  → standalone/.next/static
-          #   - public/       → standalone/public
-          cp -r $NEXT_DIR/static $NEXT_DIR/standalone/.next/static
-          [ -d $APP/public ] && cp -r $APP/public $NEXT_DIR/standalone/public || true
-
-          tar -czf next-build.tar.gz -C $NEXT_DIR/standalone .
-          ls -lah next-build.tar.gz
-
-      - name: Upload frontend artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-build
-          path: next-build.tar.gz
-          retention-days: 1
-
-  # ────────────────────────────────────────────
-  # 3. Deploy both artifacts to VPS
-  # ────────────────────────────────────────────
-  deploy:
-    runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend]
-
-    steps:
-      - name: Download backend binary
-        uses: actions/download-artifact@v4
-        with:
-          name: backend-binary
-          path: artifacts/backend
-
-      - name: Download frontend build
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-build
-          path: artifacts/frontend
-
-      - name: Upload backend binary
-        uses: appleboy/scp-action@v0.1.7
+      # ================= PREPARE VPS =================
+      - name: Prepare VPS
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
-          source: "artifacts/backend/api"
-          target: "~/deploy_tmp/"
-          overwrite: true
+          script: |
+            mkdir -p /var/www/butuhbantuan-app/backend
 
-      - name: Upload frontend archive
-        uses: appleboy/scp-action@v0.1.7
+      # ================= UPLOAD BINARY =================
+      - name: Upload Binary
+        uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
-          source: "artifacts/frontend/next-build.tar.gz"
-          target: "~/deploy_tmp/"
+          source: services/backend/api
+          target: /var/www/butuhbantuan-app/backend/
           overwrite: true
 
-      - name: Install & restart services
+      # ================= RESTART =================
+      - name: Restart Backend
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -146,42 +58,10 @@ jobs:
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           script: |
             set -e
+            APP_DIR=/var/www/butuhbantuan-app/backend
 
-            BACKEND_DIR=${{ env.APP_DIR }}/backend
-            FRONTEND_DIR=${{ env.APP_DIR }}/frontend
+            chmod +x $APP_DIR/api
 
-            mkdir -p "$BACKEND_DIR" "$FRONTEND_DIR"
-
-            # ── Backend ───────────────────────────────────────
-            mv ~/deploy_tmp/artifacts/backend/api "$BACKEND_DIR/api"
-            # chmod +x "$BACKEND_DIR/api"
-
-            # ── Frontend ──────────────────────────────────────
-            rm -rf "$FRONTEND_DIR"
-            mkdir -p "$FRONTEND_DIR"
-            tar -xzf ~/deploy_tmp/artifacts/frontend/next-build.tar.gz -C "$FRONTEND_DIR"
-
-            # ── Cleanup ───────────────────────────────────────
-            rm -rf ~/deploy_tmp
-
-            # ── Restart Backend ───────────────────────────────
-            # Delete stale PM2 process first to ensure --interpreter none
-            # is always applied correctly (PM2 caches the old config otherwise)
-            pm2 delete backend 2>/dev/null || true
-            pm2 start "$BACKEND_DIR/api" \
-              --name backend \
-              --interpreter none \
-              --restart-delay 3000 \
-              --max-restarts 5
-
-            # ── Restart Frontend ──────────────────────────────
-            # Delete stale PM2 process to pick up fresh server.js path
-            pm2 delete next-app 2>/dev/null || true
-            pm2 start "$FRONTEND_DIR/server.js" \
-              --name next-app \
-              --interpreter node \
-              --restart-delay 3000 \
-              --max-restarts 5 \
-              -e PORT=3000
+            pm2 reload backend || pm2 start $APP_DIR/api --name backend --interpreter none
 
             pm2 save
