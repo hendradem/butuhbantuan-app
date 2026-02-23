@@ -59,5 +59,3 @@ jobs:
             pm2 reload backend || pm2 start /var/www/butuhbantuan-app/backend/api
 
             pm2 save
-
-            pm2 startup
