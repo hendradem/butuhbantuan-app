@@ -152,7 +152,7 @@ jobs:
             # NOTE: On first run, your deploy user must own APP_DIR.
             # Run this once on your VPS manually:
             #   sudo mkdir -p /var/www/butuhbantuan-apps
-            #   sudo chown -R <your-ssh-user>:<your-ssh-user> /var/www/butuhbantuan-apps
+            #   sudo chown -R butuhbantuan:butuhbantuan /var/www/butuhbantuan-apps
             mkdir -p "$BACKEND_DIR" "$FRONTEND_DIR"
 
             # ── Backend ───────────────────────────────────────
