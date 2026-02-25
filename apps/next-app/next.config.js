@@ -10,9 +10,6 @@ module.exports = async (phase) => {
   output: "export",
   images: {
     domains: ["res.cloudinary.com", "bprugm.co.id"],
-  }, 
-  experimental: {
-    runtime: "edge",
   },
   reactStrictMode: true,
 };
