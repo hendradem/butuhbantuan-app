@@ -1,0 +1,4 @@
+[build]
+  base    = "apps/next-app"
+  command = "next build"
+  publish = "apps/next-app/.next"

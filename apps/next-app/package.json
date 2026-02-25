@@ -13,19 +13,9 @@
     "lint": "next lint --max-warnings 0",
     "check-types": "tsc --noEmit",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv env.d.ts",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "deploy": "opennextjs-cloudflare build && wrangler deploy .open-next/worker.js",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview"
   },
-  "cloudflare": {
-		"label": "Butuhbantuan Next App",
-		"products": [
-			"Workers"
-		],
-		"categories": [],
-		"preview_icon_url": "https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/05eee9e0-2c04-48fd-11bf-84e65f839000/public",
-		"preview_image_url": "https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/4e913a56-fd99-4372-0586-9f1364173100/preview",
-		"publish": true
-	},
   "dependencies": { 
     "@headlessui/react": "^1.7.18",
     "@iconify/react": "^5.2.0",
@@ -79,7 +69,6 @@
     "zustand": "^4.3.8"
   },
   "devDependencies": {
-    "@opennextjs/cloudflare": "1.17.1",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
@@ -97,7 +86,6 @@
     "jest-environment-jsdom": "^30.0.5",
     "jsdom": "^26.1.0",
     "serwist": "^9.0.14",
-    "vite-tsconfig-paths": "^5.1.4",
-    "wrangler": "^4.68.1"
+    "vite-tsconfig-paths": "^5.1.4"
   }
 }
