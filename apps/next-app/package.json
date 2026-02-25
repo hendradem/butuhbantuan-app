@@ -26,8 +26,8 @@
 		"preview_image_url": "https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/4e913a56-fd99-4372-0586-9f1364173100/preview",
 		"publish": true
 	},
-  "dependencies": {
-    "@opennextjs/cloudflare": "1.14.0",
+  "dependencies": { 
+    "@opennextjs/cloudflare": "1.13.2",
     "@headlessui/react": "^1.7.18",
     "@iconify/react": "^5.2.0",
     "@mapbox/mapbox-gl-directions": "^4.3.1",
