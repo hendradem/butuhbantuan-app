@@ -1,6 +1,4 @@
 name = "butuhbantuan-app"
 compatibility_date = "2024-01-01"
-
-main = ".open-next/worker.js"
-
-assets = { directory = ".open-next/assets", binding = "ASSETS" }
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".vercel/output/static"
