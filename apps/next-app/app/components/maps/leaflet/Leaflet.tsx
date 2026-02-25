@@ -134,12 +134,12 @@ export default function LeafletMaps() {
           }}
         >
           <TileLayer
-            url="https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png"
+            // url="https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png"
             // url="https://tileserver.memomaps.de/tilegen/{z}/{x}/{y}.png"
             // url="https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png"
             // url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
             // url="https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}{r}.{ext}"
-            // url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
             attribution='&copy; <a href="butuhbantuan.com">Butuhbantuan</a>'
           />
 
