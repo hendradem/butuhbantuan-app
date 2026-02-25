@@ -15,6 +15,11 @@
   "license": "ISC",
   "devDependencies": {
     "turbo": "^2.8.6"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild": "^0.21.0"
+    }
   }
 }
 
