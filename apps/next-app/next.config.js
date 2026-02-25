@@ -3,11 +3,12 @@ const {
   PHASE_PRODUCTION_BUILD,
 } = require("next/constants");
 
+const { initOpenNextCloudflareForDev } = require("@opennextjs/cloudflare");
+initOpenNextCloudflareForDev();
+
 /** @type {(phase: string, defaultConfig: import("next").NextConfig) => Promise<import("next").NextConfig>} */
 module.exports = async (phase) => {
-  /** @type {import("next").NextConfig} */
   const nextConfig = {
-    // output: "export",
     experimental: {
       runtime: "edge",
     },
@@ -28,7 +29,3 @@ module.exports = async (phase) => {
 
   return nextConfig;
 };
-
-// added by create cloudflare to enable calling `getCloudflareContext()` in `next dev`
-import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
-initOpenNextCloudflareForDev();
