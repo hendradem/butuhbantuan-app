@@ -7,7 +7,7 @@ const {
 module.exports = async (phase) => {
   /** @type {import("next").NextConfig} */
   const nextConfig = {
-  output: "export",
+  // output: "export",
   images: {
     domains: ["res.cloudinary.com", "bprugm.co.id"],
   },
