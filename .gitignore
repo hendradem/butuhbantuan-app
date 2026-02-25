@@ -11,6 +11,7 @@ apps/next-app/.next
 .turbo
 node_modules
 dist
+out
 .output
 .nuxt
 .cache
