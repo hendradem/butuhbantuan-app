@@ -19,17 +19,31 @@ jobs:
           go-version: "1.22"
 
       # =========================
-      # BUILD DI CI (MONOREPO)
+      # BUILD DI CI
       # =========================
       - name: Build Go Binary
         run: |
           cd services/backend
           go mod tidy
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-          go build -ldflags="-s -w" -o go-service.bin ./cmd/api
+          go build -ldflags="-s -w" -o go-api-service ./cmd/api
 
       # =========================
-      # UPLOAD HANYA FILE BINARY
+      # CLEAN TARGET DIRECTORY
+      # =========================
+      - name: Clean VPS Backend Folder
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_PRIVATE_KEY }}
+          script: |
+            sudo mkdir -p /var/www/butuhbantuan-app/backend
+            sudo rm -rf /var/www/butuhbantuan-app/backend/*
+            sudo chown -R butuhbantuan:butuhbantuan /var/www/butuhbantuan-app
+
+      # =========================
+      # UPLOAD FILE ONLY (NO NESTED FOLDER)
       # =========================
       - name: Upload Binary to VPS
         uses: appleboy/scp-action@v0.1.4
@@ -37,9 +51,9 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
-          source: services/backend/go-service.bin
+          source: services/backend/go-api-service
           target: /var/www/butuhbantuan-app/backend/
-          overwrite: true
+          strip_components: 2
 
       # =========================
       # SET PERMISSION + RESTART
@@ -51,7 +65,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           script: |
-            sudo chown butuhbantuan:butuhbantuan /var/www/butuhbantuan-app/backend/go-service.bin
-            sudo chmod 755 /var/www/butuhbantuan-app/backend/go-service.bin
+            sudo chmod 755 /var/www/butuhbantuan-app/backend/go-api-service
+            sudo chown butuhbantuan:butuhbantuan /var/www/butuhbantuan-app/backend/go-api-service
             sudo systemctl restart backend
             sudo systemctl status backend --no-pager
