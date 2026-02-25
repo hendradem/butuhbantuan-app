@@ -3,6 +3,7 @@ const {
   PHASE_PRODUCTION_BUILD,
 } = require("next/constants");
 
+// Init OpenNextCloudflare
 const { initOpenNextCloudflareForDev } = require("@opennextjs/cloudflare");
 initOpenNextCloudflareForDev();
 
