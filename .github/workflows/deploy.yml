@@ -10,41 +10,48 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
           go-version: "1.22"
 
-      - name: Build Go binary
+      # =========================
+      # BUILD DI CI (MONOREPO)
+      # =========================
+      - name: Build Go Binary
         run: |
           cd services/backend
           go mod tidy
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-          go build -ldflags="-s -w" -o api ./cmd/api
+          go build -ldflags="-s -w" -o go-service.bin ./cmd/api
 
-      # Upload as temporary name
-      - name: Upload binary
+      # =========================
+      # UPLOAD HANYA FILE BINARY
+      # =========================
+      - name: Upload Binary to VPS
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
-          source: services/backend/api
+          source: services/backend/go-service.bin
           target: /var/www/butuhbantuan-app/backend/
           overwrite: true
 
-      # Force replace safely
-      - name: Replace & Restart
+      # =========================
+      # SET PERMISSION + RESTART
+      # =========================
+      - name: Restart Backend Service
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           script: |
-            sudo rm -rf /var/www/butuhbantuan-app/backend/api
-            sudo mv /var/www/butuhbantuan-app/backend/services/backend/api /var/www/butuhbantuan-app/backend/api 2>/dev/null || true
-            sudo chmod 755 /var/www/butuhbantuan-app/backend/api
-            sudo chown butuhbantuan:butuhbantuan /var/www/butuhbantuan-app/backend/api
+            sudo chown butuhbantuan:butuhbantuan /var/www/butuhbantuan-app/backend/go-service.bin
+            sudo chmod 755 /var/www/butuhbantuan-app/backend/go-service.bin
             sudo systemctl restart backend
             sudo systemctl status backend --no-pager
