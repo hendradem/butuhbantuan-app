@@ -5,6 +5,17 @@ on:
     branches:
       - master
 
+  workflow_dispatch:
+    inputs:
+      run_seed:
+        description: "Run database seeder?"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -19,7 +30,7 @@ jobs:
           go-version: "1.22"
 
       # =========================
-      # BUILD DI CI
+      # BUILD IN CI
       # =========================
       - name: Build Go Binary
         run: |
@@ -43,7 +54,7 @@ jobs:
             sudo chown -R butuhbantuan:butuhbantuan /var/www/butuhbantuan-app
 
       # =========================
-      # UPLOAD FILE ONLY (NO NESTED FOLDER)
+      # UPLOAD BINARY
       # =========================
       - name: Upload Binary to VPS
         uses: appleboy/scp-action@v0.1.4
@@ -56,9 +67,9 @@ jobs:
           strip_components: 2
 
       # =========================
-      # SET PERMISSION + RESTART
+      # PERMISSION + OPTIONAL SEED + RESTART
       # =========================
-      - name: Restart Backend Service
+      - name: Restart Backend Service (and optionally seed)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -67,5 +78,17 @@ jobs:
           script: |
             sudo chmod 755 /var/www/butuhbantuan-app/backend/go-api-service
             sudo chown butuhbantuan:butuhbantuan /var/www/butuhbantuan-app/backend/go-api-service
-            sudo systemctl restart backend
+
+            # Stop service before any operation
+            sudo systemctl stop backend
+
+            # Run seeder ONLY if manually triggered
+            if [ "${{ github.event.inputs.run_seed }}" = "true" ]; then
+              echo "🔧 Running Seeder..."
+              /var/www/butuhbantuan-app/backend/go-api-service --seed
+              echo "✅ Seeder completed"
+            fi
+
+            # Restart backend
+            sudo systemctl start backend
             sudo systemctl status backend --no-pager

@@ -8,7 +8,8 @@
       "webworker"
     ],
     "types": [
-      "@serwist/next/typings", "jest"
+      "@serwist/next/typings",
+      "jest"
     ],
     "allowSyntheticDefaultImports": true,
     "allowJs": true,
@@ -22,14 +23,16 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "incremental": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "plugins": [
       {
         "name": "next"
       }
     ],
     "paths": {
-      "@/*": ["./app/*"], 
+      "@/*": [
+        "./app/*"
+      ]
     }
   },
   "include": [
@@ -37,8 +40,10 @@
     "index.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts"
-, "next.config.js"  ],
+    ".next/types/**/*.ts",
+    "next.config.js",
+    ".next/dev/types/**/*.ts"
+  ],
   "exclude": [
     "node_modules"
   ]
