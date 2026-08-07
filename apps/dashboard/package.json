@@ -1,0 +1,30 @@
+{
+  "name": "@butuhbantuan/dashboard",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev --port 3001",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "lint": "eslint .",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@butuhbantuan/api-client": "workspace:*",
+    "@butuhbantuan/types": "workspace:*",
+    "@butuhbantuan/ui": "workspace:*",
+    "@butuhbantuan/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "@butuhbantuan/config": "workspace:*",
+    "@butuhbantuan/design-tokens": "workspace:*",
+    "@nuxt/eslint": "^1.17.0",
+    "@nuxtjs/tailwindcss": "^6.14.0",
+    "nuxt": "^3.17.5",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.8.3",
+    "vue": "^3.5.17",
+    "vue-router": "^4.5.1"
+  }
+}

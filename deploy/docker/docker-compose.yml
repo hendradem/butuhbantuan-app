@@ -1,0 +1,34 @@
+services:
+  api:
+    build:
+      context: ../../apps/api
+      dockerfile: ../../deploy/docker/Dockerfile.api
+    ports:
+      - "8080:8080"
+    env_file:
+      - ../../apps/api/.env
+    restart: unless-stopped
+
+  web-app:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.web-app
+    ports:
+      - "3000:3000"
+    env_file:
+      - ../../apps/web-app/.env
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.dashboard
+    ports:
+      - "3001:3001"
+    env_file:
+      - ../../apps/dashboard/.env
+    depends_on:
+      - api
+    restart: unless-stopped

@@ -1,0 +1,15 @@
+[Unit]
+Description=ButuhBantuan Web App (Nuxt)
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/opt/butuhbantuan/web-app
+ExecStart=/usr/bin/node .output/server/index.mjs
+EnvironmentFile=/opt/butuhbantuan/web-app/.env
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
