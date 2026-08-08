@@ -1,0 +1,7 @@
+[
+  {"id": "1", "name": "Kabupaten Sleman", "regency_id": "3404", "regency": "Kabupaten Sleman", "province": "Daerah Istimewa Yogyakarta", "latitude": -7.6893463, "longitude": 110.2164617},
+  {"id": "2", "name": "Kabupaten Bantul", "regency_id": "3402", "regency": "Kabupaten Bantul", "province": "Daerah Istimewa Yogyakarta", "latitude": -7.8978176, "longitude": 110.1979432},
+  {"id": "3", "name": "Kabupaten Kulon Progo", "regency_id": "3401", "regency": "Kabupaten Kulon Progo", "province": "Daerah Istimewa Yogyakarta", "latitude": -7.8121219, "longitude": 109.9793257},
+  {"id": "4", "name": "Kabupaten Gunungkidul", "regency_id": "3403", "regency": "Kabupaten Gunungkidul", "province": "Daerah Istimewa Yogyakarta", "latitude": -7.9920367, "longitude": 109.9579521},
+  {"id": "5", "name": "Kota Yogyakarta", "regency_id": "3471", "regency": "Kota Yogyakarta", "province": "Daerah Istimewa Yogyakarta", "latitude": -7.8031634, "longitude": 110.3336451}
+]

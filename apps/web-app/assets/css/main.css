@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #fff;
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+.leaflet-routing-container {
+  display: none !important;
+}
+
+@layer base {
+  *:focus {
+    @apply outline-none ring-0;
+  }
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer layout {
+  .default-layout {
+    @apply min-h-screen max-w-md mx-auto flex flex-col;
+  }
+}
+
+@layer components {
+  .badge {
+    @apply bg-white text-gray-800 border border-gray-100 rounded-full text-xs font-medium p-[2px] px-2;
+  }
+  .badge-icon {
+    @apply flex items-center;
+  }
+  .searchbox {
+    @apply bg-gray-100 border-0 text-gray-900 text-sm rounded-xl focus:border-0 focus:outline-none block w-full px-10 py-3 placeholder-gray-400 pr-[45px] truncate;
+  }
+  .btn-base {
+    @apply text-sm font-medium rounded-lg px-5 py-2.5 me-2 mb-2 focus:outline-none;
+  }
+  .btn-whatsapp {
+    @apply btn-base flex items-center w-full justify-center bg-green-600 text-white transition hover:bg-green-700;
+  }
+  .btn-call {
+    @apply btn-base flex w-full items-center justify-center bg-white border border-gray-300 text-neutral-600 hover:bg-gray-50 transition;
+  }
+  .btn-dark {
+    @apply btn-base text-white bg-gray-800 hover:bg-gray-900 w-full justify-center flex items-center;
+  }
+  .bottom-menu-shadow {
+    box-shadow: rgba(0, 0, 0, 0.25) 0px 14px 28px, rgba(0, 0, 0, 0.22) 0px 10px 10px;
+  }
+  .bottom-sheet-shadow {
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.15);
+  }
+}
+
+/* Map markers */
+.current-location-marker {
+  background-image: url('/assets/icons/current-location-blue.svg');
+  padding: 10px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.ambulance-marker {
+  background-image: url('/assets/icons/ambulance-logo.svg');
+  background-color: #1e1e1e;
+  box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+  border: 2px solid #fff;
+  background-size: 12px 12px;
+  background-position: center;
+  background-repeat: no-repeat;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.fire-fighter-marker {
+  background-image: url('/assets/icons/fire-fighter-logo.svg');
+  background-color: #ef4444;
+  box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+  border: 2px solid #fff;
+  background-size: 12px 12px;
+  background-position: center;
+  background-repeat: no-repeat;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.hospital-marker {
+  background-image: url('/assets/icons/hospital-logo.svg');
+  background-color: #8b5cf6;
+  box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+  border: 2px solid #fff;
+  background-size: 12px 12px;
+  background-position: center;
+  background-repeat: no-repeat;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.sar-marker {
+  background-image: url('/assets/icons/sar-logo.svg');
+  background-color: #f97316;
+  box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+  border: 2px solid #fff;
+  background-size: 12px 12px;
+  background-position: center;
+  background-repeat: no-repeat;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* Scrollbar */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: #ffffff #ffffff;
+}
+*::-webkit-scrollbar { width: 2px; }
+*::-webkit-scrollbar-track { background: #ffffff; }
+*::-webkit-scrollbar-thumb {
+  background-color: #ffffff;
+  border-radius: 10px;
+}
+
+/* Sheet slide transitions */
+.sheet-enter-active,
+.sheet-leave-active {
+  transition: transform 0.3s ease-out;
+}
+.sheet-enter-from,
+.sheet-leave-to {
+  transform: translateY(100%);
+}
+
+/* Overlay fade transitions */
+.overlay-enter-active,
+.overlay-leave-active {
+  transition: opacity 0.2s ease;
+}
+.overlay-enter-from,
+.overlay-leave-to {
+  opacity: 0;
+}

@@ -1,193 +1,171 @@
 <script setup lang="ts">
-import type { Emergency } from "@butuhbantuan/types";
-import { timeAgo } from "@butuhbantuan/utils";
+import { Icon } from "@iconify/vue";
 
-const stats = [
-  { label: "Total Laporan",    value: 128,  trend: "up"      as const, trendLabel: "+12 minggu ini",  icon: "📋" },
-  { label: "Sedang Ditangani", value: 7,    trend: "neutral" as const, trendLabel: "sama seperti kemarin", icon: "🔄" },
-  { label: "Selesai Hari Ini", value: 24,   trend: "up"      as const, trendLabel: "+4 dari kemarin", icon: "✅" },
-  { label: "Responder Aktif",  value: 15,   trend: "down"    as const, trendLabel: "-2 dari normal",  icon: "👷" },
-];
+definePageMeta({ title: "Overview" });
 
-const recentEmergencies: Emergency[] = [
+const { get } = useApi();
+
+const { data: emergencies } = await useAsyncData("emergencies-all", () =>
+  get<{ data: any[] }>("/api/v1/emergency/")
+);
+const { data: types } = await useAsyncData("types-all", () =>
+  get<{ data: any[] }>("/api/v1/emergency/type")
+);
+const { data: regions } = await useAsyncData("regions-all", () =>
+  get<{ data: any[] }>("/api/v1/service/available-region")
+);
+
+const stats = computed(() => [
   {
-    id: "1",
-    title: "Kecelakaan di Jl. Sudirman",
-    description: "Tabrakan dua kendaraan.",
-    latitude: -6.2088,
-    longitude: 106.8456,
-    status: "in_progress",
-    category: "accident",
-    reportedBy: "Budi S.",
-    createdAt: new Date(Date.now() - 1000 * 60 * 8).toISOString(),
-    updatedAt: new Date().toISOString(),
+    label: "Total Layanan",
+    value: emergencies.value?.data?.length ?? 0,
+    sub: "layanan terdaftar",
+    icon: "lucide:shield-check",
+    color: "text-primary-600 bg-primary-50",
+    trend: null,
   },
   {
-    id: "2",
-    title: "Kebakaran Rumah Warga",
-    description: "Api menjalar ke atap.",
-    latitude: -6.1944,
-    longitude: 106.8229,
-    status: "pending",
-    category: "fire",
-    reportedBy: "Sari W.",
-    createdAt: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
-    updatedAt: new Date().toISOString(),
+    label: "Jenis Layanan",
+    value: types.value?.data?.length ?? 0,
+    sub: "kategori aktif",
+    icon: "lucide:tag",
+    color: "text-violet-600 bg-violet-50",
+    trend: null,
   },
   {
-    id: "3",
-    title: "Warga Pingsan di Pasar",
-    description: "Lansia butuh penanganan medis.",
-    latitude: -6.2146,
-    longitude: 106.8451,
-    status: "resolved",
-    category: "medical",
-    reportedBy: "Andi P.",
-    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    updatedAt: new Date().toISOString(),
+    label: "Wilayah Tercakup",
+    value: regions.value?.data?.length ?? 0,
+    sub: "kota/kabupaten",
+    icon: "lucide:map-pin",
+    color: "text-emerald-600 bg-emerald-50",
+    trend: null,
   },
-];
+  {
+    label: "Dispatcher",
+    value: emergencies.value?.data?.filter((e: any) => e.is_dispatcher).length ?? 0,
+    sub: "pusat panggilan",
+    icon: "lucide:phone-call",
+    color: "text-orange-600 bg-orange-50",
+    trend: null,
+  },
+]);
 
-const statusVariant = {
-  pending:     "warning",
-  in_progress: "primary",
-  resolved:    "success",
-  cancelled:   "neutral",
-} as const;
+const recentEmergencies = computed(() => (emergencies.value?.data ?? []).slice(0, 8));
 
-const statusLabel = {
-  pending:     "Menunggu",
-  in_progress: "Ditangani",
-  resolved:    "Selesai",
-  cancelled:   "Dibatalkan",
-} as const;
+const typeBreakdown = computed(() =>
+  (types.value?.data ?? []).map((t: any) => ({
+    ...t,
+    count: (emergencies.value?.data ?? []).filter((e: any) => e.emergency_type?.name === t.name).length,
+  }))
+);
 
-const confirmModalOpen = ref(false);
-const selectedEmergency = ref<Emergency | null>(null);
-
-function openConfirm(emergency: Emergency) {
-  selectedEmergency.value = emergency;
-  confirmModalOpen.value = true;
+function typeBadgeColor(name: string) {
+  const m: Record<string, string> = {
+    Ambulance: "text-red-700 bg-red-50",
+    Damkar: "text-orange-700 bg-orange-50",
+    "Rumah Sakit": "text-blue-700 bg-blue-50",
+    SAR: "text-green-700 bg-green-50",
+  };
+  return m[name] ?? "text-neutral-700 bg-neutral-100";
 }
 </script>
 
 <template>
-  <div class="min-h-screen bg-neutral-50 font-sans">
-    <header class="border-b border-neutral-200 bg-white px-6 py-4 shadow-sm">
+  <div>
+    <!-- Page header -->
+    <div class="border-b border-neutral-200 bg-white px-6 py-4">
       <div class="flex items-center justify-between">
         <div>
-          <h1 class="text-lg font-bold text-neutral-900">Dashboard Admin</h1>
-          <p class="text-xs text-neutral-500">ButuhBantuan — Pusat Komando</p>
+          <h1 class="text-lg font-semibold text-neutral-900">Overview</h1>
+          <p class="text-sm text-neutral-500 mt-0.5">Ringkasan data sistem ButuhBantuan</p>
         </div>
-        <div class="flex items-center gap-2">
-          <UiBadge variant="success" dot>Sistem Aktif</UiBadge>
-          <UiButton variant="secondary" size="sm">Export</UiButton>
+        <UiBadge variant="success" dot>Sistem Aktif</UiBadge>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="p-6 space-y-6">
+      <!-- Stats cards -->
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <div v-for="stat in stats" :key="stat.label" class="bg-white rounded-xl border border-neutral-200 p-5">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-xs font-medium text-neutral-500 uppercase tracking-wide">{{ stat.label }}</p>
+            <div :class="['w-8 h-8 rounded-lg flex items-center justify-center', stat.color]">
+              <Icon :icon="stat.icon" class="text-base" />
+            </div>
+          </div>
+          <p class="text-3xl font-bold text-neutral-900">{{ stat.value }}</p>
+          <p class="text-xs text-neutral-400 mt-1">{{ stat.sub }}</p>
         </div>
       </div>
-    </header>
 
-    <main class="mx-auto max-w-5xl px-6 py-8 space-y-8">
-
-      <!-- Stats grid -->
-      <section>
-        <h2 class="mb-4 font-semibold text-neutral-700">Ringkasan</h2>
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatsCard
-            v-for="stat in stats"
-            :key="stat.label"
-            v-bind="stat"
-          />
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <!-- Recent table -->
+        <div class="xl:col-span-2 bg-white rounded-xl border border-neutral-200 overflow-hidden">
+          <div class="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
+            <div>
+              <h2 class="text-sm font-semibold text-neutral-900">Layanan Terdaftar</h2>
+              <p class="text-xs text-neutral-400 mt-0.5">8 layanan pertama</p>
+            </div>
+            <NuxtLink to="/emergencies" class="text-xs font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1">
+              Lihat semua
+              <Icon icon="lucide:arrow-right" class="text-xs" />
+            </NuxtLink>
+          </div>
+          <div class="divide-y divide-neutral-100">
+            <div
+              v-for="item in recentEmergencies"
+              :key="item.id"
+              class="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors"
+            >
+              <img
+                v-if="item.organization_logo"
+                :src="item.organization_logo"
+                :alt="item.name"
+                class="w-8 h-8 rounded-lg object-contain bg-neutral-100 p-1 shrink-0"
+              />
+              <div v-else class="w-8 h-8 rounded-lg bg-neutral-100 shrink-0 flex items-center justify-center">
+                <Icon icon="lucide:shield" class="text-neutral-400 text-sm" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-neutral-900 truncate">{{ item.name }}</p>
+                <p class="text-xs text-neutral-400 truncate">{{ item.address?.regency }}</p>
+              </div>
+              <span :class="['text-xs font-medium px-2 py-0.5 rounded-full', typeBadgeColor(item.emergency_type?.name)]">
+                {{ item.emergency_type?.name ?? '-' }}
+              </span>
+            </div>
+            <div v-if="!recentEmergencies.length" class="px-5 py-8 text-center text-sm text-neutral-400">
+              Belum ada data
+            </div>
+          </div>
         </div>
-      </section>
 
-      <!-- Recent emergencies table -->
-      <section>
-        <h2 class="mb-4 font-semibold text-neutral-700">Laporan Terbaru</h2>
-        <UiCard padding="none">
-          <table class="w-full text-sm">
-            <thead class="border-b border-neutral-100 bg-neutral-50 text-left text-xs font-medium text-neutral-500">
-              <tr>
-                <th class="px-5 py-3">Kejadian</th>
-                <th class="px-5 py-3">Pelapor</th>
-                <th class="px-5 py-3">Waktu</th>
-                <th class="px-5 py-3">Status</th>
-                <th class="px-5 py-3"></th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-neutral-100">
-              <tr
-                v-for="e in recentEmergencies"
-                :key="e.id"
-                class="hover:bg-neutral-50"
-              >
-                <td class="px-5 py-3">
-                  <p class="font-medium text-neutral-900">{{ e.title }}</p>
-                  <p class="text-neutral-500">{{ e.description }}</p>
-                </td>
-                <td class="px-5 py-3 text-neutral-600">{{ e.reportedBy }}</td>
-                <td class="px-5 py-3 text-neutral-500">{{ timeAgo(e.createdAt) }}</td>
-                <td class="px-5 py-3">
-                  <UiBadge :variant="statusVariant[e.status]" dot>
-                    {{ statusLabel[e.status] }}
-                  </UiBadge>
-                </td>
-                <td class="px-5 py-3">
-                  <UiButton
-                    v-if="e.status === 'pending'"
-                    variant="primary"
-                    size="sm"
-                    @click="openConfirm(e)"
-                  >
-                    Tangani
-                  </UiButton>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </UiCard>
-      </section>
-
-      <!-- UI showcase -->
-      <section class="space-y-4">
-        <h2 class="font-semibold text-neutral-700">Komponen UI</h2>
-        <UiCard>
-          <p class="mb-3 text-sm font-medium text-neutral-600">Tombol</p>
-          <div class="flex flex-wrap gap-2">
-            <UiButton variant="primary">Primary</UiButton>
-            <UiButton variant="secondary">Secondary</UiButton>
-            <UiButton variant="danger">Danger</UiButton>
-            <UiButton variant="ghost">Ghost</UiButton>
+        <!-- Type breakdown -->
+        <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+          <div class="px-5 py-4 border-b border-neutral-100">
+            <h2 class="text-sm font-semibold text-neutral-900">Breakdown per Jenis</h2>
+            <p class="text-xs text-neutral-400 mt-0.5">Distribusi layanan aktif</p>
           </div>
-        </UiCard>
-
-        <UiCard>
-          <p class="mb-3 text-sm font-medium text-neutral-600">Badge</p>
-          <div class="flex flex-wrap gap-2">
-            <UiBadge variant="primary" dot>Primary</UiBadge>
-            <UiBadge variant="success" dot>Success</UiBadge>
-            <UiBadge variant="warning" dot>Warning</UiBadge>
-            <UiBadge variant="danger" dot>Danger</UiBadge>
-            <UiBadge variant="neutral">Neutral</UiBadge>
+          <div class="p-5 space-y-4">
+            <div v-for="type in typeBreakdown" :key="type.id">
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-sm font-medium text-neutral-700">{{ type.name }}</span>
+                <span class="text-sm font-semibold text-neutral-900">{{ type.count }}</span>
+              </div>
+              <div class="h-1.5 rounded-full bg-neutral-100 overflow-hidden">
+                <div
+                  class="h-full rounded-full bg-primary-500 transition-all duration-500"
+                  :style="{ width: `${Math.min(100, (type.count / Math.max(1, emergencies?.data?.length ?? 1)) * 100)}%` }"
+                />
+              </div>
+            </div>
+            <div v-if="!typeBreakdown.length" class="text-center text-sm text-neutral-400 py-4">
+              Belum ada data
+            </div>
           </div>
-        </UiCard>
-      </section>
-    </main>
-
-    <!-- Confirm modal -->
-    <UiModal
-      v-if="selectedEmergency"
-      v-model:open="confirmModalOpen"
-      title="Tangani Laporan"
-      :description="`Konfirmasi penanganan: ${selectedEmergency.title}`"
-    >
-      <p class="text-sm text-neutral-600">
-        Apakah Anda yakin ingin menandai laporan ini sebagai <strong>sedang ditangani</strong>?
-        Tindakan ini akan memberi tahu pelapor.
-      </p>
-      <template #footer>
-        <UiButton variant="ghost" @click="confirmModalOpen = false">Batal</UiButton>
-        <UiButton variant="primary" @click="confirmModalOpen = false">Ya, Tangani</UiButton>
-      </template>
-    </UiModal>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

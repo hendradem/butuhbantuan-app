@@ -1,32 +1,20 @@
-export interface Emergency {
+export interface EmergencyDataType {
   id: string;
-  title: string;
+  name: string;
+  organization: string;
+  organizationType: string;
+  logo: string;
   description: string;
-  latitude: number;
-  longitude: number;
-  status: EmergencyStatus;
-  category: EmergencyCategory;
-  reportedBy: string;
-  createdAt: string;
-  updatedAt: string;
+  coordinates: [number, number];
+  typeOfService: string;
+  address: { district: string; regency: string; province: string; fullAddress: string };
+  contact: { whatsapp: string; phone: string };
 }
-
-export type EmergencyStatus = "pending" | "in_progress" | "resolved" | "cancelled";
-
-export type EmergencyCategory =
-  | "medical"
-  | "fire"
-  | "crime"
-  | "accident"
-  | "natural_disaster"
-  | "other";
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  role: UserRole;
+  role: "admin" | "responder" | "reporter";
   createdAt: string;
 }
-
-export type UserRole = "admin" | "responder" | "reporter";

@@ -1,23 +1,9 @@
 <script setup lang="ts">
 type Trend = "up" | "down" | "neutral";
-
-defineProps<{
-  label: string;
-  value: string | number;
-  trend?: Trend;
-  trendLabel?: string;
-  icon?: string;
-}>();
-
-const trendColor = {
-  up:      "text-success-600",
-  down:    "text-emergency-600",
-  neutral: "text-neutral-500",
-} as const;
-
+defineProps<{ label: string; value: string | number; trend?: Trend; trendLabel?: string; icon?: string }>();
+const trendColor = { up: "text-success-600", down: "text-emergency-600", neutral: "text-neutral-500" } as const;
 const trendArrow = { up: "↑", down: "↓", neutral: "→" } as const;
 </script>
-
 <template>
   <UiCard>
     <div class="flex items-start justify-between">

@@ -1,13 +1,16 @@
-.PHONY: dev build run tidy
+.PHONY: dev build run tidy seed
 
 dev:
-	go run main.go
+	go run ./cmd/main.go
 
 build:
-	go build -o bin/api main.go
+	go build -o bin/api ./cmd/main.go
 
-run: build
+run:
 	./bin/api
 
 tidy:
 	go mod tidy
+
+seed:
+	go run ./cmd/main.go --seed

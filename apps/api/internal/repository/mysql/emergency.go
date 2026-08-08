@@ -1,0 +1,291 @@
+package mysqlrepo
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/butuhbantuan/api/internal/domain"
+	"github.com/butuhbantuan/api/internal/repository"
+	"gorm.io/gorm"
+)
+
+// ---------- EmergencyRepo ----------
+
+type EmergencyRepo struct{ db *gorm.DB }
+
+func NewEmergencyRepo(db *gorm.DB) *EmergencyRepo { return &EmergencyRepo{db: db} }
+
+func (r *EmergencyRepo) preload() *gorm.DB {
+	return r.db.Preload("EmergencyType").
+		Preload("Province").
+		Preload("Regency").
+		Preload("District")
+}
+
+func (r *EmergencyRepo) FindAll() ([]domain.Emergency, error) {
+	var rows []EmergencyEntity
+	if err := r.preload().Where("is_active = ?", true).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return mapManyEmergencies(rows), nil
+}
+
+func (r *EmergencyRepo) FindByProvince(provinceID string) ([]domain.Emergency, error) {
+	var rows []EmergencyEntity
+	if err := r.preload().
+		Where("province_id = ? AND is_active = ?", provinceID, true).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return mapManyEmergencies(rows), nil
+}
+
+func (r *EmergencyRepo) FindByRegency(regencyID string) ([]domain.Emergency, error) {
+	var rows []EmergencyEntity
+	if err := r.preload().
+		Where("(regency_id = ? OR is_province_dispatcher = ?) AND is_active = ?", regencyID, true, true).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return mapManyEmergencies(rows), nil
+}
+
+func (r *EmergencyRepo) FindDispatchers(regencyID, provinceID string) ([]domain.Emergency, error) {
+	var rows []EmergencyEntity
+	if err := r.preload().
+		Where("is_dispatcher = ? AND is_active = ?", true, true).
+		Where("regency_id = ? OR (province_id = ? AND is_province_dispatcher = ?)", regencyID, provinceID, true).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return mapManyEmergencies(rows), nil
+}
+
+func (r *EmergencyRepo) FindByType(emergencyTypeID string) ([]domain.Emergency, error) {
+	var rows []EmergencyEntity
+	if err := r.preload().
+		Where("emergency_type_id = ? AND is_active = ?", emergencyTypeID, true).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return mapManyEmergencies(rows), nil
+}
+
+func (r *EmergencyRepo) FindByIDs(ids []string) ([]domain.Emergency, error) {
+	var rows []EmergencyEntity
+	if err := r.preload().Where("uuid IN ?", ids).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return mapManyEmergencies(rows), nil
+}
+
+func (r *EmergencyRepo) Create(e domain.Emergency) (*domain.Emergency, error) {
+	lat, _ := strconv.ParseFloat(e.Coordinates[1], 64)
+	lng, _ := strconv.ParseFloat(e.Coordinates[0], 64)
+
+	row := EmergencyEntity{
+		Name:                 e.Name,
+		OrganizationName:     e.OrganizationName,
+		OrganizationType:     e.OrganizationType,
+		EmergencyTypeID:      uint(e.EmergencyType.ID),
+		Description:          e.Description,
+		IsActive:             true,
+		OrganizationLogo:     e.Logo,
+		Latitude:             lat,
+		Longitude:            lng,
+		Email:                e.Contact.Email,
+		Phone:                e.Contact.Phone,
+		Whatsapp:             e.Contact.Whatsapp,
+		DistrictID:           e.Address.DistrictID,
+		RegencyID:            e.Address.RegencyID,
+		ProvinceID:           e.Address.ProvinceID,
+		FullAddress:          e.Address.FullAddress,
+		TypeOfService:        e.TypeOfService,
+		IsDispatcher:         e.IsDispatcher,
+		IsProvinceDispatcher: e.IsProvinceDispatcher,
+	}
+	if err := r.db.Create(&row).Error; err != nil {
+		return nil, err
+	}
+	if err := r.preload().First(&row, row.ID).Error; err != nil {
+		return nil, err
+	}
+	created := mapEmergency(row)
+	return &created, nil
+}
+
+func (r *EmergencyRepo) Update(e domain.Emergency) (*domain.Emergency, error) {
+	lat, _ := strconv.ParseFloat(e.Coordinates[1], 64)
+	lng, _ := strconv.ParseFloat(e.Coordinates[0], 64)
+
+	var row EmergencyEntity
+	if err := r.db.Where("uuid = ?", e.ID).First(&row).Error; err != nil {
+		return nil, repository.ErrNotFound
+	}
+	row.Name = e.Name
+	row.OrganizationName = e.OrganizationName
+	row.OrganizationType = e.OrganizationType
+	row.EmergencyTypeID = uint(e.EmergencyType.ID)
+	row.Description = e.Description
+	row.OrganizationLogo = e.Logo
+	row.Latitude = lat
+	row.Longitude = lng
+	row.Email = e.Contact.Email
+	row.Phone = e.Contact.Phone
+	row.Whatsapp = e.Contact.Whatsapp
+	row.DistrictID = e.Address.DistrictID
+	row.RegencyID = e.Address.RegencyID
+	row.ProvinceID = e.Address.ProvinceID
+	row.FullAddress = e.Address.FullAddress
+	row.TypeOfService = e.TypeOfService
+	row.IsDispatcher = e.IsDispatcher
+	row.IsProvinceDispatcher = e.IsProvinceDispatcher
+
+	if err := r.db.Save(&row).Error; err != nil {
+		return nil, err
+	}
+	if err := r.preload().First(&row, row.ID).Error; err != nil {
+		return nil, err
+	}
+	updated := mapEmergency(row)
+	return &updated, nil
+}
+
+func (r *EmergencyRepo) Delete(id string) error {
+	result := r.db.Where("uuid = ?", id).Delete(&EmergencyEntity{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return repository.ErrNotFound
+	}
+	return nil
+}
+
+// UpsertRegionData inserts provinces, regencies, and districts using INSERT IGNORE
+// (safe to call repeatedly — existing rows are skipped).
+// Order matters: province → regency → district.
+func (r *EmergencyRepo) UpsertRegionData(
+	provinces []domain.Province,
+	regencies []domain.Regency,
+	districts []domain.District,
+) error {
+	for _, p := range provinces {
+		if err := r.db.Exec("INSERT IGNORE INTO province (id, name) VALUES (?, ?)",
+			p.ID, p.Name).Error; err != nil {
+			return fmt.Errorf("province %s: %w", p.ID, err)
+		}
+	}
+	for _, reg := range regencies {
+		if err := r.db.Exec("INSERT IGNORE INTO regency (id, province_id, name) VALUES (?, ?, ?)",
+			reg.ID, reg.ProvinceID, reg.Name).Error; err != nil {
+			return fmt.Errorf("regency %s: %w", reg.ID, err)
+		}
+	}
+	for _, d := range districts {
+		if err := r.db.Exec("INSERT IGNORE INTO district (id, regency_id, name) VALUES (?, ?, ?)",
+			d.ID, d.RegencyID, d.Name).Error; err != nil {
+			return fmt.Errorf("district %s: %w", d.ID, err)
+		}
+	}
+	return nil
+}
+
+// ---------- EmergencyTypeRepo ----------
+
+type EmergencyTypeRepo struct{ db *gorm.DB }
+
+func NewEmergencyTypeRepo(db *gorm.DB) *EmergencyTypeRepo { return &EmergencyTypeRepo{db: db} }
+
+func (r *EmergencyTypeRepo) FindAllTypes() ([]domain.EmergencyType, error) {
+	var rows []EmergencyTypeEntity
+	if err := r.db.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]domain.EmergencyType, len(rows))
+	for i, t := range rows {
+		out[i] = domain.EmergencyType{ID: t.ID, Name: t.Name, Icon: t.Icon, Description: t.Description}
+	}
+	return out, nil
+}
+
+func (r *EmergencyTypeRepo) CreateType(t domain.EmergencyType) (*domain.EmergencyType, error) {
+	row := EmergencyTypeEntity{Name: t.Name, Icon: t.Icon, Description: t.Description}
+	if err := r.db.Create(&row).Error; err != nil {
+		return nil, err
+	}
+	created := domain.EmergencyType{ID: row.ID, Name: row.Name, Icon: row.Icon, Description: row.Description}
+	return &created, nil
+}
+
+func (r *EmergencyTypeRepo) UpdateType(t domain.EmergencyType) (*domain.EmergencyType, error) {
+	result := r.db.Model(&EmergencyTypeEntity{}).Where("id = ?", t.ID).
+		Updates(map[string]any{"name": t.Name, "icon": t.Icon, "description": t.Description})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, repository.ErrNotFound
+	}
+	var row EmergencyTypeEntity
+	if err := r.db.First(&row, t.ID).Error; err != nil {
+		return nil, err
+	}
+	updated := domain.EmergencyType{ID: row.ID, Name: row.Name, Icon: row.Icon, Description: row.Description}
+	return &updated, nil
+}
+
+func (r *EmergencyTypeRepo) DeleteType(id string) error {
+	result := r.db.Delete(&EmergencyTypeEntity{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return repository.ErrNotFound
+	}
+	return nil
+}
+
+// ---------- Mappers ----------
+
+func mapEmergency(e EmergencyEntity) domain.Emergency {
+	return domain.Emergency{
+		ID:                   e.UUID.String(),
+		Name:                 e.Name,
+		OrganizationName:     e.OrganizationName,
+		OrganizationType:     e.OrganizationType,
+		Logo:                 e.OrganizationLogo,
+		Description:          e.Description,
+		Coordinates:          [2]string{strconv.FormatFloat(e.Longitude, 'f', 7, 64), strconv.FormatFloat(e.Latitude, 'f', 7, 64)},
+		TypeOfService:        e.TypeOfService,
+		IsDispatcher:         e.IsDispatcher,
+		IsProvinceDispatcher: e.IsProvinceDispatcher,
+		EmergencyType: domain.EmergencyType{
+			ID:   e.EmergencyType.ID,
+			Name: e.EmergencyType.Name,
+			Icon: e.EmergencyType.Icon,
+		},
+		Address: domain.Address{
+			DistrictID:  e.District.ID,
+			District:    e.District.Name,
+			RegencyID:   e.Regency.ID,
+			Regency:     e.Regency.Name,
+			ProvinceID:  e.Province.ID,
+			Province:    e.Province.Name,
+			FullAddress: e.FullAddress,
+		},
+		Contact: domain.Contact{
+			Email:    e.Email,
+			Phone:    e.Phone,
+			Whatsapp: e.Whatsapp,
+		},
+	}
+}
+
+func mapManyEmergencies(rows []EmergencyEntity) []domain.Emergency {
+	out := make([]domain.Emergency, len(rows))
+	for i, row := range rows {
+		out[i] = mapEmergency(row)
+	}
+	return out
+}

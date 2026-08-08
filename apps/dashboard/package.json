@@ -14,7 +14,9 @@
     "@butuhbantuan/api-client": "workspace:*",
     "@butuhbantuan/types": "workspace:*",
     "@butuhbantuan/ui": "workspace:*",
-    "@butuhbantuan/utils": "workspace:*"
+    "@butuhbantuan/utils": "workspace:*",
+    "@iconify-json/lucide": "^1.2.122",
+    "@iconify/vue": "^5.0.1"
   },
   "devDependencies": {
     "@butuhbantuan/config": "workspace:*",
@@ -25,6 +27,7 @@
     "tailwindcss": "^3.4.19",
     "typescript": "^5.8.3",
     "vue": "^3.5.17",
-    "vue-router": "^4.5.1"
+    "vue-router": "^4.5.1",
+    "vue-tsc": "^3.3.9"
   }
 }
