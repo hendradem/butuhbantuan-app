@@ -19,9 +19,21 @@ const groups: NavGroup[] = [
   {
     label: "Data",
     items: [
-      { label: "Layanan Darurat", to: "/emergencies", icon: "lucide:shield-check" },
-      { label: "Jenis Layanan",   to: "/emergency-types", icon: "lucide:tag" },
-      { label: "Wilayah Tercakup", to: "/regions", icon: "lucide:map-pin" },
+      { label: "Layanan Darurat",  to: "/emergencies",    icon: "lucide:shield-check" },
+      { label: "Jenis Layanan",    to: "/emergency-types", icon: "lucide:tag" },
+      { label: "Wilayah Tercakup", to: "/regions",         icon: "lucide:map-pin" },
+    ],
+  },
+  {
+    label: "Operasional",
+    items: [
+      { label: "Pesanan Masuk",    to: "/orders",          icon: "lucide:clipboard-list" },
+    ],
+  },
+  {
+    label: "Insight",
+    items: [
+      { label: "Feedback",         to: "/feedback",        icon: "lucide:message-square-text" },
     ],
   },
 ];

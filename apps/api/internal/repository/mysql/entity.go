@@ -100,3 +100,60 @@ func (e *AvailableServiceCityEntity) BeforeCreate(_ *gorm.DB) error {
 	}
 	return nil
 }
+
+type FeedbackEntity struct {
+	ID            uint      `gorm:"primaryKey"`
+	UUID          uuid.UUID `gorm:"type:char(36);uniqueIndex;not null"`
+	EmergencyUUID string    `gorm:"type:char(36);index"` // references EmergencyEntity.UUID (no FK)
+	UnitName      string    `gorm:"type:varchar(255)"`
+	UnitHelpful   bool      `gorm:"type:tinyint(1);default:0"`
+	AppHelpful    *bool     `gorm:"type:tinyint(1)"`
+	CallType      string    `gorm:"type:varchar(20)"` // whatsapp | phone
+	Comment       string    `gorm:"type:text"`
+	CreatedAt     time.Time `gorm:"autoCreateTime"`
+}
+
+func (e *FeedbackEntity) BeforeCreate(_ *gorm.DB) error {
+	if e.UUID == uuid.Nil {
+		e.UUID = uuid.New()
+	}
+	return nil
+}
+
+type OrderTicketEntity struct {
+	ID             uint       `gorm:"primaryKey"`
+	UUID           uuid.UUID  `gorm:"type:char(36);uniqueIndex;not null"`
+	TicketNumber   string     `gorm:"type:varchar(30);uniqueIndex;not null"`
+	EmergencyUUID  string     `gorm:"type:char(36);index"`
+	UnitName       string     `gorm:"type:varchar(255)"`
+	RequesterName  string     `gorm:"type:varchar(255)"`
+	RequesterPhone string     `gorm:"type:varchar(50)"`
+	Location       string     `gorm:"type:text"`
+	Condition      string     `gorm:"type:text"`
+	RequesterLat   float64    `gorm:"type:double;default:0"`
+	RequesterLng   float64    `gorm:"type:double;default:0"`
+	Status         string     `gorm:"type:varchar(20);default:'pending';index"`
+	HandlerName    string     `gorm:"type:varchar(255)"`
+	HandlingNotes  string     `gorm:"type:text"`
+	CompletedAt    *time.Time `gorm:"index"`
+	CreatedAt      time.Time  `gorm:"autoCreateTime"`
+	UpdatedAt      time.Time  `gorm:"autoUpdateTime"`
+}
+
+func (e *OrderTicketEntity) BeforeCreate(_ *gorm.DB) error {
+	if e.UUID == uuid.Nil {
+		e.UUID = uuid.New()
+	}
+	return nil
+}
+
+type UnitCredentialEntity struct {
+	ID            uint      `gorm:"primaryKey"`
+	EmergencyUUID string    `gorm:"type:char(36);uniqueIndex;not null"`
+	UnitName      string    `gorm:"type:varchar(255)"`
+	Username      string    `gorm:"type:varchar(100);uniqueIndex;not null"`
+	PasswordHash  string    `gorm:"type:varchar(255);not null"`
+	AccessToken   string    `gorm:"type:char(36);index;not null"`
+	CreatedAt     time.Time `gorm:"autoCreateTime"`
+	UpdatedAt     time.Time `gorm:"autoUpdateTime"`
+}

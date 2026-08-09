@@ -53,7 +53,7 @@ function handleClose() {
 </script>
 
 <template>
-  <CoreSheet :is-open="exploreSheet.isOpen" :snap-points="[280, 0]" @close="handleClose()">
+  <CoreSheet :is-open="exploreSheet.isOpen" :snap-points="[280, 0]" scrollable @close="handleClose()">
     <template #header>
       <div
         v-if="sheetData?.emergencyType"
@@ -81,7 +81,7 @@ function handleClose() {
       </div>
     </template>
 
-    <div ref="scrollContainer" class="max-h-[280px] pt-3 pb-[80px] overflow-y-auto">
+    <div ref="scrollContainer" class="pt-2 pb-20">
       <!-- Loading skeleton while emergency data is being refetched -->
       <div v-if="isLoading" class="space-y-2 px-0">
         <div

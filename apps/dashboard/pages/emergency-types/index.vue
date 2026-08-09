@@ -175,35 +175,21 @@ async function deleteType(id: number, name: string) {
           </div>
         </div>
 
-        <div v-if="!filtered.length" class="col-span-full py-16 flex flex-col items-center gap-3 text-center">
-          <div class="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center">
-            <Icon icon="lucide:tag" class="text-neutral-400 text-xl" />
-          </div>
-          <p class="text-sm text-neutral-500">Belum ada jenis layanan</p>
-          <UiButton size="sm" variant="secondary" @click="showCreate = true">
-            <Icon icon="lucide:plus" class="text-sm" />
-            Tambah Jenis Pertama
-          </UiButton>
+        <div v-if="!filtered.length" class="col-span-full">
+          <UiEmptyState title="Belum ada jenis layanan" description="Tambah kategori untuk mulai mengelola layanan darurat.">
+            <template #icon>
+              <Icon icon="lucide:tag" class="text-neutral-400 text-2xl" />
+            </template>
+            <UiButton size="sm" variant="secondary" @click="showCreate = true">
+              <Icon icon="lucide:plus" class="text-sm" />
+              Tambah Jenis Pertama
+            </UiButton>
+          </UiEmptyState>
         </div>
       </div>
 
-      <!-- Pagination -->
-      <div v-if="totalPages > 1" class="mt-4 flex items-center justify-center gap-1">
-        <button
-          :disabled="page <= 1"
-          class="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-500 hover:bg-white border border-neutral-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          @click="page--"
-        >
-          <Icon icon="lucide:chevron-left" class="text-sm" />
-        </button>
-        <span class="text-sm text-neutral-600 px-3">{{ page }} / {{ totalPages }}</span>
-        <button
-          :disabled="page >= totalPages"
-          class="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-500 hover:bg-white border border-neutral-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          @click="page++"
-        >
-          <Icon icon="lucide:chevron-right" class="text-sm" />
-        </button>
+      <div v-if="totalPages > 1" class="mt-4 px-1">
+        <UiPagination v-model:page="page" :total-pages="totalPages" />
       </div>
     </div>
 
@@ -211,19 +197,15 @@ async function deleteType(id: number, name: string) {
     <UiModal v-model:open="showCreate" title="Tambah Jenis Layanan" description="Buat kategori baru untuk layanan darurat.">
       <template #trigger><span /></template>
       <div class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-neutral-700 mb-1.5">Nama <span class="text-emergency-600">*</span></label>
-          <input v-model="createForm.name" type="text" placeholder="mis. Ambulance" class="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-neutral-700 mb-1.5">Icon <span class="text-emergency-600">*</span></label>
-          <input v-model="createForm.icon" type="text" placeholder="mis. mdi:ambulance" class="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
-          <p class="mt-1.5 text-xs text-neutral-400">Format iconify string, mis. <code class="bg-neutral-100 px-1 rounded">mdi:ambulance</code></p>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-neutral-700 mb-1.5">Deskripsi</label>
-          <textarea v-model="createForm.description" rows="2" placeholder="Deskripsi singkat..." class="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none" />
-        </div>
+        <UiFormField label="Nama" required>
+          <UiInput v-model="createForm.name" placeholder="mis. Ambulance" />
+        </UiFormField>
+        <UiFormField label="Icon" required hint="Format iconify string, mis. mdi:ambulance">
+          <UiInput v-model="createForm.icon" placeholder="mis. mdi:ambulance" />
+        </UiFormField>
+        <UiFormField label="Deskripsi">
+          <UiTextarea v-model="createForm.description" :rows="2" placeholder="Deskripsi singkat..." />
+        </UiFormField>
       </div>
       <template #footer>
         <UiButton variant="secondary" size="sm" @click="showCreate = false">Batal</UiButton>
@@ -235,18 +217,15 @@ async function deleteType(id: number, name: string) {
     <UiModal v-model:open="showEdit" title="Edit Jenis Layanan" description="Ubah data kategori layanan darurat.">
       <template #trigger><span /></template>
       <div class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-neutral-700 mb-1.5">Nama <span class="text-emergency-600">*</span></label>
-          <input v-model="editForm.name" type="text" class="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-neutral-700 mb-1.5">Icon <span class="text-emergency-600">*</span></label>
-          <input v-model="editForm.icon" type="text" class="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-neutral-700 mb-1.5">Deskripsi</label>
-          <textarea v-model="editForm.description" rows="2" class="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none" />
-        </div>
+        <UiFormField label="Nama" required>
+          <UiInput v-model="editForm.name" />
+        </UiFormField>
+        <UiFormField label="Icon" required>
+          <UiInput v-model="editForm.icon" />
+        </UiFormField>
+        <UiFormField label="Deskripsi">
+          <UiTextarea v-model="editForm.description" :rows="2" />
+        </UiFormField>
       </div>
       <template #footer>
         <UiButton variant="secondary" size="sm" @click="showEdit = false">Batal</UiButton>

@@ -12,6 +12,9 @@ export function useApi() {
     get<T>(path: string) {
       return $fetch<T>(`${baseUrl}${path}`);
     },
+    authGet<T>(path: string) {
+      return $fetch<T>(`${baseUrl}${path}`, { headers: adminHeaders() });
+    },
     post<T>(path: string, body: Record<string, unknown>) {
       return $fetch<T>(`${baseUrl}${path}`, {
         method: "POST",

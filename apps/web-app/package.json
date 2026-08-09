@@ -22,7 +22,7 @@
     "leaflet": "^1.9.4",
     "leaflet-routing-machine": "^3.2.12",
     "pinia": "^2.3.0",
-    "vue-sonner": "^2.0.9"
+    "vue3-hot-toast": "^0.0.5"
   },
   "devDependencies": {
     "@butuhbantuan/config": "workspace:*",

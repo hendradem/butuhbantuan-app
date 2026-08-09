@@ -1,6 +1,7 @@
 
 <script setup lang="ts">
 import type { Map as LeafletMap, Marker, Polyline } from "leaflet";
+import { toast } from "vue3-hot-toast";
 
 const leafletStore = useLeafletStore();
 const emergencyStore = useEmergencyStore();
@@ -43,11 +44,18 @@ onMounted(async () => {
 
   // Tap on map → set manual location + relocate marker + refetch (debounced 1.5s)
   let mapClickTimer: ReturnType<typeof setTimeout> | null = null;
+  let mapClickToastId: string | undefined;
+
   map.on("click", (e: any) => {
     if (mapClickTimer) clearTimeout(mapClickTimer);
+    // Dismiss previous loading toast if map is tapped again before it resolves
+    if (mapClickToastId) toast.dismiss(mapClickToastId);
+
     const { lat, lng } = e.latlng;
 
-    // Immediately move marker and show loading states before the debounce fires
+    // Show loading toast immediately on tap
+    mapClickToastId = toast.loading("Mencari layanan di area ini...");
+
     userLocationStore.setManualLocation(true);
     userLocationStore.updateCoordinate(lat, lng);
     userLocationStore.setAddressLoading(true);
@@ -56,7 +64,8 @@ onMounted(async () => {
     detailSheet.onClose();
 
     mapClickTimer = setTimeout(async () => {
-      await loadEmergencyData(lat, lng);
+      await loadEmergencyData(lat, lng, mapClickToastId);
+      mapClickToastId = undefined;
     }, 1500);
   });
 
@@ -227,12 +236,14 @@ async function renderRoute(L: any, endPoint: { lat: number; lng: number }) {
   if (routeLine) { routeLine.remove(); routeLine = null; }
 
   const token = ++routeRenderToken;
+  const routeToastId = toast.loading("Mencari rute...");
 
   const userLat = userLocationStore.lat;
   const userLng = userLocationStore.long;
 
   if (!userLat || !userLng) {
     map.setView([endPoint.lat, endPoint.lng], 14);
+    toast.dismiss(routeToastId);
     return;
   }
 
@@ -243,7 +254,10 @@ async function renderRoute(L: any, endPoint: { lat: number; lng: number }) {
     const data = await res.json();
     const coords = data?.routes?.[0]?.geometry?.coordinates as [number, number][] | undefined;
 
-    if (token !== routeRenderToken) return; // superseded by a newer render call
+    if (token !== routeRenderToken) {
+      toast.dismiss(routeToastId);
+      return;
+    }
 
     if (coords?.length) {
       // OSRM returns [lng, lat], Leaflet needs [lat, lng]
@@ -254,10 +268,14 @@ async function renderRoute(L: any, endPoint: { lat: number; lng: number }) {
         opacity: 0.85,
       }).addTo(map!);
       map.fitBounds((routeLine as any).getBounds(), { padding: [60, 60] });
+      toast.success("Rute ditemukan", { id: routeToastId, duration: 1500 });
       return;
     }
   } catch {
-    if (token !== routeRenderToken) return;
+    if (token !== routeRenderToken) {
+      toast.dismiss(routeToastId);
+      return;
+    }
   }
 
   // Fallback: dashed straight line
@@ -266,6 +284,7 @@ async function renderRoute(L: any, endPoint: { lat: number; lng: number }) {
     { color: "#3b82f6", weight: 3, dashArray: "6, 8", opacity: 0.85 }
   ).addTo(map!);
   map.fitBounds((routeLine as any).getBounds(), { padding: [60, 60] });
+  toast.dismiss(routeToastId);
 }
 </script>
 

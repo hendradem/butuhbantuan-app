@@ -16,7 +16,9 @@
     "@butuhbantuan/ui": "workspace:*",
     "@butuhbantuan/utils": "workspace:*",
     "@iconify-json/lucide": "^1.2.122",
-    "@iconify/vue": "^5.0.1"
+    "@iconify/vue": "^5.0.1",
+    "@types/leaflet": "^1.9.14",
+    "leaflet": "^1.9.4"
   },
   "devDependencies": {
     "@butuhbantuan/config": "workspace:*",

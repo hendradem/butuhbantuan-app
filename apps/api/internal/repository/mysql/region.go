@@ -84,6 +84,48 @@ func (r *RegionRepo) DeleteAvailableRegion(id string) error {
 	return nil
 }
 
+func (r *RegionRepo) SearchRegencies(q string) ([]domain.Regency, error) {
+	var rows []Regency
+	needle := "%" + strings.ToLower(q) + "%"
+	if err := r.db.Preload("Province").
+		Where("LOWER(name) LIKE ?", needle).
+		Order("name").Limit(15).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]domain.Regency, len(rows))
+	for i, row := range rows {
+		out[i] = domain.Regency{
+			ID: row.ID, ProvinceID: row.ProvinceID,
+			Name: row.Name, ProvinceName: row.Province.Name,
+		}
+	}
+	return out, nil
+}
+
+func (r *RegionRepo) FindProvinces() ([]domain.Province, error) {
+	var rows []Province
+	if err := r.db.Order("name").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]domain.Province, len(rows))
+	for i, row := range rows {
+		out[i] = domain.Province{ID: row.ID, Name: row.Name}
+	}
+	return out, nil
+}
+
+func (r *RegionRepo) FindRegenciesByProvince(provinceID string) ([]domain.Regency, error) {
+	var rows []Regency
+	if err := r.db.Where("province_id = ?", provinceID).Order("name").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]domain.Regency, len(rows))
+	for i, row := range rows {
+		out[i] = domain.Regency{ID: row.ID, ProvinceID: row.ProvinceID, Name: row.Name}
+	}
+	return out, nil
+}
+
 // ---------- Mappers ----------
 
 func mapRegion(r AvailableServiceCityEntity) domain.AvailableRegion {

@@ -1,11 +1,13 @@
 package mysqlrepo
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
 	"github.com/butuhbantuan/api/internal/domain"
 	"github.com/butuhbantuan/api/internal/repository"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -79,10 +81,9 @@ func (r *EmergencyRepo) FindByIDs(ids []string) ([]domain.Emergency, error) {
 	return mapManyEmergencies(rows), nil
 }
 
-func (r *EmergencyRepo) Create(e domain.Emergency) (*domain.Emergency, error) {
+func (r *EmergencyRepo) buildEntity(e domain.Emergency) EmergencyEntity {
 	lat, _ := strconv.ParseFloat(e.Coordinates[1], 64)
 	lng, _ := strconv.ParseFloat(e.Coordinates[0], 64)
-
 	row := EmergencyEntity{
 		Name:                 e.Name,
 		OrganizationName:     e.OrganizationName,
@@ -104,6 +105,17 @@ func (r *EmergencyRepo) Create(e domain.Emergency) (*domain.Emergency, error) {
 		IsDispatcher:         e.IsDispatcher,
 		IsProvinceDispatcher: e.IsProvinceDispatcher,
 	}
+	// Use the caller-supplied UUID when available so seeded data has stable IDs.
+	if e.ID != "" {
+		if parsed, err := uuid.Parse(e.ID); err == nil {
+			row.UUID = parsed
+		}
+	}
+	return row
+}
+
+func (r *EmergencyRepo) Create(e domain.Emergency) (*domain.Emergency, error) {
+	row := r.buildEntity(e)
 	if err := r.db.Create(&row).Error; err != nil {
 		return nil, err
 	}
@@ -112,6 +124,59 @@ func (r *EmergencyRepo) Create(e domain.Emergency) (*domain.Emergency, error) {
 	}
 	created := mapEmergency(row)
 	return &created, nil
+}
+
+// Upsert creates the emergency with its stable UUID from the JSON data file, or
+// updates all fields if a record with that UUID already exists. This is used by
+// the seeder so re-running it never produces duplicate rows.
+func (r *EmergencyRepo) Upsert(e domain.Emergency) (*domain.Emergency, error) {
+	if e.ID == "" {
+		return r.Create(e)
+	}
+	entityUUID, err := uuid.Parse(e.ID)
+	if err != nil {
+		return r.Create(e)
+	}
+
+	var existing EmergencyEntity
+	err = r.db.Where("uuid = ?", entityUUID.String()).First(&existing).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return r.Create(e)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Update every field except UUID/ID/timestamps.
+	row := r.buildEntity(e)
+	if err := r.db.Model(&existing).Updates(map[string]any{
+		"name":                   row.Name,
+		"organization_name":      row.OrganizationName,
+		"organization_type":      row.OrganizationType,
+		"emergency_type_id":      row.EmergencyTypeID,
+		"description":            row.Description,
+		"is_active":              row.IsActive,
+		"organization_logo":      row.OrganizationLogo,
+		"latitude":               row.Latitude,
+		"longitude":              row.Longitude,
+		"email":                  row.Email,
+		"phone":                  row.Phone,
+		"whatsapp":               row.Whatsapp,
+		"district_id":            row.DistrictID,
+		"regency_id":             row.RegencyID,
+		"province_id":            row.ProvinceID,
+		"full_address":           row.FullAddress,
+		"type_of_service":        row.TypeOfService,
+		"is_dispatcher":          row.IsDispatcher,
+		"is_province_dispatcher": row.IsProvinceDispatcher,
+	}).Error; err != nil {
+		return nil, err
+	}
+	if err := r.preload().First(&existing, existing.ID).Error; err != nil {
+		return nil, err
+	}
+	updated := mapEmergency(existing)
+	return &updated, nil
 }
 
 func (r *EmergencyRepo) Update(e domain.Emergency) (*domain.Emergency, error) {

@@ -6,9 +6,10 @@ type Province struct {
 }
 
 type Regency struct {
-	ID         string `json:"id"`
-	ProvinceID string `json:"province_id"`
-	Name       string `json:"name"`
+	ID           string `json:"id"`
+	ProvinceID   string `json:"province_id"`
+	Name         string `json:"name"`
+	ProvinceName string `json:"province_name,omitempty"`
 }
 
 type District struct {

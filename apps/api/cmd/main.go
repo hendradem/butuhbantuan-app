@@ -29,9 +29,12 @@ func main() {
 	cfg := config.Load()
 
 	var (
-		emergencyRepo repository.EmergencyRepository
-		typeRepo      repository.EmergencyTypeRepository
-		regionRepo    repository.RegionRepository
+		emergencyRepo   repository.EmergencyRepository
+		typeRepo        repository.EmergencyTypeRepository
+		regionRepo      repository.RegionRepository
+		feedbackRepo    repository.FeedbackRepository
+		orderRepo       repository.OrderRepository
+		unitCredRepo    repository.UnitCredentialRepository
 	)
 
 	switch cfg.Storage {
@@ -44,10 +47,16 @@ func main() {
 		mysqlEmergency := mysqlrepo.NewEmergencyRepo(db)
 		mysqlType := mysqlrepo.NewEmergencyTypeRepo(db)
 		mysqlRegion := mysqlrepo.NewRegionRepo(db)
+		mysqlFeedback := mysqlrepo.NewFeedbackRepo(db)
+		mysqlOrder := mysqlrepo.NewOrderRepo(db)
+		mysqlUnitCred := mysqlrepo.NewUnitCredentialRepo(db)
 
 		emergencyRepo = mysqlEmergency
 		typeRepo = mysqlType
 		regionRepo = mysqlRegion
+		feedbackRepo = mysqlFeedback
+		orderRepo = mysqlOrder
+		unitCredRepo = mysqlUnitCred
 
 		if *seed {
 			if err := runSeed(mysqlEmergency, mysqlType, mysqlRegion); err != nil {
@@ -72,17 +81,34 @@ func main() {
 
 	emergencySvc := service.NewEmergencyService(emergencyRepo, typeRepo)
 	regionSvc := service.NewRegionService(regionRepo)
+	var feedbackSvc service.FeedbackUseCase
+	if feedbackRepo != nil {
+		feedbackSvc = service.NewFeedbackService(feedbackRepo)
+	} else {
+		feedbackSvc = service.NewNoopFeedbackService()
+	}
+	var orderSvc service.OrderUseCase
+	var unitAuthSvc service.UnitAuthUseCase
+	if orderRepo != nil {
+		orderSvc = service.NewOrderService(orderRepo)
+		unitAuthSvc = service.NewUnitAuthService(unitCredRepo)
+	} else {
+		orderSvc = service.NewNoopOrderService()
+		unitAuthSvc = service.NewNoopUnitAuthService()
+		unitCredRepo = &repository.NoopUnitCredentialRepository{}
+	}
 
 	app := fiber.New()
 	app.Use(logger.New())
+	app.Static("/uploads", "./uploads")
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.AllowOrigins,
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Admin-Key",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Admin-Key, X-Unit-Token",
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
 		AllowCredentials: true,
 	}))
 
-	router.Register(app, emergencySvc, emergencySvc, regionSvc, cfg)
+	router.Register(app, emergencySvc, emergencySvc, regionSvc, feedbackSvc, orderSvc, unitAuthSvc, unitCredRepo, cfg)
 
 	// Graceful shutdown on SIGINT / SIGTERM
 	quit := make(chan os.Signal, 1)
@@ -179,10 +205,10 @@ func runSeed(
 	}
 	log.Printf("available regions seeded: %d", len(regions))
 
-	// Emergencies
+	// Emergencies — Upsert so re-seeding doesn't create duplicates.
 	ok, fail := 0, 0
 	for _, e := range emergencies {
-		if _, err := eRepo.Create(e); err != nil {
+		if _, err := eRepo.Upsert(e); err != nil {
 			log.Printf("emergency %q: %v", e.Name, err)
 			fail++
 		} else {

@@ -15,6 +15,7 @@ export default defineNuxtConfig({
       adminApiKey: process.env.NUXT_PUBLIC_ADMIN_API_KEY || "",
     },
   },
+  css: ["leaflet/dist/leaflet.css"],
   typescript: { strict: true },
 
   devServer: {

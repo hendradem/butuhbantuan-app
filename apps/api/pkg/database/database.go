@@ -12,8 +12,9 @@ import (
 
 func Connect(dsn string) (*gorm.DB, error) {
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		NamingStrategy: mysqlrepo.NamingStrategy(),
-		Logger:         logger.Default.LogMode(logger.Warn),
+		NamingStrategy:                           mysqlrepo.NamingStrategy(),
+		Logger:                                   logger.Default.LogMode(logger.Warn),
+		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
 		return nil, err
@@ -32,6 +33,7 @@ func Connect(dsn string) (*gorm.DB, error) {
 	if err := mysqlrepo.Migrate(db); err != nil {
 		return nil, err
 	}
+	mysqlrepo.BackfillUnitNames(db)
 
 	log.Println("database migrated")
 	return db, nil

@@ -30,28 +30,19 @@ function openSearch() {
 <template>
   <div>
     <!-- Empty state -->
-    <div
+    <UiEmptyState
       v-if="emergencyData.length === 0"
-      class="flex flex-col items-center justify-center py-6 px-6 text-center"
+      image-src="/assets/illustration/not-found.svg"
+      title="Tidak ada layanan di sekitarmu"
+      description="Coba pindah ke area lain atau perluas jangkauan pencarian."
     >
-      <img
-        src="/assets/illustration/not-found.svg"
-        alt="Tidak ada data"
-        class="w-28 mb-3 opacity-80"
-      />
-      <p class="text-sm font-semibold text-neutral-700">Tidak ada layanan di sekitarmu</p>
-      <p class="text-xs text-neutral-400 mt-1">
-        Coba pindah ke area lain atau perluas jangkauan pencarian.
-      </p>
-      <div class="flex gap-2 mt-4">
-        <button type="button" class="btn-dark text-xs py-2 px-4" @click="openSearch">
-          Ubah lokasi
-        </button>
-        <button type="button" class="btn-base hover:bg-neutral-100 text-xs py-2 px-4" @click="exploreSheet.onClose()">
-          Tutup
-        </button>
-      </div>
-    </div>
+      <button type="button" class="btn-dark text-xs py-2 px-4" @click="openSearch">
+        Ubah lokasi
+      </button>
+      <button type="button" class="btn-base hover:bg-neutral-100 text-xs py-2 px-4" @click="exploreSheet.onClose()">
+        Tutup
+      </button>
+    </UiEmptyState>
 
     <div
       v-for="(item, idx) in emergencyData"
@@ -113,14 +104,6 @@ function openSearch() {
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- CTA when list is shown -->
-    <div v-if="emergencyData?.length" class="flex items-center justify-center mt-2">
-      <button type="button" class="btn-dark" @click="openSearch">Ubah pencarian</button>
-      <button type="button" class="btn-base hover:bg-neutral-100" @click="exploreSheet.onClose()">
-        Cari di maps
-      </button>
-    </div>
+    </div> 
   </div>
 </template>

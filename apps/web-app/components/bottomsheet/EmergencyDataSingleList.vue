@@ -5,7 +5,7 @@ import { formatDistance } from "~/utils/geo";
 
 const props = defineProps<{ data: any }>();
 
-const confirmationSheet = useConfirmationSheetStore();
+const orderSheet = useOrderSheetStore();
 
 const emergencyData = computed(() => props.data?.emergencyData);
 const tripData = computed(() => props.data?.trip);
@@ -19,9 +19,12 @@ function badgeClass(duration: number): string {
 
 function onContactClick(type: "whatsapp" | "phone", number: string, e: Event) {
   e.stopPropagation();
-  confirmationSheet.setCallType(type);
-  confirmationSheet.setCallNumber(number);
-  confirmationSheet.onOpen();
+  orderSheet.open(
+    String(emergencyData.value?.id ?? ""),
+    emergencyData.value?.name ?? "",
+    type,
+    number
+  );
 }
 </script>
 
@@ -41,7 +44,7 @@ function onContactClick(type: "whatsapp" | "phone", number: string, e: Event) {
         </div>
         <div class="w-[85%]">
           <div class="flex justify-between items-center truncate">
-            <h3 class="font-semibold leading-none text-gray-900">
+            <h3 class="font-semibold truncate leading-none text-gray-900">
               {{ emergencyData?.name?.slice(0, 18) }}
             </h3>
             <div class="flex items-center gap-2">

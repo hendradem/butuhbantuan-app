@@ -183,6 +183,18 @@ func (r *Repo) DeleteAvailableRegion(_ string) error {
 	return repository.ErrNotSupported
 }
 
+func (r *Repo) SearchRegencies(_ string) ([]domain.Regency, error) {
+	return nil, repository.ErrNotSupported
+}
+
+func (r *Repo) FindProvinces() ([]domain.Province, error) {
+	return nil, repository.ErrNotSupported
+}
+
+func (r *Repo) FindRegenciesByProvince(_ string) ([]domain.Regency, error) {
+	return nil, repository.ErrNotSupported
+}
+
 var rePrefixes = regexp.MustCompile(`(?i)^(kabupaten|kab\.?|kota|provinsi|prov\.?|daerah istimewa|di)\s+`)
 var reSpaces = regexp.MustCompile(`\s+`)
 

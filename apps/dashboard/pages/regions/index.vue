@@ -131,15 +131,11 @@ async function deleteRegion(id: string, name: string) {
           class="w-full pl-8 pr-3 py-1.5 text-sm border border-neutral-200 rounded-lg bg-neutral-50 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-colors"
         />
       </div>
-      <select
-        v-model="pageSize"
-        class="py-1.5 pl-3 pr-7 text-sm border border-neutral-200 rounded-lg bg-neutral-50 text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
-        @change="page = 1"
-      >
+      <UiSelect v-model="pageSize" class="!w-auto" @change="page = 1">
         <option :value="10">10 / halaman</option>
         <option :value="25">25 / halaman</option>
         <option :value="50">50 / halaman</option>
-      </select>
+      </UiSelect>
     </div>
 
     <!-- Table -->
@@ -159,13 +155,16 @@ async function deleteRegion(id: string, name: string) {
             </thead>
             <tbody class="divide-y divide-neutral-100">
               <tr v-if="!paginated.length">
-                <td colspan="6" class="px-5 py-10 text-center">
-                  <div class="flex flex-col items-center gap-2">
-                    <div class="w-10 h-10 rounded-full bg-neutral-100 flex items-center justify-center">
-                      <Icon icon="lucide:map-pin-off" class="text-neutral-400" />
-                    </div>
-                    <p class="text-sm text-neutral-500">Belum ada wilayah</p>
-                  </div>
+                <td colspan="6" class="py-4">
+                  <UiEmptyState title="Belum ada wilayah" description="Tambah wilayah untuk mengaktifkan layanan darurat di area tersebut.">
+                    <template #icon>
+                      <Icon icon="lucide:map-pin-off" class="text-neutral-400 text-2xl" />
+                    </template>
+                    <UiButton size="sm" variant="secondary" @click="showCreate = true">
+                      <Icon icon="lucide:plus" class="text-sm" />
+                      Tambah Wilayah
+                    </UiButton>
+                  </UiEmptyState>
                 </td>
               </tr>
               <tr
@@ -207,7 +206,8 @@ async function deleteRegion(id: string, name: string) {
                       :disabled="deletingId === region.id"
                       @click="deleteRegion(region.id, region.name)"
                     >
-                      <Icon :icon="deletingId === region.id ? 'lucide:loader-2' : 'lucide:trash-2'" :class="['text-sm', { 'animate-spin': deletingId === region.id }]" />
+                      <UiSpinner v-if="deletingId === region.id" size="xs" class="text-emergency-500" />
+                      <Icon v-else icon="lucide:trash-2" class="text-sm" />
                     </button>
                   </div>
                 </td>
@@ -216,28 +216,13 @@ async function deleteRegion(id: string, name: string) {
           </table>
         </div>
 
-        <!-- Pagination -->
-        <div v-if="filtered.length" class="px-4 sm:px-5 py-3 border-t border-neutral-100 bg-neutral-50 flex items-center justify-between gap-4 flex-wrap">
-          <p class="text-xs text-neutral-500">
-            {{ (page - 1) * pageSize + 1 }}–{{ Math.min(page * pageSize, filtered.length) }} dari {{ filtered.length }}
-          </p>
-          <div class="flex items-center gap-1">
-            <button
-              :disabled="page <= 1"
-              class="w-7 h-7 flex items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              @click="page--"
-            >
-              <Icon icon="lucide:chevron-left" class="text-sm" />
-            </button>
-            <span class="text-xs text-neutral-600 px-2">{{ page }} / {{ totalPages }}</span>
-            <button
-              :disabled="page >= totalPages"
-              class="w-7 h-7 flex items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              @click="page++"
-            >
-              <Icon icon="lucide:chevron-right" class="text-sm" />
-            </button>
-          </div>
+        <div v-if="filtered.length" class="px-4 sm:px-5 py-3 border-t border-neutral-100 bg-neutral-50">
+          <UiPagination
+            v-model:page="page"
+            :total-pages="totalPages"
+            :total="filtered.length"
+            :page-size="pageSize"
+          />
         </div>
       </div>
     </div>

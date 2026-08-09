@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { toast } from "vue-sonner";
+import { toast } from "vue3-hot-toast";
 import { convertPhoneNumber } from "~/utils/convertPhoneNumber";
 
 const sheet = useConfirmationSheetStore();
+const reviewSheet = useReviewSheetStore();
 
 function onContactClick(e: Event) {
   e.stopPropagation();
@@ -15,7 +16,15 @@ function onContactClick(e: Event) {
   } else {
     window.open(`tel:${sheet.callNumber}`, "_blank");
   }
+
+  const { emergencyId, unitName, callType } = sheet;
   sheet.onClose();
+
+  if (emergencyId) {
+    setTimeout(() => {
+      reviewSheet.open(emergencyId, unitName, callType as "whatsapp" | "phone");
+    }, 1500);
+  }
 }
 </script>
 
@@ -38,6 +47,17 @@ function onContactClick(e: Event) {
       :title="`Anda akan diarahkan ke ${sheet.callType === 'phone' ? 'telfon seluler' : 'WhatsApp'}`"
       description="Gunakan hanya untuk keadaan darurat dan dilarang keras untuk menyalahgunakan nomor ini."
     >
+      <!-- Ticket info -->
+      <div v-if="sheet.ticketNumber" class="mb-4 mx-2 px-3 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl text-center">
+        <p class="text-xs text-neutral-500 mb-0.5">Nomor Tiket Anda</p>
+        <p class="text-base font-bold text-neutral-900 tracking-wider">{{ sheet.ticketNumber }}</p>
+        <a
+          :href="`/ticket/${sheet.ticketNumber}`"
+          target="_blank"
+          class="text-xs text-primary-600 underline mt-0.5 inline-block"
+        >Lihat status tiket</a>
+      </div>
+
       <div class="flex items-center justify-center gap-1">
         <button
           v-if="sheet.callType === 'whatsapp'"

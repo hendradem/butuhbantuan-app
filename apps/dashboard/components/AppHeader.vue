@@ -5,6 +5,7 @@ const emit = defineEmits<{ toggleMobile: [] }>();
 
 const route = useRoute();
 const { logout } = useAuth();
+const { toggle: toggleSidebar } = useSidebar();
 const profileOpen = ref(false);
 const profileRef = ref<HTMLElement | null>(null);
 
@@ -37,6 +38,15 @@ onUnmounted(() => document.removeEventListener("mousedown", onClickOutside));
       @click="emit('toggleMobile')"
     >
       <Icon icon="lucide:menu" class="text-[18px]" />
+    </button>
+
+    <!-- Desktop sidebar toggle -->
+    <button
+      class="hidden lg:flex w-8 h-8 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100 transition-colors"
+      title="Toggle sidebar"
+      @click="toggleSidebar"
+    >
+      <Icon icon="lucide:panel-left" class="text-[18px]" />
     </button>
 
     <!-- Breadcrumb / Title -->

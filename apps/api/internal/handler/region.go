@@ -80,3 +80,44 @@ func (h *RegionHandler) DeleteAvailableRegion(c *fiber.Ctx) error {
 	}
 	return response.OK(c, "success", nil)
 }
+
+func (h *RegionHandler) GetProvinces(c *fiber.Ctx) error {
+	data, err := h.svc.GetProvinces()
+	if err != nil {
+		if errors.Is(err, repository.ErrNotSupported) {
+			return response.NotImplemented(c)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "failed to get provinces")
+	}
+	return response.OK(c, "success", data)
+}
+
+func (h *RegionHandler) GetRegenciesByProvince(c *fiber.Ctx) error {
+	provinceID := c.Query("province_id")
+	if provinceID == "" {
+		return response.Error(c, fiber.StatusBadRequest, "province_id is required")
+	}
+	data, err := h.svc.GetRegenciesByProvince(provinceID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotSupported) {
+			return response.NotImplemented(c)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "failed to get regencies")
+	}
+	return response.OK(c, "success", data)
+}
+
+func (h *RegionHandler) SearchRegencies(c *fiber.Ctx) error {
+	q := c.Query("q")
+	if len(q) < 2 {
+		return response.Error(c, fiber.StatusBadRequest, "query must be at least 2 characters")
+	}
+	data, err := h.svc.SearchRegencies(q)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotSupported) {
+			return response.NotImplemented(c)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "failed to search regencies")
+	}
+	return response.OK(c, "success", data)
+}

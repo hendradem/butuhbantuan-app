@@ -1,6 +1,6 @@
 import { getNearestDataWithEstimation } from "~/utils/turf";
 import { formatGeoAddress } from "~/utils/geo";
-import { toast } from "vue-sonner";
+import { toast } from "vue3-hot-toast";
 
 const MAX_MATRIX_BATCH = 24; // Mapbox Matrix: max 25 coords total (1 origin + 24 destinations)
 const MAX_TRAVEL_MINUTES = 15;
@@ -63,20 +63,25 @@ export function useEmergencyApi() {
     return results;
   }
 
-  async function loadEmergencyData(lat: number, lng: number) {
+  // existingToastId: if the caller already showed a loading toast (e.g. on map click),
+  // pass its ID here so we update that toast rather than creating a duplicate.
+  async function loadEmergencyData(lat: number, lng: number, existingToastId?: string) {
     const myEpoch = ++fetchEpoch;
 
     userLocation.setAddressLoading(true);
     emergencyStore.setLoading(true);
     try {
-      const toastId = toast.loading("Mencari layanan...");
+      const toastId = existingToastId ?? toast.loading("Mencari layanan...");
 
       const geoWrapper = await $fetch<any>(
         `${baseUrl}/api/v1/geocoding/reverse?latitude=${lat}&longitude=${lng}`
       );
 
       // Bail out if a newer call superseded this one while we were awaiting
-      if (myEpoch !== fetchEpoch) return;
+      if (myEpoch !== fetchEpoch) {
+        toast.dismiss(toastId);
+        return;
+      }
 
       const geoRes = geoWrapper?.data ?? geoWrapper;
 
@@ -97,7 +102,10 @@ export function useEmergencyApi() {
         `${baseUrl}/api/v1/service/available-region/${encodeURIComponent(regionName)}`
       );
 
-      if (myEpoch !== fetchEpoch) return;
+      if (myEpoch !== fetchEpoch) {
+        toast.dismiss(toastId);
+        return;
+      }
 
       const city = cityRes?.data?.[0];
       if (!city) {
@@ -123,7 +131,10 @@ export function useEmergencyApi() {
       // Fetch real road-based durations from Mapbox Matrix
       const matrix = await fetchDistanceMatrix(lat, lng, emergencyList);
 
-      if (myEpoch !== fetchEpoch) return;
+      if (myEpoch !== fetchEpoch) {
+        toast.dismiss(toastId);
+        return;
+      }
 
       const calculated = emergencyList.map((e: any, idx: number) => {
         const trip = matrix[idx];
@@ -131,13 +142,14 @@ export function useEmergencyApi() {
         return getNearestDataWithEstimation([e], userLoc)[0];
       });
 
-      // Keep services within 15 min; always include dispatchers from the current regency
+      // Keep services within 15 min.
+      // Regency dispatchers (is_dispatcher) always shown in their regency regardless of response time.
+      // Province dispatchers (is_province_dispatcher) always shown province-wide regardless of response time.
       const withinRange = calculated.filter((item: any) => {
         if (item.trip.duration <= MAX_TRAVEL_MINUTES) return true;
-        const isLocalDispatcher =
-          item.emergencyData?.is_dispatcher &&
-          item.emergencyData?.address?.regency_id === regencyId;
-        return isLocalDispatcher;
+        if (item.emergencyData?.is_dispatcher && item.emergencyData?.address?.regency_id === regencyId) return true;
+        if (item.emergencyData?.is_province_dispatcher) return true;
+        return false;
       });
       const toShow = withinRange.length > 0 ? withinRange : calculated.slice(0, 5);
       toShow.sort((a: any, b: any) => a.trip.duration - b.trip.duration);

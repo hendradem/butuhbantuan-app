@@ -55,12 +55,15 @@ function typeBadgeColor(name: string) {
 // ── Create ──────────────────────────────────────────────────────────────────
 const showCreate = ref(false);
 const creating = ref(false);
+const createError = ref("");
 const createForm = reactive({
   name: "", organization_name: "", organization_type: "",
+  organization_logo: "",
   description: "", type_id: "",
   phone: "", whatsapp: "", email: "",
-  district_id: "", regency_id: "", province_id: "", full_address: "",
-  lat: "", lng: "",
+  district_id: "", regency_id: "", province_id: "",
+  regency_display: "", province_display: "",
+  full_address: "", lat: "", lng: "",
   is_dispatcher: false, is_province_dispatcher: false,
   type_of_service: "",
 });
@@ -68,11 +71,13 @@ const createForm = reactive({
 async function submitCreate() {
   if (!createForm.name || !createForm.type_id) return;
   creating.value = true;
+  createError.value = "";
   try {
     await post("/api/v1/emergency/", {
       name: createForm.name,
       organization_name: createForm.organization_name,
       organization_type: createForm.organization_type,
+      organization_logo: createForm.organization_logo,
       description: createForm.description,
       emergency_type: { id: parseInt(createForm.type_id) },
       coordinates: [createForm.lng || "0", createForm.lat || "0"],
@@ -89,11 +94,15 @@ async function submitCreate() {
     });
     showCreate.value = false;
     Object.assign(createForm, {
-      name: "", organization_name: "", organization_type: "", description: "", type_id: "",
+      name: "", organization_name: "", organization_type: "", organization_logo: "",
+      description: "", type_id: "",
       phone: "", whatsapp: "", email: "", district_id: "", regency_id: "", province_id: "",
+      regency_display: "", province_display: "",
       full_address: "", lat: "", lng: "", is_dispatcher: false, is_province_dispatcher: false, type_of_service: "",
     });
     await refresh();
+  } catch (err: any) {
+    createError.value = err?.data?.message ?? err?.message ?? "Gagal menyimpan layanan";
   } finally {
     creating.value = false;
   }
@@ -102,23 +111,28 @@ async function submitCreate() {
 // ── Edit ─────────────────────────────────────────────────────────────────────
 const showEdit = ref(false);
 const editing = ref(false);
+const editError = ref("");
 const editTarget = ref<any>(null);
 const editForm = reactive({
   name: "", organization_name: "", organization_type: "",
+  organization_logo: "",
   description: "", type_id: "",
   phone: "", whatsapp: "", email: "",
-  district_id: "", regency_id: "", province_id: "", full_address: "",
-  lat: "", lng: "",
+  district_id: "", regency_id: "", province_id: "",
+  regency_display: "", province_display: "",
+  full_address: "", lat: "", lng: "",
   is_dispatcher: false, is_province_dispatcher: false,
   type_of_service: "",
 });
 
 function openEdit(item: any) {
+  editError.value = "";
   editTarget.value = item;
   Object.assign(editForm, {
     name: item.name ?? "",
     organization_name: item.organization_name ?? "",
     organization_type: item.organization_type ?? "",
+    organization_logo: item.organization_logo ?? "",
     description: item.description ?? "",
     type_id: String(item.emergency_type?.id ?? ""),
     phone: item.contact?.phone ?? "",
@@ -127,6 +141,8 @@ function openEdit(item: any) {
     district_id: item.address?.district_id ?? "",
     regency_id: item.address?.regency_id ?? "",
     province_id: item.address?.province_id ?? "",
+    regency_display: item.address?.regency ?? "",
+    province_display: item.address?.province ?? "",
     full_address: item.address?.full_address ?? "",
     lat: item.coordinates?.[1] ?? "",
     lng: item.coordinates?.[0] ?? "",
@@ -140,11 +156,13 @@ function openEdit(item: any) {
 async function submitEdit() {
   if (!editTarget.value || !editForm.name || !editForm.type_id) return;
   editing.value = true;
+  editError.value = "";
   try {
     await put(`/api/v1/emergency/${editTarget.value.id}`, {
       name: editForm.name,
       organization_name: editForm.organization_name,
       organization_type: editForm.organization_type,
+      organization_logo: editForm.organization_logo,
       description: editForm.description,
       emergency_type: { id: parseInt(editForm.type_id) },
       coordinates: [editForm.lng || "0", editForm.lat || "0"],
@@ -161,9 +179,39 @@ async function submitEdit() {
     });
     showEdit.value = false;
     await refresh();
+  } catch (err: any) {
+    editError.value = err?.data?.message ?? err?.message ?? "Gagal menyimpan perubahan";
   } finally {
     editing.value = false;
   }
+}
+
+// ── Map Picker ────────────────────────────────────────────────────────────────
+const showMapPicker = ref(false);
+const activeMapForm = ref<"create" | "edit" | null>(null);
+
+function handleOpenMapPicker(which: "create" | "edit") {
+  activeMapForm.value = which;
+  showMapPicker.value = true;
+}
+
+function handleMapConfirm(lat: string, lng: string) {
+  if (lat && lng) {
+    const form = activeMapForm.value === "edit" ? editForm : createForm;
+    form.lat = lat;
+    form.lng = lng;
+  }
+  showMapPicker.value = false;
+  activeMapForm.value = null;
+}
+
+// ── Unit Credentials ──────────────────────────────────────────────────────────
+const showCredential = ref(false);
+const credentialTarget = ref<any>(null);
+
+function openCredential(item: any) {
+  credentialTarget.value = item;
+  showCredential.value = true;
 }
 
 // ── Delete ────────────────────────────────────────────────────────────────────
@@ -193,7 +241,7 @@ async function deleteEmergency(id: string, name: string) {
             <span v-else>{{ filtered.length }} dari {{ data?.data?.length ?? 0 }} layanan</span>
           </p>
         </div>
-        <UiButton size="sm" @click="showCreate = true">
+        <UiButton size="sm" @click="showCreate = true; createError = ''">
           <Icon icon="lucide:plus" class="text-sm" />
           <span class="hidden sm:inline">Tambah Layanan</span>
         </UiButton>
@@ -208,25 +256,18 @@ async function deleteEmergency(id: string, name: string) {
           v-model="search"
           type="text"
           placeholder="Cari nama, organisasi, wilayah..."
-          class="w-full pl-8 pr-3 py-1.5 text-sm border border-neutral-200 rounded-lg bg-neutral-50 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-colors"
+          class="w-full pl-8 pr-3 py-1.5 text-sm border border-neutral-200 rounded-lg bg-neutral-50 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:bg-white transition-colors"
         />
       </div>
-      <select
-        v-model="selectedType"
-        class="py-1.5 pl-3 pr-7 text-sm border border-neutral-200 rounded-lg bg-neutral-50 text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
-      >
+      <UiSelect v-model="selectedType" class="!w-auto">
         <option value="">Semua Jenis</option>
         <option v-for="t in (types?.data ?? [])" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
-      </select>
-      <select
-        v-model="pageSize"
-        class="py-1.5 pl-3 pr-7 text-sm border border-neutral-200 rounded-lg bg-neutral-50 text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
-        @change="page = 1"
-      >
+      </UiSelect>
+      <UiSelect v-model="pageSize" class="!w-auto" @change="page = 1">
         <option :value="10">10 / halaman</option>
         <option :value="25">25 / halaman</option>
         <option :value="50">50 / halaman</option>
-      </select>
+      </UiSelect>
     </div>
 
     <!-- Table -->
@@ -248,19 +289,20 @@ async function deleteEmergency(id: string, name: string) {
               <tr v-if="pending">
                 <td colspan="6" class="px-5 py-10 text-center">
                   <div class="flex items-center justify-center gap-2 text-neutral-400 text-sm">
-                    <Icon icon="lucide:loader-2" class="animate-spin" />
+                    <UiSpinner size="sm" />
                     Memuat data...
                   </div>
                 </td>
               </tr>
               <tr v-else-if="!paginated.length">
-                <td colspan="6" class="px-5 py-10 text-center">
-                  <div class="flex flex-col items-center gap-2">
-                    <div class="w-10 h-10 rounded-full bg-neutral-100 flex items-center justify-center">
-                      <Icon icon="lucide:search-x" class="text-neutral-400" />
-                    </div>
-                    <p class="text-sm text-neutral-500">Tidak ada data yang cocok</p>
-                  </div>
+                <td colspan="6">
+                  <UiEmptyState title="Tidak ada data yang cocok">
+                    <template #icon>
+                      <div class="w-10 h-10 rounded-full bg-neutral-100 flex items-center justify-center">
+                        <Icon icon="lucide:search-x" class="text-neutral-400" />
+                      </div>
+                    </template>
+                  </UiEmptyState>
                 </td>
               </tr>
               <tr
@@ -320,6 +362,13 @@ async function deleteEmergency(id: string, name: string) {
                 <td class="px-4 sm:px-5 py-3.5 text-right">
                   <div class="flex items-center justify-end gap-1.5">
                     <button
+                      class="w-7 h-7 flex items-center justify-center rounded-lg text-neutral-400 hover:text-purple-600 hover:bg-purple-50 transition-colors"
+                      title="Set Akun Unit"
+                      @click="openCredential(item)"
+                    >
+                      <Icon icon="lucide:key-round" class="text-sm" />
+                    </button>
+                    <button
                       class="w-7 h-7 flex items-center justify-center rounded-lg text-neutral-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
                       title="Edit"
                       @click="openEdit(item)"
@@ -332,7 +381,8 @@ async function deleteEmergency(id: string, name: string) {
                       :disabled="deletingId === item.id"
                       @click="deleteEmergency(item.id, item.name)"
                     >
-                      <Icon :icon="deletingId === item.id ? 'lucide:loader-2' : 'lucide:trash-2'" :class="['text-sm', { 'animate-spin': deletingId === item.id }]" />
+                      <UiSpinner v-if="deletingId === item.id" size="xs" class="text-emergency-500" />
+                      <Icon v-else icon="lucide:trash-2" class="text-sm" />
                     </button>
                   </div>
                 </td>
@@ -341,28 +391,13 @@ async function deleteEmergency(id: string, name: string) {
           </table>
         </div>
 
-        <!-- Pagination -->
-        <div v-if="!pending && filtered.length" class="px-4 sm:px-5 py-3 border-t border-neutral-100 bg-neutral-50 flex items-center justify-between gap-4 flex-wrap">
-          <p class="text-xs text-neutral-500">
-            {{ (page - 1) * pageSize + 1 }}–{{ Math.min(page * pageSize, filtered.length) }} dari {{ filtered.length }}
-          </p>
-          <div class="flex items-center gap-1">
-            <button
-              :disabled="page <= 1"
-              class="w-7 h-7 flex items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              @click="page--"
-            >
-              <Icon icon="lucide:chevron-left" class="text-sm" />
-            </button>
-            <span class="text-xs text-neutral-600 px-2">{{ page }} / {{ totalPages }}</span>
-            <button
-              :disabled="page >= totalPages"
-              class="w-7 h-7 flex items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              @click="page++"
-            >
-              <Icon icon="lucide:chevron-right" class="text-sm" />
-            </button>
-          </div>
+        <div v-if="!pending && filtered.length" class="px-4 sm:px-5 py-3 border-t border-neutral-100 bg-neutral-50">
+          <UiPagination
+            v-model:page="page"
+            :total-pages="totalPages"
+            :total="filtered.length"
+            :page-size="pageSize"
+          />
         </div>
       </div>
     </div>
@@ -370,8 +405,9 @@ async function deleteEmergency(id: string, name: string) {
     <!-- Create modal -->
     <UiModal v-model:open="showCreate" title="Tambah Layanan Darurat" description="Tambahkan layanan darurat baru ke dalam sistem.">
       <template #trigger><span /></template>
-      <EmergencyForm :types="types?.data ?? []" :form="createForm" />
+      <EmergencyForm :types="types?.data ?? []" :form="createForm" @open-map-picker="handleOpenMapPicker('create')" />
       <template #footer>
+        <p v-if="createError" class="text-xs text-emergency-600 flex-1 text-left">{{ createError }}</p>
         <UiButton variant="secondary" size="sm" @click="showCreate = false">Batal</UiButton>
         <UiButton size="sm" :loading="creating" :disabled="!createForm.name || !createForm.type_id" @click="submitCreate">
           Simpan
@@ -382,13 +418,30 @@ async function deleteEmergency(id: string, name: string) {
     <!-- Edit modal -->
     <UiModal v-model:open="showEdit" title="Edit Layanan Darurat" description="Ubah data layanan darurat.">
       <template #trigger><span /></template>
-      <EmergencyForm :types="types?.data ?? []" :form="editForm" />
+      <EmergencyForm :types="types?.data ?? []" :form="editForm" @open-map-picker="handleOpenMapPicker('edit')" />
       <template #footer>
+        <p v-if="editError" class="text-xs text-emergency-600 flex-1 text-left">{{ editError }}</p>
         <UiButton variant="secondary" size="sm" @click="showEdit = false">Batal</UiButton>
         <UiButton size="sm" :loading="editing" :disabled="!editForm.name || !editForm.type_id" @click="submitEdit">
           Simpan Perubahan
         </UiButton>
       </template>
     </UiModal>
+    <!-- Unit credential modal -->
+    <UnitCredentialModal
+      v-if="showCredential"
+      :emergency-uuid="credentialTarget.id"
+      :unit-name="credentialTarget.name"
+      @close="showCredential = false"
+      @success="showCredential = false"
+    />
+
+    <!-- Map picker — rendered outside all UiModal/DialogContent to avoid reka-ui focus trap -->
+    <MapPickerModal
+      :is-open="showMapPicker"
+      :initial-lat="activeMapForm === 'edit' ? editForm.lat : createForm.lat"
+      :initial-lng="activeMapForm === 'edit' ? editForm.lng : createForm.lng"
+      @confirm="handleMapConfirm"
+    />
   </div>
 </template>

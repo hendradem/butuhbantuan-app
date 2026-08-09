@@ -34,3 +34,15 @@ func (s *RegionService) UpdateAvailableRegion(r domain.AvailableRegion) (*domain
 func (s *RegionService) DeleteAvailableRegion(id string) error {
 	return s.repo.DeleteAvailableRegion(id)
 }
+
+func (s *RegionService) SearchRegencies(q string) ([]domain.Regency, error) {
+	return s.repo.SearchRegencies(q)
+}
+
+func (s *RegionService) GetProvinces() ([]domain.Province, error) {
+	return s.repo.FindProvinces()
+}
+
+func (s *RegionService) GetRegenciesByProvince(provinceID string) ([]domain.Regency, error) {
+	return s.repo.FindRegenciesByProvince(provinceID)
+}

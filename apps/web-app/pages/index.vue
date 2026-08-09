@@ -72,7 +72,9 @@ async function boot() {
         <ExploreDetailSheet />
         <DetailSheet />
         <SearchSheet />
+        <OrderFormSheet />
         <ConfirmationSheet />
+        <ReviewSheet />
         <ErrorSheet />
       </template>
     </div>

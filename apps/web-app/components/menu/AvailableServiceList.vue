@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { toast } from "vue-sonner";
+import { toast } from "vue3-hot-toast";
 
 defineProps<{
   emergencyTypeData: any;

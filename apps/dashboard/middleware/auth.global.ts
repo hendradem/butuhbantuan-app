@@ -1,9 +1,27 @@
 export default defineNuxtRouteMiddleware((to) => {
-  const token = useCookie("dashboard-token");
-  if (!token.value && to.path !== "/login") {
+  const adminToken = useCookie("dashboard-token");
+  const unitToken = useCookie("unit-token");
+
+  const isAdmin = !!adminToken.value;
+  const isUnit = !!unitToken.value;
+
+  // Login page logic
+  if (to.path === "/login") {
+    if (isAdmin) return navigateTo("/");
+    if (isUnit) return navigateTo("/unit/orders");
+    return;
+  }
+
+  // Unit routes: only unit users
+  if (to.path.startsWith("/unit/")) {
+    if (isUnit) return;
+    if (isAdmin) return navigateTo("/");
     return navigateTo("/login");
   }
-  if (token.value && to.path === "/login") {
-    return navigateTo("/");
+
+  // Admin routes: only admin users
+  if (!isAdmin) {
+    if (isUnit) return navigateTo("/unit/orders");
+    return navigateTo("/login");
   }
 });

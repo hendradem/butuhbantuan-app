@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -79,6 +80,43 @@ func (h *GeocodingHandler) ReverseGeocoding(c *fiber.Ctx) error {
 	}
 
 	h.geocache.Set(cacheKey, result, 10*time.Minute)
+	return response.OK(c, "success", result)
+}
+
+// SearchGeocoding does a forward geocoding search using Nominatim, returning
+// up to 5 results matching the query. No API key required.
+func (h *GeocodingHandler) SearchGeocoding(c *fiber.Ctx) error {
+	q := c.Query("q")
+	if q == "" {
+		return response.Error(c, fiber.StatusBadRequest, "q is required")
+	}
+
+	reqURL := fmt.Sprintf(
+		"%s/search?q=%s&format=json&limit=5&addressdetails=1&countrycodes=id",
+		h.cfg.NominatimURL, url.QueryEscape(q),
+	)
+
+	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "failed to build request")
+	}
+	req.Header.Set("User-Agent", "ButuhBantuan/1.0 (contact: mufindlabs@gmail.com)")
+
+	resp, err := httpclient.Default.Do(req)
+	if err != nil {
+		return response.Error(c, fiber.StatusBadGateway, "geocoding service unreachable")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return response.Error(c, fiber.StatusBadGateway, fmt.Sprintf("geocoding service returned %d", resp.StatusCode))
+	}
+
+	var result []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "failed to decode response")
+	}
+
 	return response.OK(c, "success", result)
 }
 
