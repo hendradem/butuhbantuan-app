@@ -6,26 +6,36 @@ const from = computed(() => props.total != null && props.pageSize ? (props.page 
 const to = computed(() => props.total != null && props.pageSize ? Math.min(props.page * props.pageSize, props.total) : null);
 </script>
 <template>
-  <div class="flex items-center justify-between gap-4 flex-wrap">
-    <p v-if="total != null && from != null" class="text-xs text-neutral-500">
-      {{ from }}–{{ to }} dari {{ total }}
+  <div class="flex items-center justify-between flex-wrap gap-3">
+    <p v-if="total != null && from != null" class="text-sm text-neutral-700">
+      Menampilkan <span class="font-semibold">{{ from }}</span>–<span class="font-semibold">{{ to }}</span> dari <span class="font-semibold">{{ total }}</span>
     </p>
-    <div class="flex items-center gap-1 ml-auto">
-      <button
-        :disabled="page <= 1"
-        class="w-7 h-7 flex items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-200 border border-neutral-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        @click="emit('update:page', page - 1)"
-      >
-        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-      </button>
-      <span class="text-xs text-neutral-600 px-2">{{ page }} / {{ totalPages }}</span>
-      <button
-        :disabled="page >= totalPages"
-        class="w-7 h-7 flex items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-200 border border-neutral-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        @click="emit('update:page', page + 1)"
-      >
-        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-      </button>
-    </div>
+    <nav class="ml-auto">
+      <ul class="inline-flex -space-x-px text-sm">
+        <li>
+          <button
+            :disabled="page <= 1"
+            class="flex items-center justify-center px-3 h-8 leading-tight text-neutral-500 bg-white border border-neutral-300 rounded-s-lg hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            @click="emit('update:page', page - 1)"
+          >
+            Prev
+          </button>
+        </li>
+        <li>
+          <span class="flex items-center justify-center px-4 h-8 leading-tight text-neutral-600 bg-white border border-neutral-300 text-sm">
+            {{ page }} / {{ totalPages }}
+          </span>
+        </li>
+        <li>
+          <button
+            :disabled="page >= totalPages"
+            class="flex items-center justify-center px-3 h-8 leading-tight text-neutral-500 bg-white border border-neutral-300 rounded-e-lg hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            @click="emit('update:page', page + 1)"
+          >
+            Next
+          </button>
+        </li>
+      </ul>
+    </nav>
   </div>
 </template>

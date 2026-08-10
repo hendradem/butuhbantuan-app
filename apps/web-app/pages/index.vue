@@ -76,6 +76,7 @@ async function boot() {
         <ConfirmationSheet />
         <ReviewSheet />
         <ErrorSheet />
+        <SosSheet />
       </template>
     </div>
   </div>

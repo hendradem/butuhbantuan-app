@@ -89,17 +89,19 @@ function openSearch() {
             <p class="text-gray-500 leading-normal truncate text-sm">
               {{ item.emergencyData?.organization_name?.slice(0, 30) }}
             </p>
-            <div class="flex mt-2 items-center text-gray-500 text-sm gap-2 truncate">
-              <span class="flex items-center gap-1">
-                <Icon icon="mingcute:location-fill" />
-                <span class="leading-none">
+            <div class="flex mt-2 items-center text-gray-500 text-sm gap-1.5 flex-wrap">
+              <span class="flex items-center gap-1 min-w-0 shrink truncate">
+                <Icon icon="mingcute:location-fill" class="shrink-0" />
+                <span class="leading-none truncate">
                   {{ cityNameFormat(item.emergencyData?.address?.regency ?? "") }}
                 </span>
               </span>
-              <span class="flex items-center gap-1">
-                <Icon icon="mdi:circle-outline" />
-                <span class="leading-none">{{ item.emergencyData?.type_of_service }}</span>
-              </span>
+              
+              <span
+                v-for="tipe in (item.emergencyData?.tipe_emergency ?? [])"
+                :key="tipe"
+                :class="['shrink-0 text-[10px] font-medium px-2 uppercase rounded-full tracking-wide', tipe === 'emergency' ? 'bg-red-50 text-neutral-600' : tipe === 'transport' ? 'bg-blue-50 text-neutral-600' : tipe === 'pemadam' ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-700']"
+              >{{ tipe === 'pencarian dan pertolongan' ? 'SAR' : tipe }}</span>
             </div>
           </div>
         </div>

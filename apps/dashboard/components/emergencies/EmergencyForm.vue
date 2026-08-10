@@ -26,12 +26,19 @@ const props = defineProps<{
     is_dispatcher: boolean;
     is_province_dispatcher: boolean;
     type_of_service: string;
+    tipe_emergency: string[];
+    is_active: boolean;
+    is_24_hours: boolean;
+    open_time: string;
+    close_time: string;
+    total_units: number;
+    available_units: number;
   };
 }>();
 
 const config = useRuntimeConfig();
 const baseUrl = config.public.apiBaseUrl as string;
-const ic = "w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"; // kept for address search input only
+const ic = "w-full pl-8 pr-3 py-2.5 text-sm border border-neutral-300 rounded-lg bg-neutral-50 text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-4 focus:ring-primary-100 focus:border-primary-500 transition-colors";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const authToken = useCookie<string | null>("dashboard-token");
@@ -211,6 +218,20 @@ function selectAddress(item: any) {
       <UiFormField label="Tipe Organisasi">
         <UiInput v-model="form.organization_type" placeholder="mis. Rumah Sakit Pemerintah" />
       </UiFormField>
+      <div class="col-span-2 sm:col-span-1">
+        <label class="block text-sm font-medium text-neutral-900 mb-2">Tipe Emergency</label>
+        <div class="flex flex-wrap gap-2">
+          <label
+            v-for="opt in ['emergency', 'transport', 'pencarian dan pertolongan']"
+            :key="opt"
+            class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-sm cursor-pointer transition-colors"
+            :class="form.tipe_emergency.includes(opt) ? 'bg-primary-50 border-primary-400 text-primary-700 font-medium' : 'border-neutral-200 text-neutral-600 hover:bg-neutral-50'"
+          >
+            <input type="checkbox" :value="opt" v-model="form.tipe_emergency" class="hidden" />
+            {{ opt.charAt(0).toUpperCase() + opt.slice(1) }}
+          </label>
+        </div>
+      </div>
     </div>
     <UiFormField label="Deskripsi">
       <UiTextarea v-model="form.description" :rows="2" placeholder="Deskripsi singkat..." />
@@ -238,7 +259,7 @@ function selectAddress(item: any) {
           <div class="flex items-center gap-2">
             <span class="text-xs text-neutral-400">atau</span>
             <label
-              class="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50 transition-colors"
+              class="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100 transition-colors"
               :class="uploadingLogo ? 'opacity-50 pointer-events-none' : ''"
             >
               <UiSpinner v-if="uploadingLogo" size="xs" />
@@ -305,7 +326,7 @@ function selectAddress(item: any) {
 
       <!-- Address search for coordinates -->
       <div class="mb-3">
-        <label class="block text-sm font-medium text-neutral-700 mb-1.5">
+        <label class="block text-sm font-medium text-neutral-900 mb-2">
           Cari Alamat <span class="font-normal text-neutral-400 text-xs">(untuk mengisi koordinat otomatis)</span>
         </label>
         <div class="relative">
@@ -315,7 +336,7 @@ function selectAddress(item: any) {
             v-model="addressQuery"
             type="text"
             placeholder="Ketik alamat lengkap..."
-            :class="ic.replace('px-3', 'pl-8 pr-3')"
+            :class="ic"
             autocomplete="off"
             @input="onAddressInput"
             @blur="hideAddressDrop"
@@ -390,6 +411,54 @@ function selectAddress(item: any) {
           <span class="text-sm text-neutral-700">Dispatcher tingkat provinsi</span>
         </label>
       </div>
+    </div>
+
+    <!-- Operational Status -->
+    <div class="border-t border-neutral-100 pt-4">
+      <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">Status Operasional</p>
+      <div class="space-y-3">
+        <label class="flex items-center gap-2.5 cursor-pointer">
+          <input
+            v-model="form.is_active"
+            type="checkbox"
+            class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+          />
+          <span class="text-sm text-neutral-700">Layanan aktif</span>
+          <span
+            :class="['text-xs px-1.5 py-0.5 rounded-full font-medium', form.is_active ? 'bg-green-100 text-green-700' : 'bg-neutral-100 text-neutral-500']"
+          >{{ form.is_active ? 'Aktif' : 'Nonaktif' }}</span>
+        </label>
+        <label class="flex items-center gap-2.5 cursor-pointer">
+          <input
+            v-model="form.is_24_hours"
+            type="checkbox"
+            class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+          />
+          <span class="text-sm text-neutral-700">Beroperasi 24 jam</span>
+        </label>
+        <div v-if="!form.is_24_hours" class="grid grid-cols-2 gap-3">
+          <UiFormField label="Jam Buka">
+            <UiInput v-model="form.open_time" type="time" />
+          </UiFormField>
+          <UiFormField label="Jam Tutup">
+            <UiInput v-model="form.close_time" type="time" />
+          </UiFormField>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fleet -->
+    <div class="border-t border-neutral-100 pt-4">
+      <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">Ketersediaan Armada</p>
+      <div class="grid grid-cols-2 gap-3">
+        <UiFormField label="Total Unit">
+          <UiInput v-model.number="form.total_units" type="number" min="0" placeholder="0" />
+        </UiFormField>
+        <UiFormField label="Unit Tersedia">
+          <UiInput v-model.number="form.available_units" type="number" min="0" :max="form.total_units" placeholder="0" />
+        </UiFormField>
+      </div>
+      <p class="text-xs text-neutral-400 mt-1.5">Unit dapat diperbarui secara real-time oleh operator unit dari panel mereka.</p>
     </div>
   </div>
 

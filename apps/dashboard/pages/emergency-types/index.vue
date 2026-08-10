@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import { toast } from "vue3-hot-toast";
 
 definePageMeta({ title: "Jenis Layanan" });
 
@@ -58,6 +59,9 @@ async function submitCreate() {
     showCreate.value = false;
     Object.assign(createForm, { name: "", icon: "", description: "" });
     await refresh();
+    toast.success("Jenis layanan berhasil ditambahkan");
+  } catch {
+    toast.error("Gagal menambahkan jenis layanan");
   } finally {
     creating.value = false;
   }
@@ -84,6 +88,9 @@ async function submitEdit() {
     });
     showEdit.value = false;
     await refresh();
+    toast.success("Jenis layanan berhasil diperbarui");
+  } catch {
+    toast.error("Gagal memperbarui jenis layanan");
   } finally {
     editing.value = false;
   }
@@ -91,15 +98,27 @@ async function submitEdit() {
 
 // ── Delete ────────────────────────────────────────────────────────────────────
 const deletingId = ref<number | null>(null);
+const showDeleteTypeConfirm = ref(false);
+const deleteTypeTarget = ref<{ id: number; name: string } | null>(null);
 
-async function deleteType(id: number, name: string) {
-  if (!confirm(`Hapus jenis "${name}"?`)) return;
-  deletingId.value = id;
+function confirmDeleteType(id: number, name: string) {
+  deleteTypeTarget.value = { id, name };
+  showDeleteTypeConfirm.value = true;
+}
+
+async function executeDeleteType() {
+  if (!deleteTypeTarget.value) return;
+  deletingId.value = deleteTypeTarget.value.id;
+  showDeleteTypeConfirm.value = false;
   try {
-    await del(`/api/v1/emergency/type/${id}`);
+    await del(`/api/v1/emergency/type/${deleteTypeTarget.value.id}`);
     await refresh();
+    toast.success(`Jenis "${deleteTypeTarget.value.name}" berhasil dihapus`);
+  } catch {
+    toast.error("Gagal menghapus jenis layanan");
   } finally {
     deletingId.value = null;
+    deleteTypeTarget.value = null;
   }
 }
 </script>
@@ -110,12 +129,12 @@ async function deleteType(id: number, name: string) {
     <div class="border-b border-neutral-200 bg-white px-4 sm:px-6 py-4">
       <div class="flex items-center justify-between">
         <div>
-          <h1 class="text-lg font-semibold text-neutral-900">Jenis Layanan</h1>
+          <h1 class="text-xl font-semibold text-neutral-900">Jenis Layanan</h1>
           <p class="text-sm text-neutral-500 mt-0.5">{{ filtered.length }} jenis terdaftar</p>
         </div>
-        <UiButton size="sm" @click="showCreate = true">
+        <UiButton @click="showCreate = true">
           <Icon icon="lucide:plus" class="text-sm" />
-          <span class="hidden sm:inline">Tambah Jenis</span>
+          Tambah Jenis
         </UiButton>
       </div>
     </div>
@@ -167,7 +186,7 @@ async function deleteType(id: number, name: string) {
               variant="danger"
               size="sm"
               :loading="deletingId === type.id"
-              @click="deleteType(type.id, type.name)"
+              @click="confirmDeleteType(type.id, type.name)"
             >
               <Icon icon="lucide:trash-2" class="text-xs" />
               Hapus
@@ -230,6 +249,21 @@ async function deleteType(id: number, name: string) {
       <template #footer>
         <UiButton variant="secondary" size="sm" @click="showEdit = false">Batal</UiButton>
         <UiButton size="sm" :loading="editing" :disabled="!editForm.name || !editForm.icon" @click="submitEdit">Simpan Perubahan</UiButton>
+      </template>
+    </UiModal>
+
+    <!-- Delete confirm modal -->
+    <UiModal v-model:open="showDeleteTypeConfirm" title="Hapus Jenis Layanan" description="Tindakan ini tidak dapat dibatalkan.">
+      <template #trigger><span /></template>
+      <p class="text-sm text-neutral-600">
+        Apakah kamu yakin ingin menghapus jenis <span class="font-semibold">{{ deleteTypeTarget?.name }}</span>?
+      </p>
+      <template #footer>
+        <UiButton variant="secondary" size="sm" @click="showDeleteTypeConfirm = false">Batal</UiButton>
+        <UiButton variant="danger" size="sm" @click="executeDeleteType">
+          <Icon icon="lucide:trash-2" class="text-sm" />
+          Hapus
+        </UiButton>
       </template>
     </UiModal>
   </div>

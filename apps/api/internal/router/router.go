@@ -6,6 +6,7 @@ import (
 	"github.com/butuhbantuan/api/internal/repository"
 	"github.com/butuhbantuan/api/internal/service"
 	"github.com/butuhbantuan/api/pkg/config"
+	"github.com/butuhbantuan/api/pkg/hub"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -17,8 +18,12 @@ func Register(
 	feedbackSvc service.FeedbackUseCase,
 	orderSvc service.OrderUseCase,
 	unitAuthSvc service.UnitAuthUseCase,
+	sosSvc service.SOSUseCase,
+	pushSvc service.PushUseCase,
+	analyticsSvc service.AnalyticsUseCase,
 	unitCredRepo repository.UnitCredentialRepository,
 	cfg *config.Config,
+	eventHub *hub.Hub,
 ) {
 	emergency := handler.NewEmergencyHandler(emergencySvc, emergencyTypeSvc)
 	region := handler.NewRegionHandler(regionSvc)
@@ -28,6 +33,10 @@ func Register(
 	feedbackH := handler.NewFeedbackHandler(feedbackSvc)
 	orderH := handler.NewOrderHandler(orderSvc)
 	unitH := handler.NewUnitHandler(unitAuthSvc, orderSvc, emergencySvc, feedbackSvc)
+	sosH := handler.NewSOSHandler(sosSvc)
+	pushH := handler.NewPushHandler(pushSvc)
+	streamH := handler.NewStreamHandler(eventHub)
+	analyticsH := handler.NewAnalyticsHandler(analyticsSvc)
 
 	adminAuth := middleware.AdminAuth(cfg.AdminAPIKey)
 	unitAuth := middleware.UnitAuth(unitCredRepo)
@@ -35,7 +44,7 @@ func Register(
 	v1 := app.Group("/api/v1")
 	v1.Get("/health", handler.Health)
 	v1.Post("/auth/login", authH.Login)
-	v1.Post("/upload", adminAuth, handler.UploadFile)
+	v1.Post("/upload", handler.UploadFile)
 
 	em := v1.Group("/emergency")
 	em.Get("/", emergency.GetAll)
@@ -50,6 +59,8 @@ func Register(
 	em.Post("/", adminAuth, emergency.Create)
 	em.Put("/:id", adminAuth, emergency.Update)
 	em.Delete("/:id", adminAuth, emergency.Delete)
+	em.Patch("/:id/operational", adminAuth, emergency.UpdateOperational)
+	em.Patch("/:id/active", adminAuth, emergency.ToggleActive)
 
 	svc := v1.Group("/service")
 	svc.Get("/province", region.GetProvinces)
@@ -89,8 +100,22 @@ func Register(
 	unit.Get("/orders", unitAuth, unitH.GetOrders)
 	unit.Put("/orders/:id", unitAuth, unitH.UpdateOrder)
 	unit.Get("/feedback", unitAuth, unitH.GetFeedback)
+	unit.Patch("/fleet", unitAuth, unitH.UpdateFleet)
+	unit.Patch("/availability", unitAuth, unitH.UpdateAvailability)
+	unit.Get("/stream", unitAuth, streamH.Stream)
+
+	sos := v1.Group("/sos")
+	sos.Post("/", sosH.Submit)
+	sos.Get("/", adminAuth, sosH.GetAll)
+
+	push := v1.Group("/push")
+	push.Get("/vapid-key", pushH.VAPIDPublicKey)
+	push.Post("/subscribe", pushH.Subscribe)
+	push.Delete("/subscribe", pushH.Unsubscribe)
 
 	admin := v1.Group("/admin")
 	admin.Post("/units/:uuid/credentials", adminAuth, unitH.SetCredentials)
 	admin.Get("/orders", adminAuth, unitH.GetAllOrders)
+	admin.Get("/analytics", adminAuth, analyticsH.Get)
+	admin.Get("/analytics/heatmap", adminAuth, analyticsH.GetHeatmap)
 }

@@ -20,6 +20,88 @@ const { data: feedbackStats } = await useAsyncData("feedback-stats", () =>
 const { data: feedbackList } = await useAsyncData("feedback-list", () =>
   authGet<{ data: any[] }>("/api/v1/feedback/")
 );
+const { data: ordersData } = await useAsyncData("overview-orders", () =>
+  authGet<{ data: any[] }>("/api/v1/admin/orders"),
+  { server: false }
+);
+const orders = computed(() => ordersData.value?.data ?? []);
+
+const emergencyMap = computed(() => {
+  const m: Record<string, any> = {};
+  for (const e of (emergencies.value?.data ?? [])) m[e.id] = e;
+  return m;
+});
+
+const unitOrderCounts = computed(() => {
+  const counts: Record<string, { emergency: any; pending: number; active: number; total: number }> = {};
+  for (const o of orders.value) {
+    const em = emergencyMap.value[o.emergency_uuid];
+    if (!em) continue;
+    const coords = em.coordinates as [string, string];
+    const lat = parseFloat(coords[1]);
+    const lng = parseFloat(coords[0]);
+    if (!lat || !lng) continue;
+    if (!counts[o.emergency_uuid]) counts[o.emergency_uuid] = { emergency: em, pending: 0, active: 0, total: 0 };
+    counts[o.emergency_uuid].total++;
+    if (o.status === "pending") counts[o.emergency_uuid].pending++;
+    if (o.status === "accepted" || o.status === "in_progress") counts[o.emergency_uuid].active++;
+  }
+  return Object.values(counts);
+});
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+const mapEl = ref<HTMLDivElement | null>(null);
+let mapInstance: any = null;
+let markerLayer: any = null;
+
+function markerColor(entry: { pending: number; active: number }) {
+  if (entry.pending > 0) return "#ef4444";
+  if (entry.active > 0) return "#f97316";
+  return "#22c55e";
+}
+
+async function initMap() {
+  if (!mapEl.value || mapInstance) return;
+  const L = (await import("leaflet")).default;
+  await import("leaflet/dist/leaflet.css");
+  mapInstance = L.map(mapEl.value, { zoomControl: true, attributionControl: false }).setView([-7.6, 110.1], 7);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(mapInstance);
+  markerLayer = L.layerGroup().addTo(mapInstance);
+  updateMarkers(L);
+}
+
+function updateMarkers(L: any) {
+  if (!markerLayer) return;
+  markerLayer.clearLayers();
+  for (const entry of unitOrderCounts.value) {
+    const coords = entry.emergency.coordinates as [string, string];
+    const lat = parseFloat(coords[1]);
+    const lng = parseFloat(coords[0]);
+    if (!lat || !lng) continue;
+    const color = markerColor(entry);
+    const size = Math.min(20 + entry.total * 4, 44);
+    const pulseHtml = entry.pending > 0 || entry.active > 0
+      ? `<span class="pulse-ring" style="background:${color}20;animation:pulse-ring 1.6s ease-out infinite;"></span>`
+      : "";
+    const icon = L.divIcon({
+      className: "",
+      html: `<div style="position:relative;display:flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;">${pulseHtml}<div style="width:${Math.round(size*0.55)}px;height:${Math.round(size*0.55)}px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 2px 6px ${color}80;position:relative;z-index:1;display:flex;align-items:center;justify-content:center;color:white;font-size:9px;font-weight:700;">${entry.total}</div></div>`,
+      iconSize: [size, size], iconAnchor: [size / 2, size / 2],
+    });
+    const marker = L.marker([lat, lng], { icon });
+    marker.bindTooltip(
+      `<div style="font-size:12px;line-height:1.5;"><strong>${entry.emergency.name}</strong><br>${entry.total} pesanan · ${entry.pending} pending · ${entry.active} diproses</div>`,
+      { direction: "top", offset: [0, -size / 2] }
+    );
+    markerLayer.addLayer(marker);
+  }
+}
+
+watch(mapEl, (el) => { if (el && !mapInstance) initMap(); });
+watch(unitOrderCounts, async () => {
+  if (mapInstance) { const L = (await import("leaflet")).default; updateMarkers(L); }
+});
+onBeforeUnmount(() => { if (mapInstance) { mapInstance.remove(); mapInstance = null; } });
 
 const stats = computed(() => [
   {
@@ -75,12 +157,12 @@ const typeBreakdown = computed(() =>
 
 function typeBadgeColor(name: string) {
   const m: Record<string, string> = {
-    Ambulance: "text-red-700 bg-red-50",
-    Damkar: "text-orange-700 bg-orange-50",
-    "Rumah Sakit": "text-blue-700 bg-blue-50",
-    SAR: "text-green-700 bg-green-50",
+    Ambulance:    "bg-red-100 text-red-800",
+    Damkar:       "bg-orange-100 text-orange-800",
+    "Rumah Sakit":"bg-blue-100 text-blue-800",
+    SAR:          "bg-green-100 text-green-800",
   };
-  return m[name] ?? "text-neutral-700 bg-neutral-100";
+  return m[name] ?? "bg-neutral-100 text-neutral-700";
 }
 </script>
 
@@ -90,7 +172,7 @@ function typeBadgeColor(name: string) {
     <div class="border-b border-neutral-200 bg-white px-6 py-4">
       <div class="flex items-center justify-between">
         <div>
-          <h1 class="text-lg font-semibold text-neutral-900">Overview</h1>
+          <h1 class="text-xl font-semibold text-neutral-900">Overview</h1>
           <p class="text-sm text-neutral-500 mt-0.5">Ringkasan data sistem ButuhBantuan</p>
         </div>
         <UiBadge variant="success" dot>Sistem Aktif</UiBadge>
@@ -111,6 +193,30 @@ function typeBadgeColor(name: string) {
           <p class="text-3xl font-bold text-neutral-900">{{ stat.value }}</p>
           <p class="text-xs text-neutral-400 mt-1">{{ stat.sub }}</p>
         </div>
+      </div>
+
+      <!-- Map -->
+      <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+        <div class="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <Icon icon="lucide:map" class="text-neutral-400 text-sm" />
+            <p class="text-sm font-semibold text-neutral-900">Peta Sebaran Panggilan</p>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-neutral-500">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> Pending</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block" /> Diproses</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" /> Selesai</span>
+          </div>
+        </div>
+        <ClientOnly>
+          <div ref="mapEl" class="w-full h-[300px] sm:h-[380px]" />
+          <template #fallback>
+            <div class="w-full h-[300px] sm:h-[380px] bg-neutral-50 flex items-center justify-center text-neutral-400 text-sm gap-2">
+              <UiSpinner size="sm" />
+              Memuat peta...
+            </div>
+          </template>
+        </ClientOnly>
       </div>
 
       <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -145,7 +251,7 @@ function typeBadgeColor(name: string) {
                 <p class="text-sm font-medium text-neutral-900 truncate">{{ item.name }}</p>
                 <p class="text-xs text-neutral-400 truncate">{{ item.address?.regency }}</p>
               </div>
-              <span :class="['text-xs font-medium px-2 py-0.5 rounded-full', typeBadgeColor(item.emergency_type?.name)]">
+              <span :class="['text-xs font-medium px-2.5 py-0.5 rounded', typeBadgeColor(item.emergency_type?.name)]">
                 {{ item.emergency_type?.name ?? '-' }}
               </span>
             </div>
@@ -245,7 +351,7 @@ function typeBadgeColor(name: string) {
                 <p class="text-sm font-medium text-neutral-900 truncate">{{ fb.unit_name || '—' }}</p>
                 <p class="text-xs text-neutral-400">via {{ fb.call_type === 'whatsapp' ? 'WhatsApp' : 'Telepon' }}</p>
               </div>
-              <span :class="['text-xs font-medium px-2 py-0.5 rounded-full', fb.app_helpful === true ? 'bg-primary-50 text-primary-700' : fb.app_helpful === false ? 'bg-red-50 text-red-600' : 'bg-neutral-100 text-neutral-500']">
+              <span :class="['text-xs font-medium px-2.5 py-0.5 rounded', fb.app_helpful === true ? 'bg-primary-100 text-primary-800' : fb.app_helpful === false ? 'bg-red-100 text-red-800' : 'bg-neutral-100 text-neutral-600']">
                 App: {{ fb.app_helpful === true ? 'Berguna' : fb.app_helpful === false ? 'Tidak' : 'Biasa' }}
               </span>
             </div>
@@ -255,3 +361,15 @@ function typeBadgeColor(name: string) {
     </div>
   </div>
 </template>
+
+<style>
+@keyframes pulse-ring {
+  0%   { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.pulse-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+</style>

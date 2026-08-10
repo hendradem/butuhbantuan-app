@@ -9,6 +9,9 @@ func UnitAuth(repo repository.UnitCredentialRepository) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		token := c.Get("X-Unit-Token")
 		if token == "" {
+			token = c.Query("token") // fallback for EventSource (can't set headers)
+		}
+		if token == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"status":  "error",
 				"message": "unit token required",

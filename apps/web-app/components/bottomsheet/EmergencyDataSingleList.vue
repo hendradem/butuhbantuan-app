@@ -3,6 +3,17 @@ import { Icon } from "@iconify/vue";
 import { cityNameFormat } from "~/utils/cityNameFormat";
 import { formatDistance } from "~/utils/geo";
 
+function isOpenNow(op: any): boolean {
+  if (!op) return true;
+  if (!op.is_active) return false;
+  if (op.is_24_hours) return true;
+  const now = new Date();
+  const [oh, om] = (op.open_time || "00:00").split(":").map(Number);
+  const [ch, cm] = (op.close_time || "23:59").split(":").map(Number);
+  const cur = now.getHours() * 60 + now.getMinutes();
+  return cur >= oh * 60 + om && cur <= ch * 60 + cm;
+}
+
 const props = defineProps<{ data: any }>();
 
 const orderSheet = useOrderSheetStore();
@@ -73,15 +84,27 @@ function onContactClick(type: "whatsapp" | "phone", number: string, e: Event) {
           <p class="text-gray-500 leading-normal truncate text-sm">
             {{ emergencyData?.organization_name?.slice(0, 28) }}
           </p>
-          <div class="flex mt-2 items-center text-gray-500 text-sm gap-2 truncate">
-            <span class="flex items-center gap-1">
-              <Icon icon="mingcute:location-fill" />
-              <span class="leading-none">{{ cityNameFormat(emergencyData?.address?.regency ?? "") }}</span>
+          <div class="flex mt-2 items-center text-gray-500 text-sm gap-1.5 flex-wrap">
+            <span class="flex items-center gap-1 min-w-0 shrink truncate">
+              <Icon icon="mingcute:location-fill" class="shrink-0" />
+              <span class="leading-none truncate">{{ cityNameFormat(emergencyData?.address?.regency ?? "") }}</span>
             </span>
-            <span class="flex items-center gap-1">
-              <Icon icon="mdi:circle-outline" />
-              <span class="leading-none">{{ emergencyData?.type_of_service }}</span>
-            </span>
+            <span
+              :class="[
+                'shrink-0 flex items-center gap-1 text-[10px] font-semibold px-2  rounded-full',
+                isOpenNow(emergencyData?.operational) ? 'bg-green-100 text-green-700' : 'bg-neutral-100 text-neutral-500',
+              ]"
+            >
+              <Icon icon="lucide:clock" class="text-[10px]" />
+              {{ isOpenNow(emergencyData?.operational) ? 'Buka' : 'Tutup' }}
+              <template v-if="emergencyData?.operational?.is_24_hours"> · 24 Jam</template>
+              <template v-else-if="emergencyData?.operational?.open_time"> · {{ emergencyData.operational.open_time }}–{{ emergencyData.operational.close_time }}</template>
+            </span> 
+            <span
+                v-for="tipe in (emergencyData?.tipe_emergency ?? [])"
+                :key="tipe"
+                :class="['shrink-0 text-[10px] font-medium px-2 uppercase rounded-full tracking-wide', tipe === 'emergency' ? 'bg-red-50 text-neutral-600' : tipe === 'transport' ? 'bg-blue-50 text-neutral-600' : tipe === 'pemadam' ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-700']"
+              >{{ tipe === 'pencarian dan pertolongan' ? 'SAR' : tipe }}</span>
           </div>
         </div>
       </div>

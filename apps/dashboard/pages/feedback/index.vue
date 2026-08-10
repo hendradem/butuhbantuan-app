@@ -22,6 +22,17 @@ const { data: groupedData, refresh: refreshGrouped } = await useAsyncData("fb-gr
 const stats = computed(() => statsData.value?.data);
 const groups = computed(() => groupedData.value?.data ?? []);
 
+// ── Row dropdown ──────────────────────────────────────────────────────────────
+const dropdownItem = ref<any>(null);
+const dropdownPos = ref({ top: 0, right: 0 });
+function toggleDropdown(item: any, event: MouseEvent) {
+  if (dropdownItem.value?.emergency_uuid === item.emergency_uuid) { dropdownItem.value = null; return; }
+  const btn = event.currentTarget as HTMLElement;
+  const rect = btn.getBoundingClientRect();
+  dropdownPos.value = { top: rect.bottom + 4, right: window.innerWidth - rect.right };
+  dropdownItem.value = item;
+}
+
 // ── Detail modal ──────────────────────────────────────────────────────────────
 const detailUnit = ref<any>(null);
 const detailFeedbacks = ref<any[]>([]);
@@ -101,14 +112,17 @@ function rateTextColor(rate: number) {
 
 <template>
   <div>
+    <!-- Dropdown overlay -->
+    <div v-if="dropdownItem" class="fixed inset-0 z-[98]" @click="dropdownItem = null" />
+
     <!-- Page header -->
     <div class="border-b border-neutral-200 bg-white px-4 sm:px-6 py-4">
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between gap-4">
         <div>
-          <h1 class="text-lg font-semibold text-neutral-900">Feedback Masyarakat</h1>
+          <h1 class="text-xl font-semibold text-neutral-900">Feedback Masyarakat</h1>
           <p class="text-sm text-neutral-500 mt-0.5">Penilaian dari pengguna setelah menghubungi layanan darurat</p>
         </div>
-        <UiButton variant="secondary" size="sm" @click="refreshGrouped(); refreshStats()">
+        <UiButton variant="secondary" @click="refreshGrouped(); refreshStats()">
           <Icon icon="lucide:refresh-cw" class="text-sm" />
           Refresh
         </UiButton>
@@ -220,22 +234,14 @@ function rateTextColor(rate: number) {
 
                 <!-- Actions -->
                 <td class="px-5 py-4 text-right">
-                  <div class="flex items-center justify-end gap-1.5">
-                    <button
-                      class="w-7 h-7 flex items-center justify-center rounded-lg text-neutral-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
-                      title="Lihat semua komentar"
-                      @click="openDetail(group)"
-                    >
-                      <Icon icon="lucide:message-square-text" class="text-sm" />
-                    </button>
-                    <button
-                      class="w-7 h-7 flex items-center justify-center rounded-lg text-neutral-400 hover:text-green-600 hover:bg-green-50 transition-colors"
-                      title="Kirim ringkasan via WhatsApp"
-                      @click="sendWA(group)"
-                    >
-                      <Icon icon="mdi:whatsapp" class="text-sm" />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-neutral-900 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 focus:outline-none focus:ring-4 focus:ring-neutral-100 transition-colors"
+                    @click.stop="toggleDropdown(group, $event)"
+                  >
+                    Aksi
+                    <Icon icon="lucide:chevron-down" class="text-xs text-neutral-500" />
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -243,6 +249,31 @@ function rateTextColor(rate: number) {
         </div>
       </div>
     </div>
+
+    <!-- Row dropdown (teleported) -->
+    <Teleport to="body">
+      <div
+        v-if="dropdownItem"
+        class="fixed z-[99] w-52 bg-white rounded-xl shadow-lg border border-neutral-200 overflow-hidden py-1"
+        :style="{ top: dropdownPos.top + 'px', right: dropdownPos.right + 'px' }"
+        @click.stop
+      >
+        <button
+          class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors"
+          @click="openDetail(dropdownItem); dropdownItem = null"
+        >
+          <Icon icon="lucide:message-square-text" class="text-neutral-500 text-base shrink-0" />
+          Lihat Komentar
+        </button>
+        <button
+          class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors"
+          @click="sendWA(dropdownItem); dropdownItem = null"
+        >
+          <Icon icon="mdi:whatsapp" class="text-green-600 text-base shrink-0" />
+          Kirim Ringkasan WA
+        </button>
+      </div>
+    </Teleport>
 
     <!-- Detail modal -->
     <UiModal v-model:open="showDetail" :title="detailUnit?.unit_name ?? ''" description="Semua penilaian dari pengguna untuk unit ini.">

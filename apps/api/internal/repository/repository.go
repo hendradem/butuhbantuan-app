@@ -22,6 +22,20 @@ type EmergencyRepository interface {
 	Create(e domain.Emergency) (*domain.Emergency, error)
 	Update(e domain.Emergency) (*domain.Emergency, error)
 	Delete(id string) error
+	UpdateOperational(id string, status domain.OperationalStatus) error
+	UpdateFleet(id string, fleet domain.FleetStatus) error
+	UpdateActive(id string, isActive bool) error
+}
+
+type PushRepository interface {
+	Save(sub domain.PushSubscription) error
+	FindByTicket(ticketNumber string) ([]domain.PushSubscription, error)
+	DeleteByEndpoint(endpoint string) error
+}
+
+type SOSRepository interface {
+	Create(s domain.SOSAlert) (*domain.SOSAlert, error)
+	FindAll() ([]domain.SOSAlert, error)
 }
 
 type EmergencyTypeRepository interface {
@@ -62,6 +76,11 @@ func (r *NoopUnitCredentialRepository) FindByToken(_ string) (*domain.UnitCreden
 }
 func (r *NoopUnitCredentialRepository) FindByUsername(_ string) (*domain.UnitCredential, error) {
 	return nil, ErrNotFound
+}
+
+type AnalyticsRepository interface {
+	GetAnalytics(periodDays int) (domain.Analytics, error)
+	GetHeatmap(periodDays int) ([]domain.HeatmapPoint, error)
 }
 
 type RegionRepository interface {

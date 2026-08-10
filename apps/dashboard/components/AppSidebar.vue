@@ -28,11 +28,14 @@ const groups: NavGroup[] = [
     label: "Operasional",
     items: [
       { label: "Pesanan Masuk",    to: "/orders",          icon: "lucide:clipboard-list" },
+      { label: "Alert SOS",        to: "/sos",             icon: "lucide:siren" },
+      { label: "Laporan Kejadian", to: "/reports",         icon: "lucide:file-text" },
     ],
   },
   {
     label: "Insight",
     items: [
+      { label: "Analitik",         to: "/analytics",       icon: "lucide:bar-chart-2" },
       { label: "Feedback",         to: "/feedback",        icon: "lucide:message-square-text" },
     ],
   },
@@ -85,7 +88,7 @@ function onNavClick() {
       <div v-for="(group, gi) in groups" :key="gi" class="space-y-0.5">
         <p
           v-if="group.label && !collapsed"
-          class="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-400 select-none"
+          class="px-2 mb-1 text-xs font-semibold uppercase tracking-wider text-neutral-400 select-none"
         >
           {{ group.label }}
         </p>
@@ -124,8 +127,8 @@ function onNavClick() {
           <Icon icon="lucide:user" class="text-primary-600 text-sm" />
         </div>
         <div v-if="!collapsed" class="min-w-0">
-          <p class="text-xs font-semibold text-neutral-800 leading-none truncate">Admin</p>
-          <p class="text-[11px] text-neutral-400 leading-none mt-0.5">Administrator</p>
+          <p class="text-sm font-semibold text-neutral-800 leading-none truncate">Admin</p>
+          <p class="text-xs text-neutral-400 leading-none mt-0.5">Administrator</p>
         </div>
         <Icon v-if="!collapsed" icon="lucide:chevrons-up-down" class="text-neutral-300 text-sm ml-auto shrink-0" />
       </div>

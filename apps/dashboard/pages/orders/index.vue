@@ -72,7 +72,12 @@ const filtered = computed(() => {
       o.location?.toLowerCase().includes(q)
     );
   }
-  return list;
+  return [...list].sort((a: any, b: any) => {
+    const va = String(a[sortCol.value] ?? '');
+    const vb = String(b[sortCol.value] ?? '');
+    const cmp = va.localeCompare(vb);
+    return sortDir.value === 'asc' ? cmp : -cmp;
+  });
 });
 
 watch([filterStatus, filterType, filterProvince, search], () => { page.value = 1; });
@@ -95,104 +100,16 @@ const stats = computed(() => ({
 // ── Notification + auto-refresh ───────────────────────────────────────────────
 useOrderNotification(computed(() => stats.value.pending), refresh);
 
-// ── Map ───────────────────────────────────────────────────────────────────────
-const mapEl = ref<HTMLDivElement | null>(null);
-let mapInstance: any = null;
-let markerLayer: any = null;
+// ── Sort ──────────────────────────────────────────────────────────────────────
+type SortCol = 'ticket_number' | 'requester_name' | 'unit_name' | 'created_at' | 'status';
+const sortCol = ref<SortCol>('created_at');
+const sortDir = ref<'asc' | 'desc'>('desc');
 
-// Group active orders by emergency unit for map markers
-const unitOrderCounts = computed(() => {
-  const counts: Record<string, { emergency: any; pending: number; active: number; total: number }> = {};
-  for (const o of orders.value) {
-    const em = emergencyMap.value[o.emergency_uuid];
-    if (!em) continue;
-    const coords = em.coordinates as [string, string]; // [lng, lat]
-    const lat = parseFloat(coords[1]);
-    const lng = parseFloat(coords[0]);
-    if (!lat || !lng) continue;
-    if (!counts[o.emergency_uuid]) {
-      counts[o.emergency_uuid] = { emergency: em, pending: 0, active: 0, total: 0 };
-    }
-    counts[o.emergency_uuid].total++;
-    if (o.status === "pending") counts[o.emergency_uuid].pending++;
-    if (o.status === "accepted" || o.status === "in_progress") counts[o.emergency_uuid].active++;
-  }
-  return Object.values(counts);
-});
-
-function markerColor(entry: { pending: number; active: number }) {
-  if (entry.pending > 0) return "#ef4444";
-  if (entry.active > 0) return "#f97316";
-  return "#22c55e";
+function sortBy(col: SortCol) {
+  if (sortCol.value === col) sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+  else { sortCol.value = col; sortDir.value = col === 'created_at' ? 'desc' : 'asc'; }
+  page.value = 1;
 }
-
-async function initMap() {
-  if (!mapEl.value || mapInstance) return;
-  const L = (await import("leaflet")).default;
-  await import("leaflet/dist/leaflet.css");
-
-  mapInstance = L.map(mapEl.value, { zoomControl: true, attributionControl: false }).setView([-7.6, 110.1], 7);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 18,
-    attribution: "© OpenStreetMap contributors",
-  }).addTo(mapInstance);
-  markerLayer = L.layerGroup().addTo(mapInstance);
-  updateMarkers(L);
-}
-
-function updateMarkers(L: any) {
-  if (!markerLayer) return;
-  markerLayer.clearLayers();
-  for (const entry of unitOrderCounts.value) {
-    const coords = entry.emergency.coordinates as [string, string];
-    const lat = parseFloat(coords[1]);
-    const lng = parseFloat(coords[0]);
-    if (!lat || !lng) continue;
-
-    const color = markerColor(entry);
-    const size = Math.min(20 + entry.total * 4, 44);
-    const pulseHtml = entry.pending > 0 || entry.active > 0
-      ? `<span class="pulse-ring" style="background:${color}20;animation:pulse-ring 1.6s ease-out infinite;"></span>`
-      : "";
-    const icon = L.divIcon({
-      className: "",
-      html: `<div class="pulse-marker" style="position:relative;display:flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;">
-        ${pulseHtml}
-        <div style="width:${Math.round(size * 0.55)}px;height:${Math.round(size * 0.55)}px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 2px 6px ${color}80;position:relative;z-index:1;display:flex;align-items:center;justify-content:center;color:white;font-size:9px;font-weight:700;">${entry.total}</div>
-      </div>`,
-      iconSize: [size, size],
-      iconAnchor: [size / 2, size / 2],
-    });
-
-    const marker = L.marker([lat, lng], { icon });
-    marker.bindTooltip(
-      `<div style="font-size:12px;line-height:1.5;">
-        <strong>${entry.emergency.name}</strong><br>
-        ${entry.total} pesanan · ${entry.pending} pending · ${entry.active} diproses
-      </div>`,
-      { direction: "top", offset: [0, -size / 2] }
-    );
-    markerLayer.addLayer(marker);
-  }
-}
-
-watch(mapEl, (el) => {
-  if (el && !mapInstance) initMap();
-});
-
-watch(unitOrderCounts, async () => {
-  if (mapInstance) {
-    const L = (await import("leaflet")).default;
-    updateMarkers(L);
-  }
-});
-
-onBeforeUnmount(() => {
-  if (mapInstance) {
-    mapInstance.remove();
-    mapInstance = null;
-  }
-});
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function statusLabel(s: string) {
@@ -205,13 +122,13 @@ function statusLabel(s: string) {
 
 function statusClass(s: string) {
   const m: Record<string, string> = {
-    pending: "bg-yellow-50 text-yellow-700 ring-yellow-200",
-    accepted: "bg-blue-50 text-blue-700 ring-blue-200",
-    in_progress: "bg-orange-50 text-orange-700 ring-orange-200",
-    completed: "bg-green-50 text-green-700 ring-green-200",
-    cancelled: "bg-neutral-100 text-neutral-500 ring-neutral-200",
+    pending:     "bg-yellow-100 text-yellow-800",
+    accepted:    "bg-blue-100 text-blue-800",
+    in_progress: "bg-orange-100 text-orange-800",
+    completed:   "bg-green-100 text-green-800",
+    cancelled:   "bg-neutral-100 text-neutral-600",
   };
-  return m[s] ?? "bg-neutral-100 text-neutral-500 ring-neutral-200";
+  return m[s] ?? "bg-neutral-100 text-neutral-600";
 }
 
 function formatDate(d: string) {
@@ -220,21 +137,105 @@ function formatDate(d: string) {
     hour: "2-digit", minute: "2-digit",
   });
 }
+
+function hasReport(ticketNum: string): boolean {
+  if (!import.meta.client) return false;
+  return !!localStorage.getItem(`bb-report-${ticketNum}`);
+}
+
+const config = useRuntimeConfig();
+const baseUrl = config.public.apiBaseUrl as string;
+
+function assetUrl(url: string): string {
+  if (!url) return "";
+  if (url.startsWith("http")) return url;
+  return baseUrl + url;
+}
+
+// ── CSV Export ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const cols = [
+    { header: "No. Tiket", key: "ticket_number" },
+    { header: "Tanggal", key: "created_at" },
+    { header: "Pelapor", key: "requester_name" },
+    { header: "No. HP", key: "requester_phone" },
+    { header: "Unit", key: "unit_name" },
+    { header: "Lokasi", key: "location" },
+    { header: "Kondisi", key: "condition" },
+    { header: "Status", key: "status" },
+    { header: "Petugas", key: "handler_name" },
+    { header: "Catatan", key: "handling_notes" },
+    { header: "Sumber", key: "source" },
+  ];
+  const escape = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const header = cols.map(c => escape(c.header)).join(",");
+  const rows = filtered.value.map((o: any) =>
+    cols.map(c => {
+      if (c.key === "created_at") return escape(formatDate(o[c.key]));
+      if (c.key === "status") return escape(statusLabel(o[c.key]));
+      return escape(o[c.key]);
+    }).join(",")
+  );
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `pesanan-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Detail modal ─────────────────────────────────────────────────────────────
+const showDetail = ref(false);
+const detailOrder = ref<any>(null);
+
+function openDetail(order: any) {
+  detailOrder.value = order;
+  showDetail.value = true;
+}
+
+// ── Row dropdown ──────────────────────────────────────────────────────────────
+const dropdownOrder = ref<any>(null);
+const dropdownPos = ref({ top: 0, right: 0 });
+
+function toggleDropdown(order: any, event: MouseEvent) {
+  if (dropdownOrder.value?.id === order.id) {
+    dropdownOrder.value = null;
+    return;
+  }
+  const btn = event.currentTarget as HTMLElement;
+  const rect = btn.getBoundingClientRect();
+  dropdownPos.value = { top: rect.bottom + 4, right: window.innerWidth - rect.right };
+  dropdownOrder.value = order;
+}
 </script>
 
 <template>
   <div>
+    <!-- Dropdown overlay -->
+    <div v-if="dropdownOrder" class="fixed inset-0 z-[98]" @click="dropdownOrder = null" />
+
     <!-- Page header -->
     <div class="border-b border-neutral-200 bg-white px-4 sm:px-6 py-4">
       <div class="flex items-start justify-between gap-4">
         <div>
-          <h1 class="text-lg font-semibold text-neutral-900">Pesanan Masuk</h1>
-          <p class="text-sm text-neutral-500 mt-0.5">Semua pesanan dari seluruh unit layanan darurat</p>
+          <h1 class="text-xl font-semibold text-neutral-900">Pesanan Masuk</h1>
+          <p class="text-sm text-neutral-500 mt-0.5">
+            <span v-if="ordersPending">Memuat...</span>
+            <span v-else>{{ filtered.length }} dari {{ orders.length }} pesanan</span>
+          </p>
         </div>
-        <UiButton variant="secondary" size="sm" @click="refresh()">
-          <Icon icon="lucide:refresh-cw" class="text-sm" />
-          Refresh
-        </UiButton>
+        <div class="flex items-center gap-2">
+          <UiButton variant="secondary" @click="exportCSV()">
+            <Icon icon="lucide:download" class="text-sm" />
+            Export CSV
+          </UiButton>
+          <UiButton variant="secondary" @click="refresh()">
+            <Icon icon="lucide:refresh-cw" class="text-sm" />
+            Refresh
+          </UiButton>
+        </div>
       </div>
     </div>
 
@@ -264,47 +265,12 @@ function formatDate(d: string) {
         </div>
       </div>
 
-      <!-- Map -->
-      <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-        <div class="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <Icon icon="lucide:map" class="text-neutral-400 text-sm" />
-            <p class="text-sm font-medium text-neutral-700">Peta Sebaran Panggilan</p>
-          </div>
-          <div class="flex items-center gap-3 text-xs text-neutral-500">
-            <span class="flex items-center gap-1.5">
-              <span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span> Pending
-            </span>
-            <span class="flex items-center gap-1.5">
-              <span class="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span> Diproses
-            </span>
-            <span class="flex items-center gap-1.5">
-              <span class="w-2.5 h-2.5 rounded-full bg-green-500 inline-block"></span> Selesai
-            </span>
-          </div>
-        </div>
-        <ClientOnly>
-          <div ref="mapEl" class="w-full h-[320px] sm:h-[400px]" />
-          <template #fallback>
-            <div class="w-full h-[320px] sm:h-[400px] bg-neutral-50 flex items-center justify-center text-neutral-400 text-sm gap-2">
-              <UiSpinner size="sm" />
-              Memuat peta...
-            </div>
-          </template>
-        </ClientOnly>
-      </div>
-
       <!-- Filters -->
       <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
         <div class="px-4 sm:px-5 py-3 border-b border-neutral-100 flex flex-wrap items-center gap-3">
           <div class="relative flex-1 min-w-[160px] max-w-xs">
-            <Icon icon="lucide:search" class="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 text-sm" />
-            <input
-              v-model="search"
-              type="text"
-              placeholder="Cari nama, tiket, unit..."
-              class="w-full pl-8 pr-3 py-1.5 text-sm border border-neutral-200 rounded-lg bg-neutral-50 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:bg-white transition-colors"
-            />
+            <Icon icon="lucide:search" class="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 text-sm z-10 pointer-events-none" />
+            <UiInput v-model="search" placeholder="Cari nama, tiket, unit..." class="pl-8" />
           </div>
           <UiSelect v-model="filterStatus" class="!w-auto">
             <option value="">Semua Status</option>
@@ -329,21 +295,41 @@ function formatDate(d: string) {
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
-              <tr class="border-b border-neutral-100 bg-neutral-50">
-                <th class="px-4 sm:px-5 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Tiket / Waktu</th>
-                <th class="px-4 sm:px-5 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Pelapor</th>
-                <th class="px-4 sm:px-5 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider hidden md:table-cell">Unit</th>
-                <th class="px-4 sm:px-5 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Lokasi / Kondisi</th>
-                <th class="px-4 sm:px-5 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Status</th>
+              <tr class="border-b border-neutral-200 bg-neutral-50">
+                <th class="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider cursor-pointer hover:bg-neutral-100 select-none transition-colors group" @click="sortBy('created_at')">
+                  <div class="flex items-center gap-1">Tiket <Icon :icon="sortCol==='created_at'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='created_at'?'text-primary-500':'text-neutral-300 group-hover:text-neutral-400']" /></div>
+                </th>
+                <th class="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider cursor-pointer hover:bg-neutral-100 select-none transition-colors group" @click="sortBy('requester_name')">
+                  <div class="flex items-center gap-1">Pelapor <Icon :icon="sortCol==='requester_name'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='requester_name'?'text-primary-500':'text-neutral-300 group-hover:text-neutral-400']" /></div>
+                </th>
+                <th class="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider hidden md:table-cell cursor-pointer hover:bg-neutral-100 select-none transition-colors group" @click="sortBy('unit_name')">
+                  <div class="flex items-center gap-1">Unit <Icon :icon="sortCol==='unit_name'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='unit_name'?'text-primary-500':'text-neutral-300 group-hover:text-neutral-400']" /></div>
+                </th>
+                <th class="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider cursor-pointer hover:bg-neutral-100 select-none transition-colors group" @click="sortBy('status')">
+                  <div class="flex items-center gap-1">Status <Icon :icon="sortCol==='status'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='status'?'text-primary-500':'text-neutral-300 group-hover:text-neutral-400']" /></div>
+                </th>
+                <th class="px-6 py-3.5 text-right text-xs font-semibold text-neutral-500 uppercase tracking-wider">Aksi</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-neutral-100">
-              <tr v-if="ordersPending">
-                <td colspan="5" class="px-5 py-10 text-center">
-                  <div class="flex items-center justify-center gap-2 text-neutral-400 text-sm">
-                    <UiSpinner size="sm" />
-                    Memuat data...
-                  </div>
+              <tr v-if="ordersPending" v-for="i in 4" :key="`skel-${i}`" class="animate-pulse">
+                <td class="px-6 py-5">
+                  <div class="h-4 bg-neutral-200 rounded w-32 mb-2" />
+                  <div class="h-3 bg-neutral-100 rounded w-20" />
+                </td>
+                <td class="px-6 py-5">
+                  <div class="h-4 bg-neutral-200 rounded w-36 mb-2" />
+                  <div class="h-3 bg-neutral-100 rounded w-28" />
+                </td>
+                <td class="px-6 py-5 hidden md:table-cell">
+                  <div class="h-4 bg-neutral-100 rounded w-28 mb-2" />
+                  <div class="h-3 bg-neutral-100 rounded w-20" />
+                </td>
+                <td class="px-6 py-5">
+                  <div class="h-6 bg-neutral-100 rounded w-20" />
+                </td>
+                <td class="px-6 py-5">
+                  <div class="h-9 bg-neutral-100 rounded-lg w-20 ml-auto" />
                 </td>
               </tr>
               <tr v-else-if="!paginated.length">
@@ -356,42 +342,54 @@ function formatDate(d: string) {
                 </td>
               </tr>
               <tr v-else v-for="order in paginated" :key="order.id" class="hover:bg-neutral-50 transition-colors">
-                <td class="px-4 sm:px-5 py-3.5">
-                  <p class="font-mono text-xs font-medium text-primary-700">{{ order.ticket_number }}</p>
-                  <p class="text-xs text-neutral-400 mt-0.5">{{ formatDate(order.created_at) }}</p>
+                <!-- Tiket -->
+                <td class="px-6 py-4">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="font-mono text-sm font-semibold text-primary-700">{{ order.ticket_number }}</span>
+                    <span
+                      v-if="order.source === 'sos'"
+                      class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emergency-600 text-white uppercase tracking-wide animate-pulse"
+                    >
+                      <Icon icon="lucide:siren" class="text-[10px]" />
+                      SOS
+                    </span>
+                  </div>
+                  <p class="text-xs text-neutral-400">{{ formatDate(order.created_at) }}</p>
                 </td>
-                <td class="px-4 sm:px-5 py-3.5">
-                  <p class="font-medium text-neutral-900">{{ order.requester_name }}</p>
-                  <p class="text-xs text-neutral-400">{{ order.requester_phone }}</p>
+
+                <!-- Pelapor -->
+                <td class="px-6 py-4">
+                  <p class="font-semibold text-neutral-900 text-sm">{{ order.requester_name }}</p>
+                  <p class="text-sm text-neutral-500 mt-0.5">{{ order.requester_phone }}</p>
                 </td>
-                <td class="px-4 sm:px-5 py-3.5 hidden md:table-cell">
-                  <p class="text-neutral-700 text-sm">{{ order.unit_name }}</p>
-                  <p v-if="order._emergency?.address?.regency" class="text-xs text-neutral-400">
+
+                <!-- Unit -->
+                <td class="px-6 py-4 hidden md:table-cell">
+                  <p class="text-sm font-medium text-neutral-900">{{ order.unit_name }}</p>
+                  <p v-if="order._emergency?.address?.regency" class="text-xs text-neutral-400 mt-0.5">
                     {{ order._emergency.address.regency }}
                   </p>
                 </td>
-                <td class="px-4 sm:px-5 py-3.5 hidden lg:table-cell max-w-xs">
-                  <p v-if="order.location" class="text-xs text-neutral-600 line-clamp-1">
-                    <Icon icon="lucide:map-pin" class="inline text-neutral-400 mr-0.5" />
-                    {{ order.location }}
-                  </p>
-                  <p v-if="order.condition" class="text-xs text-neutral-400 line-clamp-1 mt-0.5">{{ order.condition }}</p>
-                  <a
-                    v-if="order.requester_lat && order.requester_lng"
-                    :href="`https://www.google.com/maps?q=${order.requester_lat},${order.requester_lng}`"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 mt-1 transition-colors"
-                  >
-                    <Icon icon="lucide:locate" class="text-xs" />
-                    Lihat Lokasi
-                  </a>
-                </td>
-                <td class="px-4 sm:px-5 py-3.5">
-                  <span :class="['inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ring-1', statusClass(order.status)]">
+
+                <!-- Status -->
+                <td class="px-6 py-4">
+                  <span :class="['inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded', statusClass(order.status)]">
                     {{ statusLabel(order.status) }}
                   </span>
-                  <p v-if="order.handler_name" class="text-xs text-neutral-400 mt-0.5">{{ order.handler_name }}</p>
+                </td>
+
+                <!-- Aksi -->
+                <td class="px-6 py-4">
+                  <div class="flex justify-end">
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-neutral-700 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-100 focus:ring-4 focus:ring-neutral-100 focus:outline-none transition-colors"
+                      @click.stop="toggleDropdown(order, $event)"
+                    >
+                      Aksi
+                      <Icon icon="lucide:chevron-down" class="text-xs text-neutral-500" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -399,7 +397,7 @@ function formatDate(d: string) {
         </div>
 
         <!-- Pagination -->
-        <div v-if="!ordersPending && filtered.length" class="px-4 sm:px-5 py-3 border-t border-neutral-100 bg-neutral-50">
+        <div v-if="!ordersPending && filtered.length" class="px-6 py-4 border-t border-neutral-200 bg-white">
           <UiPagination
             v-model:page="page"
             :total-pages="totalPages"
@@ -409,18 +407,105 @@ function formatDate(d: string) {
         </div>
       </div>
     </div>
+
+    <!-- Detail modal -->
+    <UiModal v-model:open="showDetail" :title="detailOrder?.ticket_number ?? 'Detail Pesanan'">
+      <template #trigger><span /></template>
+      <div v-if="detailOrder" class="space-y-5 text-sm">
+        <div class="flex items-center justify-between">
+          <span :class="['inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded', statusClass(detailOrder.status)]">
+            {{ statusLabel(detailOrder.status) }}
+          </span>
+          <span class="text-xs text-neutral-400">{{ formatDate(detailOrder.created_at) }}</span>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">Pelapor</p>
+          <p class="font-semibold text-neutral-900">{{ detailOrder.requester_name }}</p>
+          <p class="text-neutral-500 mt-0.5">{{ detailOrder.requester_phone }}</p>
+        </div>
+        <div v-if="detailOrder.unit_name">
+          <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">Unit Layanan</p>
+          <p class="text-neutral-900 font-medium">{{ detailOrder.unit_name }}</p>
+          <p v-if="detailOrder._emergency?.address?.regency" class="text-neutral-400 text-xs mt-0.5">
+            {{ detailOrder._emergency.address.regency }}, {{ detailOrder._emergency.address.province }}
+          </p>
+        </div>
+        <div v-if="detailOrder.location">
+          <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">Lokasi</p>
+          <p class="text-neutral-700">{{ detailOrder.location }}</p>
+          <a
+            v-if="detailOrder.requester_lat && detailOrder.requester_lng"
+            :href="`https://www.google.com/maps?q=${detailOrder.requester_lat},${detailOrder.requester_lng}`"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 mt-1 transition-colors"
+          >
+            <Icon icon="lucide:locate" class="text-xs" />
+            Buka di Google Maps
+          </a>
+        </div>
+        <div v-if="detailOrder.condition">
+          <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">Kondisi</p>
+          <p class="text-neutral-700">{{ detailOrder.condition }}</p>
+        </div>
+        <div v-if="detailOrder.handler_name">
+          <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">Penanganan</p>
+          <p class="text-neutral-900"><span class="font-medium">Petugas:</span> {{ detailOrder.handler_name }}</p>
+          <p v-if="detailOrder.handling_notes" class="text-neutral-600 mt-1">{{ detailOrder.handling_notes }}</p>
+        </div>
+        <div v-if="detailOrder.photo_url">
+          <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">Foto</p>
+          <img :src="assetUrl(detailOrder.photo_url)" alt="Foto laporan" class="rounded-lg max-h-56 w-full object-cover" />
+        </div>
+      </div>
+    </UiModal>
+
+    <!-- Aksi dropdown (teleported to avoid overflow clipping) -->
+    <Teleport to="body">
+      <div
+        v-if="dropdownOrder"
+        class="fixed z-[99] w-52 bg-white rounded-lg shadow-lg border border-neutral-200 overflow-hidden"
+        :style="{ top: dropdownPos.top + 'px', right: dropdownPos.right + 'px' }"
+        @click.stop
+      >
+        <!-- Info -->
+        <div class="py-1">
+          <p class="px-4 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">Detail</p>
+          <button
+            class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors"
+            @click="openDetail(dropdownOrder); dropdownOrder = null"
+          >
+            <Icon icon="lucide:info" class="text-neutral-500 text-base shrink-0" />
+            Lihat Detail
+          </button>
+          <a
+            v-if="dropdownOrder.requester_lat && dropdownOrder.requester_lng"
+            :href="`https://www.google.com/maps?q=${dropdownOrder.requester_lat},${dropdownOrder.requester_lng}`"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors"
+            @click="dropdownOrder = null"
+          >
+            <Icon icon="lucide:locate" class="text-neutral-500 text-base shrink-0" />
+            Lihat Lokasi
+          </a>
+          <p v-if="!dropdownOrder.requester_lat && !dropdownOrder.requester_lng" class="px-4 py-2 text-xs text-neutral-400 italic">Lokasi tidak tersedia</p>
+        </div>
+
+        <!-- Laporan -->
+        <div class="border-t border-neutral-100 py-1">
+          <p class="px-4 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">Lainnya</p>
+          <NuxtLink
+            :to="`/reports?ticket=${dropdownOrder.ticket_number}`"
+            class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors"
+            @click="dropdownOrder = null"
+          >
+            <Icon icon="lucide:file-text" class="text-neutral-500 text-base shrink-0" />
+            {{ hasReport(dropdownOrder.ticket_number) ? 'Lihat Laporan' : 'Buat Laporan' }}
+          </NuxtLink>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
-<style>
-@keyframes pulse-ring {
-  0%   { transform: scale(1); opacity: 0.6; }
-  100% { transform: scale(2.2); opacity: 0; }
-}
-.pulse-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  animation: pulse-ring 1.6s ease-out infinite;
-}
-</style>

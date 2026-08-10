@@ -19,6 +19,8 @@ func Migrate(db *gorm.DB) error {
 		&FeedbackEntity{},
 		&OrderTicketEntity{},
 		&UnitCredentialEntity{},
+		&SOSAlertEntity{},
+		&PushSubscriptionEntity{},
 	)
 }
 
@@ -34,12 +36,12 @@ func dropEmergencyDistrictFK(db *gorm.DB) {
 		SELECT CONSTRAINT_NAME
 		FROM information_schema.KEY_COLUMN_USAGE
 		WHERE TABLE_SCHEMA = DATABASE()
-		  AND TABLE_NAME   = 'emergency'
+		  AND TABLE_NAME   = 'emergency_entity'
 		  AND COLUMN_NAME  = 'district_id'
 		  AND REFERENCED_TABLE_NAME IS NOT NULL
 	`).Scan(&fks)
 	for _, fk := range fks {
-		db.Exec("ALTER TABLE `emergency` DROP FOREIGN KEY `" + fk.ConstraintName + "`")
+		db.Exec("ALTER TABLE `emergency_entity` DROP FOREIGN KEY `" + fk.ConstraintName + "`")
 	}
 }
 

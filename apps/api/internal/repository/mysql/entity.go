@@ -54,6 +54,11 @@ type EmergencyEntity struct {
 	Description          string              `gorm:"type:text"`
 	IsVerified           bool                `gorm:"type:tinyint(1);default:0"`
 	IsActive             bool                `gorm:"type:tinyint(1);default:1;index"`
+	Is24Hours            bool                `gorm:"type:tinyint(1);default:0"`
+	OpenTime             string              `gorm:"type:varchar(5);default:'08:00'"`
+	CloseTime            string              `gorm:"type:varchar(5);default:'17:00'"`
+	TotalUnits           int                 `gorm:"default:0"`
+	AvailableUnits       int                 `gorm:"default:0"`
 	OrganizationLogo     string              `gorm:"type:varchar(500)"`
 	Latitude             float64             `gorm:"type:double;not null;default:0"` // was varchar — now DOUBLE for spatial queries
 	Longitude            float64             `gorm:"type:double;not null;default:0"`
@@ -65,6 +70,7 @@ type EmergencyEntity struct {
 	Province             Province            `gorm:"foreignKey:ProvinceID;references:ID"`
 	FullAddress          string              `gorm:"type:text"`
 	TypeOfService        string              `gorm:"type:varchar(500)"`
+	TipeEmergency        string              `gorm:"type:varchar(255)"`
 	Email                string              `gorm:"type:varchar(255)"`
 	Phone                string              `gorm:"type:varchar(50)"`
 	Whatsapp             string              `gorm:"type:varchar(50)"`
@@ -130,14 +136,50 @@ type OrderTicketEntity struct {
 	RequesterPhone string     `gorm:"type:varchar(50)"`
 	Location       string     `gorm:"type:text"`
 	Condition      string     `gorm:"type:text"`
+	PhotoURL       string     `gorm:"type:varchar(500)"`
 	RequesterLat   float64    `gorm:"type:double;default:0"`
 	RequesterLng   float64    `gorm:"type:double;default:0"`
 	Status         string     `gorm:"type:varchar(20);default:'pending';index"`
+	Source         string     `gorm:"type:varchar(20);default:'call';index"` // "call" | "sos"
 	HandlerName    string     `gorm:"type:varchar(255)"`
 	HandlingNotes  string     `gorm:"type:text"`
+	AcceptedAt     *time.Time `gorm:"index"`
 	CompletedAt    *time.Time `gorm:"index"`
+	CancelledAt    *time.Time
 	CreatedAt      time.Time  `gorm:"autoCreateTime"`
 	UpdatedAt      time.Time  `gorm:"autoUpdateTime"`
+}
+
+type SOSAlertEntity struct {
+	ID           uint      `gorm:"primaryKey"`
+	UUID         uuid.UUID `gorm:"type:char(36);uniqueIndex;not null"`
+	Name         string    `gorm:"type:varchar(255)"`
+	Phone        string    `gorm:"type:varchar(50)"`
+	Lat          float64   `gorm:"type:double;default:0"`
+	Lng          float64   `gorm:"type:double;default:0"`
+	Address      string    `gorm:"type:text"`
+	Description  string    `gorm:"type:text"`
+	PhotoURL     string    `gorm:"type:varchar(500)"`
+	TypeID       uint      `gorm:"default:0"`
+	RegencyID    string    `gorm:"type:varchar(10)"`
+	ProvinceID   string    `gorm:"type:varchar(10)"`
+	TicketNumber string    `gorm:"type:varchar(30)"`
+	CreatedAt    time.Time `gorm:"autoCreateTime"`
+}
+
+func (e *SOSAlertEntity) BeforeCreate(_ *gorm.DB) error {
+	if e.UUID == uuid.Nil {
+		e.UUID = uuid.New()
+	}
+	return nil
+}
+
+type PushSubscriptionEntity struct {
+	ID           uint   `gorm:"primaryKey"`
+	TicketNumber string `gorm:"type:varchar(30);not null;index"`
+	Endpoint     string `gorm:"type:text;not null"`
+	P256DH       string `gorm:"type:varchar(255);not null"`
+	Auth         string `gorm:"type:varchar(100);not null"`
 }
 
 func (e *OrderTicketEntity) BeforeCreate(_ *gorm.DB) error {

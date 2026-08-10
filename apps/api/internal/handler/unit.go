@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 
+	"github.com/butuhbantuan/api/internal/domain"
 	"github.com/butuhbantuan/api/internal/repository"
 	"github.com/butuhbantuan/api/internal/service"
 	"github.com/butuhbantuan/api/pkg/response"
@@ -81,6 +82,8 @@ func (h *UnitHandler) GetProfile(c *fiber.Ctx) error {
 		profile["emergency_type"] = u.EmergencyType.Name
 		profile["address"] = u.Address
 		profile["contact"] = u.Contact
+		profile["operational"] = u.Operational
+		profile["fleet"] = u.Fleet
 	}
 	return response.OK(c, "success", profile)
 }
@@ -119,6 +122,57 @@ func (h *UnitHandler) GetFeedback(c *fiber.Ctx) error {
 		return response.Error(c, fiber.StatusInternalServerError, "failed to get feedback")
 	}
 	return response.OK(c, "success", data)
+}
+
+func (h *UnitHandler) UpdateFleet(c *fiber.Ctx) error {
+	emergencyUUID := c.Locals("emergency_uuid").(string)
+	var body struct {
+		Total     int `json:"total"`
+		Available int `json:"available"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+	if body.Available > body.Total {
+		body.Available = body.Total
+	}
+	err := h.emergencySvc.UpdateFleet(emergencyUUID, domain.FleetStatus{
+		Total:     body.Total,
+		Available: body.Available,
+	})
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "emergency not found")
+		}
+		if errors.Is(err, repository.ErrNotSupported) {
+			return response.NotImplemented(c)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "failed to update fleet")
+	}
+	return response.OK(c, "fleet updated", fiber.Map{
+		"total":     body.Total,
+		"available": body.Available,
+	})
+}
+
+func (h *UnitHandler) UpdateAvailability(c *fiber.Ctx) error {
+	emergencyUUID := c.Locals("emergency_uuid").(string)
+	var body struct {
+		IsActive bool `json:"is_active"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+	if err := h.emergencySvc.UpdateActive(emergencyUUID, body.IsActive); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "emergency not found")
+		}
+		if errors.Is(err, repository.ErrNotSupported) {
+			return response.NotImplemented(c)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "failed to update availability")
+	}
+	return response.OK(c, "availability updated", fiber.Map{"is_active": body.IsActive})
 }
 
 func (h *UnitHandler) UpdateOrder(c *fiber.Ctx) error {

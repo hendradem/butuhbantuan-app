@@ -13,6 +13,23 @@ type EmergencyUseCase interface {
 	Create(e domain.Emergency) (*domain.Emergency, error)
 	Update(e domain.Emergency) (*domain.Emergency, error)
 	Delete(id string) error
+	UpdateOperational(id string, status domain.OperationalStatus) error
+	UpdateFleet(id string, fleet domain.FleetStatus) error
+	UpdateActive(id string, isActive bool) error
+}
+
+// PushUseCase handles Web Push subscriptions and notification delivery.
+type PushUseCase interface {
+	VAPIDPublicKey() string
+	Subscribe(sub domain.PushSubscription) error
+	Unsubscribe(endpoint string) error
+	Notify(ticketNumber, title, body string)
+}
+
+// SOSUseCase is the interface handlers use for SOS alert operations.
+type SOSUseCase interface {
+	Submit(s domain.SOSAlert) (*domain.SOSAlert, error)
+	GetAll() ([]domain.SOSAlert, error)
 }
 
 // EmergencyTypeUseCase is the interface handlers use for emergency type operations.
@@ -46,6 +63,12 @@ type UnitAuthUseCase interface {
 	SetCredentials(emergencyUUID, unitName, username, password string) error
 	Login(username, password string) (*domain.UnitCredential, error)
 	GetByToken(token string) (*domain.UnitCredential, error)
+}
+
+// AnalyticsUseCase aggregates order/feedback/unit data for reporting.
+type AnalyticsUseCase interface {
+	GetAnalytics(periodDays int) (domain.Analytics, error)
+	GetHeatmap(periodDays int) ([]domain.HeatmapPoint, error)
 }
 
 // RegionUseCase is the interface handlers use for available region operations.

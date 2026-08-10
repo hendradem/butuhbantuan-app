@@ -1,19 +1,34 @@
 package domain
 
 type Emergency struct {
-	ID                   string        `json:"id"`
-	Name                 string        `json:"name"`
-	OrganizationName     string        `json:"organization_name"`
-	OrganizationType     string        `json:"organization_type"`
-	Logo                 string        `json:"organization_logo"`
-	Description          string        `json:"description"`
-	Coordinates          [2]string     `json:"coordinates"` // [longitude, latitude]
-	TypeOfService        string        `json:"type_of_service"`
-	IsDispatcher         bool          `json:"is_dispatcher"`
-	IsProvinceDispatcher bool          `json:"is_province_dispatcher"`
-	EmergencyType        EmergencyType `json:"emergency_type"`
-	Address              Address       `json:"address"`
-	Contact              Contact       `json:"contact"`
+	ID                   string            `json:"id"`
+	Name                 string            `json:"name"`
+	OrganizationName     string            `json:"organization_name"`
+	OrganizationType     string            `json:"organization_type"`
+	Logo                 string            `json:"organization_logo"`
+	Description          string            `json:"description"`
+	Coordinates          [2]string         `json:"coordinates"` // [longitude, latitude]
+	TypeOfService        string            `json:"type_of_service"`
+	TipeEmergency        []string          `json:"tipe_emergency"`
+	IsDispatcher         bool              `json:"is_dispatcher"`
+	IsProvinceDispatcher bool              `json:"is_province_dispatcher"`
+	EmergencyType        EmergencyType     `json:"emergency_type"`
+	Address              Address           `json:"address"`
+	Contact              Contact           `json:"contact"`
+	Operational          OperationalStatus `json:"operational"`
+	Fleet                FleetStatus       `json:"fleet"`
+}
+
+type OperationalStatus struct {
+	IsActive  bool   `json:"is_active"`
+	Is24Hours bool   `json:"is_24_hours"`
+	OpenTime  string `json:"open_time"`
+	CloseTime string `json:"close_time"`
+}
+
+type FleetStatus struct {
+	Total     int `json:"total"`
+	Available int `json:"available"`
 }
 
 type EmergencyType struct {

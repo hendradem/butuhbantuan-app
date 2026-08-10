@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log"
 
 	"github.com/butuhbantuan/api/internal/domain"
 	"github.com/butuhbantuan/api/internal/repository"
@@ -9,6 +10,7 @@ import (
 	"github.com/butuhbantuan/api/pkg/response"
 	"github.com/gofiber/fiber/v2"
 )
+
 
 type EmergencyHandler struct {
 	emergencySvc service.EmergencyUseCase
@@ -66,6 +68,7 @@ func (h *EmergencyHandler) Create(c *fiber.Ctx) error {
 	}
 	created, err := h.emergencySvc.Create(req)
 	if err != nil {
+		log.Printf("emergency create error: %v | body: name=%q type_id=%d regency=%q province=%q", err, req.Name, req.EmergencyType.ID, req.Address.RegencyID, req.Address.ProvinceID)
 		if errors.Is(err, repository.ErrNotSupported) {
 			return response.NotImplemented(c)
 		}
@@ -121,6 +124,54 @@ func (h *EmergencyHandler) Delete(c *fiber.Ctx) error {
 		return response.Error(c, fiber.StatusInternalServerError, "failed to delete emergency")
 	}
 	return response.OK(c, "success", nil)
+}
+
+func (h *EmergencyHandler) UpdateOperational(c *fiber.Ctx) error {
+	var body struct {
+		IsActive  bool   `json:"is_active"`
+		Is24Hours bool   `json:"is_24_hours"`
+		OpenTime  string `json:"open_time"`
+		CloseTime string `json:"close_time"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+	err := h.emergencySvc.UpdateOperational(c.Params("id"), domain.OperationalStatus{
+		IsActive:  body.IsActive,
+		Is24Hours: body.Is24Hours,
+		OpenTime:  body.OpenTime,
+		CloseTime: body.CloseTime,
+	})
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "emergency not found")
+		}
+		if errors.Is(err, repository.ErrNotSupported) {
+			return response.NotImplemented(c)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "failed to update operational status")
+	}
+	return response.OK(c, "operational status updated", nil)
+}
+
+func (h *EmergencyHandler) ToggleActive(c *fiber.Ctx) error {
+	var body struct {
+		IsActive bool `json:"is_active"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+	err := h.emergencySvc.UpdateActive(c.Params("id"), body.IsActive)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "emergency not found")
+		}
+		if errors.Is(err, repository.ErrNotSupported) {
+			return response.NotImplemented(c)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "failed to update active status")
+	}
+	return response.OK(c, "active status updated", fiber.Map{"is_active": body.IsActive})
 }
 
 func (h *EmergencyHandler) UpdateType(c *fiber.Ctx) error {

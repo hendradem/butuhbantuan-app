@@ -5,23 +5,31 @@ import (
 
 	"github.com/butuhbantuan/api/internal/domain"
 	"github.com/butuhbantuan/api/internal/repository"
+	"github.com/butuhbantuan/api/pkg/hub"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // ── OrderService ──────────────────────────────────────────────────────────────
 
 type OrderService struct {
-	repo repository.OrderRepository
+	repo    repository.OrderRepository
+	pub     hub.Publisher
+	pushSvc PushUseCase
 }
 
-func NewOrderService(repo repository.OrderRepository) *OrderService {
-	return &OrderService{repo: repo}
+func NewOrderService(repo repository.OrderRepository, pub hub.Publisher, pushSvc PushUseCase) *OrderService {
+	return &OrderService{repo: repo, pub: pub, pushSvc: pushSvc}
 }
 
 var _ OrderUseCase = (*OrderService)(nil)
 
 func (s *OrderService) Create(o domain.OrderTicket) (*domain.OrderTicket, error) {
-	return s.repo.Create(o)
+	result, err := s.repo.Create(o)
+	if err != nil {
+		return nil, err
+	}
+	s.pub.Publish(result.EmergencyUUID, hub.Event{Type: "new_order", Payload: result})
+	return result, nil
 }
 
 func (s *OrderService) GetByTicketNumber(number string) (*domain.OrderTicket, error) {
@@ -37,7 +45,23 @@ func (s *OrderService) GetByUnit(emergencyUUID, unitName string) ([]domain.Order
 }
 
 func (s *OrderService) UpdateStatus(id, status, handlerName, notes string) (*domain.OrderTicket, error) {
-	return s.repo.UpdateStatus(id, status, handlerName, notes)
+	result, err := s.repo.UpdateStatus(id, status, handlerName, notes)
+	if err != nil {
+		return nil, err
+	}
+	// Send push notification to any subscribed citizen watchers.
+	if s.pushSvc != nil {
+		label := map[string]string{
+			"accepted":    "Diterima",
+			"in_progress": "Sedang Diproses",
+			"completed":   "Selesai",
+			"cancelled":   "Dibatalkan",
+		}[status]
+		if label != "" {
+			s.pushSvc.Notify(result.TicketNumber, "Update Tiket "+result.TicketNumber, "Status: "+label)
+		}
+	}
+	return result, nil
 }
 
 // ── NoopOrderService ──────────────────────────────────────────────────────────

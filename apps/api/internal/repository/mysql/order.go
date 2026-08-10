@@ -29,6 +29,10 @@ func (r *OrderRepo) generateTicketNumber() string {
 }
 
 func (r *OrderRepo) Create(o domain.OrderTicket) (*domain.OrderTicket, error) {
+	src := o.Source
+	if src == "" {
+		src = "call"
+	}
 	row := OrderTicketEntity{
 		TicketNumber:   r.generateTicketNumber(),
 		EmergencyUUID:  o.EmergencyUUID,
@@ -37,9 +41,11 @@ func (r *OrderRepo) Create(o domain.OrderTicket) (*domain.OrderTicket, error) {
 		RequesterPhone: o.RequesterPhone,
 		Location:       o.Location,
 		Condition:      o.Condition,
+		PhotoURL:       o.PhotoURL,
 		RequesterLat:   o.RequesterLat,
 		RequesterLng:   o.RequesterLng,
 		Status:         "pending",
+		Source:         src,
 	}
 	if err := r.db.Create(&row).Error; err != nil {
 		return nil, err
@@ -86,14 +92,19 @@ func (r *OrderRepo) FindByUnit(emergencyUUID, unitName string) ([]domain.OrderTi
 }
 
 func (r *OrderRepo) UpdateStatus(id, status, handlerName, notes string) (*domain.OrderTicket, error) {
+	now := time.Now()
 	updates := map[string]any{
-		"status":       status,
-		"handler_name": handlerName,
+		"status":         status,
+		"handler_name":   handlerName,
 		"handling_notes": notes,
 	}
-	if status == "completed" {
-		now := time.Now()
+	switch status {
+	case "accepted":
+		updates["accepted_at"] = &now
+	case "completed":
 		updates["completed_at"] = &now
+	case "cancelled":
+		updates["cancelled_at"] = &now
 	}
 	if err := r.db.Model(&OrderTicketEntity{}).Where("uuid = ?", id).Updates(updates).Error; err != nil {
 		return nil, err
@@ -106,6 +117,10 @@ func (r *OrderRepo) UpdateStatus(id, status, handlerName, notes string) (*domain
 }
 
 func mapOrder(row OrderTicketEntity) *domain.OrderTicket {
+	src := row.Source
+	if src == "" {
+		src = "call"
+	}
 	return &domain.OrderTicket{
 		ID:             row.UUID.String(),
 		TicketNumber:   row.TicketNumber,
@@ -115,9 +130,11 @@ func mapOrder(row OrderTicketEntity) *domain.OrderTicket {
 		RequesterPhone: row.RequesterPhone,
 		Location:       row.Location,
 		Condition:      row.Condition,
+		PhotoURL:       row.PhotoURL,
 		RequesterLat:   row.RequesterLat,
 		RequesterLng:   row.RequesterLng,
 		Status:         row.Status,
+		Source:         src,
 		HandlerName:    row.HandlerName,
 		HandlingNotes:  row.HandlingNotes,
 		CompletedAt:    row.CompletedAt,

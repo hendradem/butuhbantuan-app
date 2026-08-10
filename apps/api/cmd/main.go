@@ -17,6 +17,7 @@ import (
 	"github.com/butuhbantuan/api/internal/service"
 	"github.com/butuhbantuan/api/pkg/config"
 	"github.com/butuhbantuan/api/pkg/database"
+	"github.com/butuhbantuan/api/pkg/hub"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -29,12 +30,15 @@ func main() {
 	cfg := config.Load()
 
 	var (
-		emergencyRepo   repository.EmergencyRepository
-		typeRepo        repository.EmergencyTypeRepository
-		regionRepo      repository.RegionRepository
-		feedbackRepo    repository.FeedbackRepository
-		orderRepo       repository.OrderRepository
-		unitCredRepo    repository.UnitCredentialRepository
+		emergencyRepo  repository.EmergencyRepository
+		typeRepo       repository.EmergencyTypeRepository
+		regionRepo     repository.RegionRepository
+		feedbackRepo   repository.FeedbackRepository
+		orderRepo      repository.OrderRepository
+		unitCredRepo   repository.UnitCredentialRepository
+		sosRepo        repository.SOSRepository
+		pushRepo       repository.PushRepository
+		analyticsRepo  repository.AnalyticsRepository
 	)
 
 	switch cfg.Storage {
@@ -50,6 +54,9 @@ func main() {
 		mysqlFeedback := mysqlrepo.NewFeedbackRepo(db)
 		mysqlOrder := mysqlrepo.NewOrderRepo(db)
 		mysqlUnitCred := mysqlrepo.NewUnitCredentialRepo(db)
+		mysqlSOS := mysqlrepo.NewSOSRepo(db)
+		mysqlPush := mysqlrepo.NewPushRepo(db)
+		mysqlAnalytics := mysqlrepo.NewAnalyticsRepo(db)
 
 		emergencyRepo = mysqlEmergency
 		typeRepo = mysqlType
@@ -57,6 +64,9 @@ func main() {
 		feedbackRepo = mysqlFeedback
 		orderRepo = mysqlOrder
 		unitCredRepo = mysqlUnitCred
+		sosRepo = mysqlSOS
+		pushRepo = mysqlPush
+		analyticsRepo = mysqlAnalytics
 
 		if *seed {
 			if err := runSeed(mysqlEmergency, mysqlType, mysqlRegion); err != nil {
@@ -87,15 +97,39 @@ func main() {
 	} else {
 		feedbackSvc = service.NewNoopFeedbackService()
 	}
+	var analyticsSvc service.AnalyticsUseCase
+	if analyticsRepo != nil {
+		analyticsSvc = service.NewAnalyticsService(analyticsRepo)
+	} else {
+		analyticsSvc = &service.NoopAnalyticsService{}
+	}
+
+	// Push service — active only when VAPID keys are configured and storage is mysql.
+	var pushSvc service.PushUseCase
+	if pushRepo != nil && cfg.VAPIDPrivateKey != "" && cfg.VAPIDPublicKey != "" {
+		pushSvc = service.NewPushService(pushRepo, cfg.VAPIDPrivateKey, cfg.VAPIDPublicKey, cfg.VAPIDSubject)
+		log.Println("web push enabled")
+	} else {
+		pushSvc = service.NewNoopPushService()
+	}
+
+	eventHub := hub.New()
 	var orderSvc service.OrderUseCase
 	var unitAuthSvc service.UnitAuthUseCase
+	var sosSvc service.SOSUseCase
 	if orderRepo != nil {
-		orderSvc = service.NewOrderService(orderRepo)
+		orderSvc = service.NewOrderService(orderRepo, eventHub, pushSvc)
 		unitAuthSvc = service.NewUnitAuthService(unitCredRepo)
+		if sosRepo != nil {
+			sosSvc = service.NewSOSService(sosRepo, orderRepo, emergencyRepo)
+		}
 	} else {
 		orderSvc = service.NewNoopOrderService()
 		unitAuthSvc = service.NewNoopUnitAuthService()
 		unitCredRepo = &repository.NoopUnitCredentialRepository{}
+	}
+	if sosSvc == nil {
+		sosSvc = service.NewNoopSOSService()
 	}
 
 	app := fiber.New()
@@ -104,11 +138,11 @@ func main() {
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.AllowOrigins,
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Admin-Key, X-Unit-Token",
-		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
+		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
 		AllowCredentials: true,
 	}))
 
-	router.Register(app, emergencySvc, emergencySvc, regionSvc, feedbackSvc, orderSvc, unitAuthSvc, unitCredRepo, cfg)
+	router.Register(app, emergencySvc, emergencySvc, regionSvc, feedbackSvc, orderSvc, unitAuthSvc, sosSvc, pushSvc, analyticsSvc, unitCredRepo, cfg, eventHub)
 
 	// Graceful shutdown on SIGINT / SIGTERM
 	quit := make(chan os.Signal, 1)

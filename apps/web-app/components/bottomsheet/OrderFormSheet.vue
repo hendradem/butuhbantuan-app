@@ -13,12 +13,15 @@ const location = ref("");
 const condition = ref("");
 const submitting = ref(false);
 
+const { photoPreview, uploading: uploadingPhoto, uploadError, selectPhoto, uploadPhoto, removePhoto } = usePhotoUpload();
+
 watch(() => orderSheet.isOpen, (v) => {
   if (v) {
     name.value = "";
     phone.value = "";
     location.value = userLocation.fullAddress ?? "";
     condition.value = "";
+    removePhoto();
   }
 });
 
@@ -27,6 +30,7 @@ async function submit() {
   submitting.value = true;
   const toastId = toast.loading("Membuat laporan...");
   try {
+    const photoUrl = await uploadPhoto(config.public.apiBaseUrl as string);
     const res = await $fetch<{ data: { ticket_number: string } }>(`${config.public.apiBaseUrl}/api/v1/order/`, {
       method: "POST",
       body: {
@@ -36,6 +40,7 @@ async function submit() {
         requester_phone: phone.value,
         location: location.value,
         condition: condition.value,
+        photo_url: photoUrl ?? undefined,
         requester_lat: userLocation.lat,
         requester_lng: userLocation.long,
       },
@@ -130,9 +135,32 @@ async function submit() {
         />
       </div>
 
+      <!-- Photo upload -->
+      <div>
+        <label class="block text-sm font-semibold text-neutral-800 mb-1.5">
+          Foto Kondisi <span class="text-neutral-400 font-normal text-xs">(opsional)</span>
+        </label>
+        <div v-if="photoPreview" class="relative">
+          <img :src="photoPreview" class="w-full h-36 object-cover rounded-xl border border-neutral-200" />
+          <button
+            type="button"
+            class="absolute top-2 right-2 bg-black/50 text-white rounded-full w-6 h-6 flex items-center justify-center"
+            @click="removePhoto"
+          >
+            <Icon icon="ion:close" class="text-xs" />
+          </button>
+        </div>
+        <label v-else class="flex items-center gap-2 w-full px-3 py-2.5 border border-dashed border-neutral-300 rounded-xl bg-neutral-50 cursor-pointer hover:bg-neutral-100 transition-colors">
+          <Icon icon="lucide:camera" class="text-neutral-400 text-base shrink-0" />
+          <span class="text-sm text-neutral-400">Pilih foto dari galeri</span>
+          <input type="file" accept="image/*" class="sr-only" @change="selectPhoto" />
+        </label>
+        <p v-if="uploadError" class="text-xs text-red-500 mt-1">{{ uploadError }}</p>
+      </div>
+
       <!-- Submit -->
       <button
-        :disabled="!name || !phone || submitting"
+        :disabled="!name || !phone || submitting || uploadingPhoto"
         class="w-full py-3 rounded-xl bg-red-500 text-white font-semibold text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-opacity"
         @click="submit"
       >

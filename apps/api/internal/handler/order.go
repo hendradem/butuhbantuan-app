@@ -23,6 +23,7 @@ func (h *OrderHandler) Create(c *fiber.Ctx) error {
 		RequesterPhone string  `json:"requester_phone"`
 		Location       string  `json:"location"`
 		Condition      string  `json:"condition"`
+		PhotoURL       string  `json:"photo_url"`
 		RequesterLat   float64 `json:"requester_lat"`
 		RequesterLng   float64 `json:"requester_lng"`
 	}
@@ -40,6 +41,7 @@ func (h *OrderHandler) Create(c *fiber.Ctx) error {
 		RequesterPhone: body.RequesterPhone,
 		Location:       body.Location,
 		Condition:      body.Condition,
+		PhotoURL:       body.PhotoURL,
 		RequesterLat:   body.RequesterLat,
 		RequesterLng:   body.RequesterLng,
 	}

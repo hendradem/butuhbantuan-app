@@ -4,11 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/butuhbantuan/api/internal/domain"
 	"github.com/butuhbantuan/api/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ---------- EmergencyRepo ----------
@@ -91,6 +93,11 @@ func (r *EmergencyRepo) buildEntity(e domain.Emergency) EmergencyEntity {
 		EmergencyTypeID:      uint(e.EmergencyType.ID),
 		Description:          e.Description,
 		IsActive:             true,
+		Is24Hours:            e.Operational.Is24Hours,
+		OpenTime:             e.Operational.OpenTime,
+		CloseTime:            e.Operational.CloseTime,
+		TotalUnits:           e.Fleet.Total,
+		AvailableUnits:       e.Fleet.Available,
 		OrganizationLogo:     e.Logo,
 		Latitude:             lat,
 		Longitude:            lng,
@@ -102,6 +109,7 @@ func (r *EmergencyRepo) buildEntity(e domain.Emergency) EmergencyEntity {
 		ProvinceID:           e.Address.ProvinceID,
 		FullAddress:          e.Address.FullAddress,
 		TypeOfService:        e.TypeOfService,
+		TipeEmergency:        strings.Join(e.TipeEmergency, ","),
 		IsDispatcher:         e.IsDispatcher,
 		IsProvinceDispatcher: e.IsProvinceDispatcher,
 	}
@@ -114,9 +122,50 @@ func (r *EmergencyRepo) buildEntity(e domain.Emergency) EmergencyEntity {
 	return row
 }
 
+func (r *EmergencyRepo) UpdateOperational(id string, status domain.OperationalStatus) error {
+	result := r.db.Model(&EmergencyEntity{}).Where("uuid = ?", id).Updates(map[string]any{
+		"is_active":   status.IsActive,
+		"is_24_hours": status.Is24Hours,
+		"open_time":   status.OpenTime,
+		"close_time":  status.CloseTime,
+	})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return repository.ErrNotFound
+	}
+	return nil
+}
+
+func (r *EmergencyRepo) UpdateFleet(id string, fleet domain.FleetStatus) error {
+	var row EmergencyEntity
+	if err := r.db.Where("uuid = ? AND deleted_at IS NULL", id).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return repository.ErrNotFound
+		}
+		return err
+	}
+	return r.db.Model(&row).Updates(map[string]any{
+		"total_units":     fleet.Total,
+		"available_units": fleet.Available,
+	}).Error
+}
+
+func (r *EmergencyRepo) UpdateActive(id string, isActive bool) error {
+	var row EmergencyEntity
+	if err := r.db.Where("uuid = ? AND deleted_at IS NULL", id).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return repository.ErrNotFound
+		}
+		return err
+	}
+	return r.db.Model(&row).Update("is_active", isActive).Error
+}
+
 func (r *EmergencyRepo) Create(e domain.Emergency) (*domain.Emergency, error) {
 	row := r.buildEntity(e)
-	if err := r.db.Create(&row).Error; err != nil {
+	if err := r.db.Omit(clause.Associations).Create(&row).Error; err != nil {
 		return nil, err
 	}
 	if err := r.preload().First(&row, row.ID).Error; err != nil {
@@ -156,6 +205,11 @@ func (r *EmergencyRepo) Upsert(e domain.Emergency) (*domain.Emergency, error) {
 		"emergency_type_id":      row.EmergencyTypeID,
 		"description":            row.Description,
 		"is_active":              row.IsActive,
+		"is_24_hours":            row.Is24Hours,
+		"open_time":              row.OpenTime,
+		"close_time":             row.CloseTime,
+		"total_units":            row.TotalUnits,
+		"available_units":        row.AvailableUnits,
 		"organization_logo":      row.OrganizationLogo,
 		"latitude":               row.Latitude,
 		"longitude":              row.Longitude,
@@ -167,6 +221,7 @@ func (r *EmergencyRepo) Upsert(e domain.Emergency) (*domain.Emergency, error) {
 		"province_id":            row.ProvinceID,
 		"full_address":           row.FullAddress,
 		"type_of_service":        row.TypeOfService,
+		"tipe_emergency":         row.TipeEmergency,
 		"is_dispatcher":          row.IsDispatcher,
 		"is_province_dispatcher": row.IsProvinceDispatcher,
 	}).Error; err != nil {
@@ -203,10 +258,16 @@ func (r *EmergencyRepo) Update(e domain.Emergency) (*domain.Emergency, error) {
 	row.ProvinceID = e.Address.ProvinceID
 	row.FullAddress = e.Address.FullAddress
 	row.TypeOfService = e.TypeOfService
+	row.TipeEmergency = strings.Join(e.TipeEmergency, ",")
 	row.IsDispatcher = e.IsDispatcher
 	row.IsProvinceDispatcher = e.IsProvinceDispatcher
+	row.Is24Hours = e.Operational.Is24Hours
+	row.OpenTime = e.Operational.OpenTime
+	row.CloseTime = e.Operational.CloseTime
+	row.TotalUnits = e.Fleet.Total
+	row.AvailableUnits = e.Fleet.Available
 
-	if err := r.db.Save(&row).Error; err != nil {
+	if err := r.db.Omit(clause.Associations).Save(&row).Error; err != nil {
 		return nil, err
 	}
 	if err := r.preload().First(&row, row.ID).Error; err != nil {
@@ -323,6 +384,7 @@ func mapEmergency(e EmergencyEntity) domain.Emergency {
 		Description:          e.Description,
 		Coordinates:          [2]string{strconv.FormatFloat(e.Longitude, 'f', 7, 64), strconv.FormatFloat(e.Latitude, 'f', 7, 64)},
 		TypeOfService:        e.TypeOfService,
+		TipeEmergency:        splitTipe(e.TipeEmergency),
 		IsDispatcher:         e.IsDispatcher,
 		IsProvinceDispatcher: e.IsProvinceDispatcher,
 		EmergencyType: domain.EmergencyType{
@@ -344,6 +406,16 @@ func mapEmergency(e EmergencyEntity) domain.Emergency {
 			Phone:    e.Phone,
 			Whatsapp: e.Whatsapp,
 		},
+		Operational: domain.OperationalStatus{
+			IsActive:  e.IsActive,
+			Is24Hours: e.Is24Hours,
+			OpenTime:  e.OpenTime,
+			CloseTime: e.CloseTime,
+		},
+		Fleet: domain.FleetStatus{
+			Total:     e.TotalUnits,
+			Available: e.AvailableUnits,
+		},
 	}
 }
 
@@ -351,6 +423,20 @@ func mapManyEmergencies(rows []EmergencyEntity) []domain.Emergency {
 	out := make([]domain.Emergency, len(rows))
 	for i, row := range rows {
 		out[i] = mapEmergency(row)
+	}
+	return out
+}
+
+func splitTipe(s string) []string {
+	if s == "" {
+		return []string{}
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
 	}
 	return out
 }

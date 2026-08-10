@@ -13,7 +13,7 @@ import (
 func Connect(dsn string) (*gorm.DB, error) {
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		NamingStrategy:                           mysqlrepo.NamingStrategy(),
-		Logger:                                   logger.Default.LogMode(logger.Warn),
+		Logger:                                   logger.Default.LogMode(logger.Info),
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {

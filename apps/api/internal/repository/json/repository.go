@@ -139,6 +139,18 @@ func (r *Repo) Delete(_ string) error {
 	return repository.ErrNotSupported
 }
 
+func (r *Repo) UpdateOperational(_ string, _ domain.OperationalStatus) error {
+	return repository.ErrNotSupported
+}
+
+func (r *Repo) UpdateFleet(_ string, _ domain.FleetStatus) error {
+	return repository.ErrNotSupported
+}
+
+func (r *Repo) UpdateActive(_ string, _ bool) error {
+	return repository.ErrNotSupported
+}
+
 func (r *Repo) FindAllTypes() ([]domain.EmergencyType, error) {
 	return r.types, nil
 }
