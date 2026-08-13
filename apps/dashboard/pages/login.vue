@@ -85,13 +85,12 @@ async function submitUnit() {
           <form class="space-y-4" @submit.prevent="submitAdmin">
             <div>
               <label class="block text-sm font-medium text-neutral-700 mb-1.5">Kunci Admin</label>
-              <input
+              <UiInput
                 v-model="adminKey"
                 type="password"
                 placeholder="Masukkan kunci admin..."
                 autofocus
-                class="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                :class="{ 'border-emergency-500 focus:ring-emergency-500': adminError }"
+                :invalid="!!adminError"
               />
               <p v-if="adminError" class="mt-1.5 text-xs text-emergency-600 flex items-center gap-1">
                 <Icon icon="lucide:alert-circle" class="text-sm" />
@@ -112,24 +111,22 @@ async function submitUnit() {
           <form class="space-y-4" @submit.prevent="submitUnit">
             <div>
               <label class="block text-sm font-medium text-neutral-700 mb-1.5">Username</label>
-              <input
+              <UiInput
                 v-model="unitUsername"
                 type="text"
                 placeholder="Username unit..."
                 autocomplete="username"
-                class="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                :class="{ 'border-emergency-500': unitError }"
+                :invalid="!!unitError"
               />
             </div>
             <div>
               <label class="block text-sm font-medium text-neutral-700 mb-1.5">Password</label>
-              <input
+              <UiInput
                 v-model="unitPassword"
                 type="password"
                 placeholder="Password..."
                 autocomplete="current-password"
-                class="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                :class="{ 'border-emergency-500': unitError }"
+                :invalid="!!unitError"
               />
               <p v-if="unitError" class="mt-1.5 text-xs text-emergency-600 flex items-center gap-1">
                 <Icon icon="lucide:alert-circle" class="text-sm" />

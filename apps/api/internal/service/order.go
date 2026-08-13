@@ -2,23 +2,41 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"log"
+	"time"
 
 	"github.com/butuhbantuan/api/internal/domain"
 	"github.com/butuhbantuan/api/internal/repository"
 	"github.com/butuhbantuan/api/pkg/hub"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // ── OrderService ──────────────────────────────────────────────────────────────
 
 type OrderService struct {
-	repo    repository.OrderRepository
-	pub     hub.Publisher
-	pushSvc PushUseCase
+	repo        repository.OrderRepository
+	pub         hub.Publisher
+	pushSvc     PushUseCase
+	attemptRepo repository.DispatchAttemptRepository // optional; nil-safe
+	eventRepo   repository.OrderEventRepository      // optional; nil-safe
 }
 
 func NewOrderService(repo repository.OrderRepository, pub hub.Publisher, pushSvc PushUseCase) *OrderService {
 	return &OrderService{repo: repo, pub: pub, pushSvc: pushSvc}
+}
+
+// WithAttemptRepo enables dispatch-attempt bookkeeping on status changes.
+func (s *OrderService) WithAttemptRepo(repo repository.DispatchAttemptRepository) *OrderService {
+	s.attemptRepo = repo
+	return s
+}
+
+// WithEventRepo enables persistent order timeline history.
+func (s *OrderService) WithEventRepo(repo repository.OrderEventRepository) *OrderService {
+	s.eventRepo = repo
+	return s
 }
 
 var _ OrderUseCase = (*OrderService)(nil)
@@ -28,12 +46,53 @@ func (s *OrderService) Create(o domain.OrderTicket) (*domain.OrderTicket, error)
 	if err != nil {
 		return nil, err
 	}
+	src := result.Source
+	if src == "" {
+		src = "call"
+	}
+	msg := "Pesanan masuk"
+	if src == "sos" {
+		msg = "Pesanan SOS masuk"
+	} else if src == "manual" {
+		msg = "E-tiket dibuat manual"
+	}
+	if result.UnitName != "" {
+		if src == "sos" {
+			msg += " · menunggu respons " + result.UnitName
+		} else {
+			msg += " · ditugaskan ke " + result.UnitName
+		}
+	}
+	_ = s.RecordEvent(domain.OrderEvent{
+		OrderID:      result.ID,
+		TicketNumber: result.TicketNumber,
+		Type:         domain.OrderEventCreated,
+		Message:      msg,
+		Actor:        "system",
+		ToUnit:       result.UnitName,
+	})
 	s.pub.Publish(result.EmergencyUUID, hub.Event{Type: "new_order", Payload: result})
 	return result, nil
 }
 
+func (s *OrderService) GetByID(id string) (*domain.OrderTicket, error) {
+	ticket, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+	s.attachHistory(ticket)
+	return ticket, nil
+}
+
 func (s *OrderService) GetByTicketNumber(number string) (*domain.OrderTicket, error) {
-	return s.repo.FindByTicketNumber(number)
+	ticket, err := s.repo.FindByTicketNumber(number)
+	if err != nil {
+		return nil, err
+	}
+	s.attachHistory(ticket)
+	// Never expose the magic-link token on the public ticket endpoint.
+	ticket.TrackToken = ""
+	return ticket, nil
 }
 
 func (s *OrderService) GetAll() ([]domain.OrderTicket, error) {
@@ -44,15 +103,32 @@ func (s *OrderService) GetByUnit(emergencyUUID, unitName string) ([]domain.Order
 	return s.repo.FindByUnit(emergencyUUID, unitName)
 }
 
+func (s *OrderService) GetByWilayahScope(regencyID, provinceID string, provinceWide bool) ([]domain.OrderTicket, error) {
+	return s.repo.FindByWilayahScope(regencyID, provinceID, provinceWide)
+}
+
 func (s *OrderService) UpdateStatus(id, status, handlerName, notes string) (*domain.OrderTicket, error) {
+	before, _ := s.repo.FindByID(id)
 	result, err := s.repo.UpdateStatus(id, status, handlerName, notes)
 	if err != nil {
 		return nil, err
 	}
-	// Send push notification to any subscribed citizen watchers.
-	if s.pushSvc != nil {
+	if status == "accepted" && s.attemptRepo != nil {
+		_ = s.attemptRepo.MarkAccepted(result.ID, result.EmergencyUUID)
+	}
+	if status == "cancelled" {
+		if _, err := s.repo.DisableTrack(id); err == nil {
+			result.TrackToken = ""
+			result.TrackEnabledAt = nil
+			result.TrackExpiresAt = nil
+		}
+	}
+	s.recordStatusEvent(before, result, status, handlerName, notes)
+
+	if status == "accepted" {
+		s.NotifyCitizenAccept(result, 0)
+	} else if s.pushSvc != nil {
 		label := map[string]string{
-			"accepted":    "Diterima",
 			"in_progress": "Sedang Diproses",
 			"completed":   "Selesai",
 			"cancelled":   "Dibatalkan",
@@ -62,6 +138,372 @@ func (s *OrderService) UpdateStatus(id, status, handlerName, notes string) (*dom
 		}
 	}
 	return result, nil
+}
+
+func (s *OrderService) AcceptPending(id, expectedUUID string) (*domain.OrderTicket, error) {
+	before, _ := s.repo.FindByID(id)
+	result, err := s.repo.AcceptPending(id, expectedUUID)
+	if err != nil {
+		return nil, err
+	}
+	if s.attemptRepo != nil {
+		_ = s.attemptRepo.MarkAccepted(result.ID, result.EmergencyUUID)
+	}
+	s.recordStatusEvent(before, result, "accepted", "", "")
+	return result, nil
+}
+
+// NotifyCitizenAccept sends the calm-down callback to the requester's ticket push subscription.
+func (s *OrderService) NotifyCitizenAccept(ticket *domain.OrderTicket, etaMinutes int) {
+	if s.pushSvc == nil || ticket == nil {
+		return
+	}
+	title := "Unit menerima permintaan Anda"
+	body := "Tim darurat telah menerima tiket " + ticket.TicketNumber
+	if ticket.UnitName != "" {
+		body = ticket.UnitName + " menerima permintaan Anda"
+	}
+	if etaMinutes > 0 {
+		body += fmt.Sprintf(". Perkiraan tiba ±%d menit", etaMinutes)
+	} else {
+		body += ". Mohon tetap di lokasi yang aman."
+	}
+	s.pushSvc.Notify(ticket.TicketNumber, title, body)
+}
+
+func (s *OrderService) RecordEvent(ev domain.OrderEvent) error {
+	if s.eventRepo == nil {
+		return nil
+	}
+	if ev.OrderID == "" || ev.Message == "" || ev.Type == "" {
+		return nil
+	}
+	if _, err := s.eventRepo.Create(ev); err != nil {
+		log.Printf("order event: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (s *OrderService) GetHistory(orderID string) ([]domain.OrderEvent, error) {
+	if orderID == "" {
+		return nil, repository.ErrNotFound
+	}
+	ticket, err := s.repo.FindByID(orderID)
+	if err != nil {
+		return nil, err
+	}
+	events, err := s.loadHistory(ticket)
+	if err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+func (s *OrderService) attachHistory(ticket *domain.OrderTicket) {
+	if ticket == nil {
+		return
+	}
+	events, err := s.loadHistory(ticket)
+	if err != nil {
+		log.Printf("order history %s: %v", ticket.TicketNumber, err)
+		return
+	}
+	ticket.History = events
+}
+
+func (s *OrderService) loadHistory(ticket *domain.OrderTicket) ([]domain.OrderEvent, error) {
+	if s.eventRepo != nil {
+		events, err := s.eventRepo.FindByOrderID(ticket.ID)
+		if err != nil {
+			return nil, err
+		}
+		if len(events) > 0 {
+			return events, nil
+		}
+	}
+	return synthesizeHistory(ticket, s.attemptRepo), nil
+}
+
+func (s *OrderService) recordStatusEvent(before, result *domain.OrderTicket, status, handlerName, notes string) {
+	if result == nil {
+		return
+	}
+	unit := result.UnitName
+	var (
+		typ string
+		msg string
+	)
+	switch status {
+	case "accepted":
+		typ = domain.OrderEventAccepted
+		msg = "Pesanan diterima"
+		if unit != "" {
+			msg += " oleh " + unit
+		}
+	case "in_progress":
+		typ = domain.OrderEventInProgress
+		msg = "Unit mulai menuju / memproses lokasi"
+		if unit != "" {
+			msg += " · " + unit
+		}
+	case "completed":
+		typ = domain.OrderEventCompleted
+		msg = "Pesanan selesai"
+		if handlerName != "" {
+			msg += " · petugas " + handlerName
+		}
+		if notes != "" {
+			msg += " · " + notes
+		}
+	case "cancelled":
+		typ = domain.OrderEventCancelled
+		msg = "Pesanan dibatalkan"
+		if unit != "" {
+			msg += " · " + unit
+		}
+	default:
+		return
+	}
+	_ = s.RecordEvent(domain.OrderEvent{
+		OrderID:      result.ID,
+		TicketNumber: result.TicketNumber,
+		Type:         typ,
+		Message:      msg,
+		Actor:        "unit",
+		ToUnit:       unit,
+	})
+	_ = before
+}
+
+// synthesizeHistory builds a best-effort timeline for legacy tickets without event rows.
+func synthesizeHistory(ticket *domain.OrderTicket, attempts repository.DispatchAttemptRepository) []domain.OrderEvent {
+	if ticket == nil {
+		return nil
+	}
+	out := make([]domain.OrderEvent, 0, 8)
+	createdMsg := "Pesanan masuk"
+	if ticket.Source == "sos" {
+		createdMsg = "Pesanan SOS masuk"
+	}
+	if ticket.UnitName != "" {
+		createdMsg += " · " + ticket.UnitName
+	}
+	out = append(out, domain.OrderEvent{
+		OrderID: ticket.ID, TicketNumber: ticket.TicketNumber,
+		Type: domain.OrderEventCreated, Message: createdMsg, Actor: "system",
+		ToUnit: ticket.UnitName, CreatedAt: ticket.CreatedAt,
+	})
+
+	if attempts != nil {
+		rows, err := attempts.FindByOrderID(ticket.ID)
+		if err == nil {
+			var prev string
+			for _, a := range rows {
+				msg := fmt.Sprintf("Ditawarkan ke %s", a.UnitName)
+				typ := domain.OrderEventOffered
+				if prev != "" && prev != a.UnitName {
+					typ = domain.OrderEventReassigned
+					msg = fmt.Sprintf("Dialihkan dari %s ke %s", prev, a.UnitName)
+				}
+				out = append(out, domain.OrderEvent{
+					OrderID: ticket.ID, TicketNumber: ticket.TicketNumber,
+					Type: typ, Message: msg, Actor: "system",
+					FromUnit: prev, ToUnit: a.UnitName, CreatedAt: a.OfferedAt,
+				})
+				prev = a.UnitName
+			}
+		}
+	}
+
+	if ticket.AcceptedAt != nil {
+		msg := "Pesanan diterima"
+		if ticket.UnitName != "" {
+			msg += " oleh " + ticket.UnitName
+		}
+		out = append(out, domain.OrderEvent{
+			OrderID: ticket.ID, TicketNumber: ticket.TicketNumber,
+			Type: domain.OrderEventAccepted, Message: msg, Actor: "unit",
+			ToUnit: ticket.UnitName, CreatedAt: *ticket.AcceptedAt,
+		})
+	}
+	if ticket.Status == "in_progress" {
+		out = append(out, domain.OrderEvent{
+			OrderID: ticket.ID, TicketNumber: ticket.TicketNumber,
+			Type: domain.OrderEventInProgress, Message: "Unit sedang memproses",
+			Actor: "unit", ToUnit: ticket.UnitName, CreatedAt: ticket.CreatedAt.Add(time.Minute),
+		})
+	}
+	if ticket.CompletedAt != nil {
+		out = append(out, domain.OrderEvent{
+			OrderID: ticket.ID, TicketNumber: ticket.TicketNumber,
+			Type: domain.OrderEventCompleted, Message: "Pesanan selesai",
+			Actor: "unit", ToUnit: ticket.UnitName, CreatedAt: *ticket.CompletedAt,
+		})
+	}
+	if ticket.Status == "cancelled" {
+		t := ticket.CreatedAt
+		out = append(out, domain.OrderEvent{
+			OrderID: ticket.ID, TicketNumber: ticket.TicketNumber,
+			Type: domain.OrderEventCancelled, Message: "Pesanan dibatalkan",
+			Actor: "unit", ToUnit: ticket.UnitName, CreatedAt: t,
+		})
+	}
+	if ticket.DispatchStatus == "exhausted" {
+		out = append(out, domain.OrderEvent{
+			OrderID: ticket.ID, TicketNumber: ticket.TicketNumber,
+			Type: domain.OrderEventExhausted, Message: "Tidak ada unit yang merespons",
+			Actor: "system", CreatedAt: time.Now(),
+		})
+	}
+	return out
+}
+
+const trackLinkTTL = 12 * time.Hour
+
+// EnableTrack creates/refreshes a magic link so field staff can share GPS without dashboard login.
+func (s *OrderService) EnableTrack(id, actor string) (*domain.OrderTicket, error) {
+	ticket, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if ticket.Status != "accepted" && ticket.Status != "in_progress" {
+		return nil, repository.ErrConflict
+	}
+	token := uuid.New().String()
+	expires := time.Now().Add(trackLinkTTL)
+	updated, err := s.repo.EnableTrack(id, token, expires)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.RecordEvent(domain.OrderEvent{
+		OrderID:      updated.ID,
+		TicketNumber: updated.TicketNumber,
+		Type:         domain.OrderEventTrackEnabled,
+		Message:      "Link bagikan lokasi petugas diaktifkan",
+		Actor:        actor,
+	})
+	s.pub.Publish(updated.EmergencyUUID, hub.Event{Type: "order_updated", Payload: updated})
+	return updated, nil
+}
+
+func (s *OrderService) DisableTrack(id, actor string) (*domain.OrderTicket, error) {
+	updated, err := s.repo.DisableTrack(id)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.RecordEvent(domain.OrderEvent{
+		OrderID:      updated.ID,
+		TicketNumber: updated.TicketNumber,
+		Type:         domain.OrderEventTrackDisabled,
+		Message:      "Link bagikan lokasi petugas dinonaktifkan",
+		Actor:        actor,
+	})
+	s.pub.Publish(updated.EmergencyUUID, hub.Event{Type: "order_updated", Payload: updated})
+	return updated, nil
+}
+
+// GetByTrackToken returns a session for the field tracking page.
+// Allows completed tickets so petugas still sees pelapor contact / photo after arrival.
+func (s *OrderService) GetByTrackToken(token string) (*domain.OrderTicket, error) {
+	ticket, err := s.repo.FindByTrackToken(token)
+	if err != nil {
+		return nil, err
+	}
+	if ticket.TrackExpiresAt != nil && time.Now().After(*ticket.TrackExpiresAt) {
+		return nil, repository.ErrConflict
+	}
+	switch ticket.Status {
+	case "accepted", "in_progress", "completed":
+		return ticket, nil
+	default:
+		return nil, repository.ErrConflict
+	}
+}
+
+func (s *OrderService) PingTrackLocation(token string, lat, lng float64) (*domain.OrderTicket, error) {
+	if lat < -90 || lat > 90 || lng < -180 || lng > 180 {
+		return nil, repository.ErrConflict
+	}
+	// Reject obvious null island / zero coords unless somehow valid Indonesia edge.
+	if lat == 0 && lng == 0 {
+		return nil, repository.ErrConflict
+	}
+	updated, err := s.repo.UpdateResponderLocation(token, lat, lng)
+	if err != nil {
+		return nil, err
+	}
+	// Citizens poll ticket; also nudge unit stream for posko dashboards.
+	s.pub.Publish(updated.EmergencyUUID, hub.Event{Type: "responder_location", Payload: updated})
+	return updated, nil
+}
+
+func (s *OrderService) MarkArrivedByToken(token string) (*domain.OrderTicket, error) {
+	before, _ := s.repo.FindByTrackToken(token)
+	updated, err := s.repo.MarkArrivedByToken(token)
+	if err != nil {
+		return nil, err
+	}
+	s.emitArrived(before, updated)
+	return updated, nil
+}
+
+func (s *OrderService) MarkArrived(id string) (*domain.OrderTicket, error) {
+	before, _ := s.repo.FindByID(id)
+	updated, err := s.repo.MarkArrived(id)
+	if err != nil {
+		return nil, err
+	}
+	s.emitArrived(before, updated)
+	return updated, nil
+}
+
+func (s *OrderService) SaveIncidentReport(id, reportJSON string) (*domain.OrderTicket, error) {
+	updated, err := s.repo.SaveIncidentReport(id, reportJSON)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.RecordEvent(domain.OrderEvent{
+		OrderID:      updated.ID,
+		TicketNumber: updated.TicketNumber,
+		Type:         "incident_report",
+		Message:      "Laporan kejadian disimpan",
+		Actor:        "unit",
+	})
+	return updated, nil
+}
+
+func (s *OrderService) emitArrived(before, updated *domain.OrderTicket) {
+	if updated == nil {
+		return
+	}
+	// Only emit once when newly marked.
+	if before != nil && before.ArrivedAt != nil {
+		return
+	}
+	travelNote := ""
+	if updated.AcceptedAt != nil && updated.ArrivedAt != nil {
+		sec := int(updated.ArrivedAt.Sub(*updated.AcceptedAt).Seconds())
+		if sec < 0 {
+			sec = 0
+		}
+		travelNote = fmt.Sprintf(" · waktu tempuh %d dtk", sec)
+	}
+	_ = s.RecordEvent(domain.OrderEvent{
+		OrderID:      updated.ID,
+		TicketNumber: updated.TicketNumber,
+		Type:         domain.OrderEventArrived,
+		Message:      "Petugas sudah sampai di lokasi" + travelNote,
+		Actor:        "unit",
+	})
+	if s.pushSvc != nil {
+		s.pushSvc.Notify(
+			updated.TicketNumber,
+			"Petugas sudah sampai",
+			"Tim darurat sudah tiba di lokasi Anda.",
+		)
+	}
+	s.pub.Publish(updated.EmergencyUUID, hub.Event{Type: "order_arrived", Payload: updated})
 }
 
 // ── NoopOrderService ──────────────────────────────────────────────────────────
@@ -77,14 +519,49 @@ var errOrderNotSupported = errors.New("orders not supported in json storage mode
 func (s *NoopOrderService) Create(_ domain.OrderTicket) (*domain.OrderTicket, error) {
 	return nil, errOrderNotSupported
 }
+func (s *NoopOrderService) GetByID(_ string) (*domain.OrderTicket, error) {
+	return nil, errOrderNotSupported
+}
 func (s *NoopOrderService) GetByTicketNumber(_ string) (*domain.OrderTicket, error) {
 	return nil, errOrderNotSupported
 }
-func (s *NoopOrderService) GetAll() ([]domain.OrderTicket, error)            { return []domain.OrderTicket{}, nil }
+func (s *NoopOrderService) GetAll() ([]domain.OrderTicket, error) { return []domain.OrderTicket{}, nil }
 func (s *NoopOrderService) GetByUnit(_, _ string) ([]domain.OrderTicket, error) {
 	return []domain.OrderTicket{}, nil
 }
+func (s *NoopOrderService) GetByWilayahScope(_, _ string, _ bool) ([]domain.OrderTicket, error) {
+	return []domain.OrderTicket{}, nil
+}
 func (s *NoopOrderService) UpdateStatus(_, _, _, _ string) (*domain.OrderTicket, error) {
+	return nil, errOrderNotSupported
+}
+func (s *NoopOrderService) AcceptPending(_, _ string) (*domain.OrderTicket, error) {
+	return nil, errOrderNotSupported
+}
+func (s *NoopOrderService) NotifyCitizenAccept(_ *domain.OrderTicket, _ int) {}
+func (s *NoopOrderService) RecordEvent(_ domain.OrderEvent) error { return nil }
+func (s *NoopOrderService) GetHistory(_ string) ([]domain.OrderEvent, error) {
+	return nil, errOrderNotSupported
+}
+func (s *NoopOrderService) EnableTrack(_, _ string) (*domain.OrderTicket, error) {
+	return nil, errOrderNotSupported
+}
+func (s *NoopOrderService) DisableTrack(_, _ string) (*domain.OrderTicket, error) {
+	return nil, errOrderNotSupported
+}
+func (s *NoopOrderService) GetByTrackToken(_ string) (*domain.OrderTicket, error) {
+	return nil, errOrderNotSupported
+}
+func (s *NoopOrderService) PingTrackLocation(_ string, _, _ float64) (*domain.OrderTicket, error) {
+	return nil, errOrderNotSupported
+}
+func (s *NoopOrderService) MarkArrivedByToken(_ string) (*domain.OrderTicket, error) {
+	return nil, errOrderNotSupported
+}
+func (s *NoopOrderService) MarkArrived(_ string) (*domain.OrderTicket, error) {
+	return nil, errOrderNotSupported
+}
+func (s *NoopOrderService) SaveIncidentReport(_, _ string) (*domain.OrderTicket, error) {
 	return nil, errOrderNotSupported
 }
 

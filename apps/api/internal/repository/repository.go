@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"time"
 
 	"github.com/butuhbantuan/api/internal/domain"
 )
@@ -10,6 +11,7 @@ var (
 	ErrNotFound     = errors.New("record not found")
 	ErrNotSupported = errors.New("operation not supported in current storage mode")
 	ErrDuplicate    = errors.New("record already exists")
+	ErrConflict     = errors.New("record was modified concurrently")
 )
 
 type EmergencyRepository interface {
@@ -55,10 +57,47 @@ type FeedbackRepository interface {
 
 type OrderRepository interface {
 	Create(o domain.OrderTicket) (*domain.OrderTicket, error)
+	FindByID(id string) (*domain.OrderTicket, error)
 	FindByTicketNumber(number string) (*domain.OrderTicket, error)
 	FindAll() ([]domain.OrderTicket, error)
 	FindByUnit(emergencyUUID, unitName string) ([]domain.OrderTicket, error)
+	// FindByWilayahScope returns tickets in a dispatcher wilayah.
+	// provinceWide=true filters by provinceID; otherwise by regencyID.
+	FindByWilayahScope(regencyID, provinceID string, provinceWide bool) ([]domain.OrderTicket, error)
 	UpdateStatus(id, status, handlerName, notes string) (*domain.OrderTicket, error)
+	// AcceptPending atomically accepts a pending ticket. When expectedUUID is non-empty,
+	// the ticket must still be assigned to that unit (prevents accept-after-reassign races).
+	AcceptPending(id, expectedUUID string) (*domain.OrderTicket, error)
+	FindPendingPastSLA(now time.Time) ([]domain.OrderTicket, error)
+	// Reassign atomically moves a ticket. When fromUUID is non-empty, the ticket must
+	// still be assigned to fromUUID (prevents double-reassign races).
+	Reassign(id, fromUUID, emergencyUUID, unitName string, round int, slaDeadline *time.Time, dispatchStatus string) (*domain.OrderTicket, error)
+	MarkDispatchExhausted(id string) (*domain.OrderTicket, error)
+	MarkEscalated(id, hotline, label, emergencyUUID, unitName string) (*domain.OrderTicket, error)
+	// FindActiveByPhone returns the newest open ticket matching phone (+ optional type).
+	FindActiveByPhone(phone string, typeID uint) (*domain.OrderTicket, error)
+	EnableTrack(id, token string, expiresAt time.Time) (*domain.OrderTicket, error)
+	FindByTrackToken(token string) (*domain.OrderTicket, error)
+	UpdateResponderLocation(token string, lat, lng float64) (*domain.OrderTicket, error)
+	MarkArrivedByToken(token string) (*domain.OrderTicket, error)
+	MarkArrived(id string) (*domain.OrderTicket, error)
+	DisableTrack(id string) (*domain.OrderTicket, error)
+	SaveIncidentReport(id, reportJSON string) (*domain.OrderTicket, error)
+}
+
+type DispatchAttemptRepository interface {
+	Create(a domain.DispatchAttempt) (*domain.DispatchAttempt, error)
+	FindByOrderID(orderID string) ([]domain.DispatchAttempt, error)
+	FindOfferedEmergencyUUIDs(orderID string) ([]string, error)
+	ResolveOffered(orderID, status string) error
+	RejectOffered(orderID, reason, note string) error
+	MarkAccepted(orderID, emergencyUUID string) error
+	CountRejectsSince(emergencyUUID string, since time.Time) (int, error)
+}
+
+type OrderEventRepository interface {
+	Create(e domain.OrderEvent) (*domain.OrderEvent, error)
+	FindByOrderID(orderID string) ([]domain.OrderEvent, error)
 }
 
 type UnitCredentialRepository interface {
@@ -92,4 +131,11 @@ type RegionRepository interface {
 	SearchRegencies(q string) ([]domain.Regency, error)
 	FindProvinces() ([]domain.Province, error)
 	FindRegenciesByProvince(provinceID string) ([]domain.Regency, error)
+	FindCoveredProvinces() ([]domain.Province, error)
+	FindCoveredRegenciesByProvince(provinceID string) ([]domain.Regency, error)
+}
+
+type MapTileUsageRepository interface {
+	GetMonth(monthKey string) (int64, error)
+	Increment(monthKey string, delta int64) (int64, error)
 }

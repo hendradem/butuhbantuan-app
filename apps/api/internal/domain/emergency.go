@@ -1,5 +1,12 @@
 package domain
 
+// Partner tier — quality / trust level (independent of cascade dispatcher flags).
+const (
+	PartnerTierPSC       = "psc"
+	PartnerTierVerified  = "verified"
+	PartnerTierCommunity = "community"
+)
+
 type Emergency struct {
 	ID                   string            `json:"id"`
 	Name                 string            `json:"name"`
@@ -12,11 +19,21 @@ type Emergency struct {
 	TipeEmergency        []string          `json:"tipe_emergency"`
 	IsDispatcher         bool              `json:"is_dispatcher"`
 	IsProvinceDispatcher bool              `json:"is_province_dispatcher"`
+	PartnerTier          string            `json:"partner_tier"` // psc | verified | community
+	Readiness            Readiness         `json:"readiness"`
 	EmergencyType        EmergencyType     `json:"emergency_type"`
 	Address              Address           `json:"address"`
 	Contact              Contact           `json:"contact"`
 	Operational          OperationalStatus `json:"operational"`
 	Fleet                FleetStatus       `json:"fleet"`
+}
+
+// Readiness is on-the-ground capability claimed by the partner unit.
+type Readiness struct {
+	TrainedDriver   bool   `json:"trained_driver"`
+	HasOxygen       bool   `json:"has_oxygen"`
+	HasStretcher    bool   `json:"has_stretcher"`
+	EquipmentNotes  string `json:"equipment_notes,omitempty"`
 }
 
 type OperationalStatus struct {

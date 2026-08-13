@@ -1,6 +1,7 @@
 package mysqlrepo
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -46,8 +47,25 @@ func (r *OrderRepo) Create(o domain.OrderTicket) (*domain.OrderTicket, error) {
 		RequesterLng:   o.RequesterLng,
 		Status:         "pending",
 		Source:         src,
+		TypeID:         o.TypeID,
+		RegencyID:      o.RegencyID,
+		ProvinceID:     o.ProvinceID,
+		DispatchRound:  o.DispatchRound,
+		SlaDeadline:    o.SlaDeadline,
+		DispatchStatus: o.DispatchStatus,
 	}
 	if err := r.db.Create(&row).Error; err != nil {
+		return nil, err
+	}
+	return mapOrder(row), nil
+}
+
+func (r *OrderRepo) FindByID(id string) (*domain.OrderTicket, error) {
+	var row OrderTicketEntity
+	if err := r.db.Where("uuid = ?", id).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repository.ErrNotFound
+		}
 		return nil, err
 	}
 	return mapOrder(row), nil
@@ -56,6 +74,9 @@ func (r *OrderRepo) Create(o domain.OrderTicket) (*domain.OrderTicket, error) {
 func (r *OrderRepo) FindByTicketNumber(number string) (*domain.OrderTicket, error) {
 	var row OrderTicketEntity
 	if err := r.db.Where("ticket_number = ?", number).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repository.ErrNotFound
+		}
 		return nil, err
 	}
 	return mapOrder(row), nil
@@ -91,6 +112,30 @@ func (r *OrderRepo) FindByUnit(emergencyUUID, unitName string) ([]domain.OrderTi
 	return result, nil
 }
 
+func (r *OrderRepo) FindByWilayahScope(regencyID, provinceID string, provinceWide bool) ([]domain.OrderTicket, error) {
+	var rows []OrderTicketEntity
+	q := r.db.Order("created_at DESC")
+	if provinceWide {
+		if provinceID == "" {
+			return []domain.OrderTicket{}, nil
+		}
+		q = q.Where("province_id = ?", provinceID)
+	} else {
+		if regencyID == "" {
+			return []domain.OrderTicket{}, nil
+		}
+		q = q.Where("regency_id = ?", regencyID)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	result := make([]domain.OrderTicket, len(rows))
+	for i, row := range rows {
+		result[i] = *mapOrder(row)
+	}
+	return result, nil
+}
+
 func (r *OrderRepo) UpdateStatus(id, status, handlerName, notes string) (*domain.OrderTicket, error) {
 	now := time.Now()
 	updates := map[string]any{
@@ -98,19 +143,177 @@ func (r *OrderRepo) UpdateStatus(id, status, handlerName, notes string) (*domain
 		"handler_name":   handlerName,
 		"handling_notes": notes,
 	}
+	q := r.db.Model(&OrderTicketEntity{}).Where("uuid = ?", id)
 	switch status {
 	case "accepted":
+		// Atomic accept — only while still pending (race-safe vs reassign worker).
+		q = q.Where("status = ?", "pending")
 		updates["accepted_at"] = &now
+		updates["dispatch_status"] = "assigned"
+		updates["sla_deadline"] = nil
 	case "completed":
 		updates["completed_at"] = &now
+		updates["sla_deadline"] = nil
 	case "cancelled":
 		updates["cancelled_at"] = &now
+		updates["sla_deadline"] = nil
 	}
-	if err := r.db.Model(&OrderTicketEntity{}).Where("uuid = ?", id).Updates(updates).Error; err != nil {
+	result := q.Updates(updates)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if status == "accepted" && result.RowsAffected == 0 {
+		return nil, repository.ErrConflict
+	}
+	var row OrderTicketEntity
+	if err := r.db.Where("uuid = ?", id).First(&row).Error; err != nil {
+		return nil, err
+	}
+	return mapOrder(row), nil
+}
+
+// AcceptPending accepts a pending ticket, optionally requiring it still belong to expectedUUID.
+func (r *OrderRepo) AcceptPending(id, expectedUUID string) (*domain.OrderTicket, error) {
+	now := time.Now()
+	q := r.db.Model(&OrderTicketEntity{}).Where("uuid = ? AND status = ?", id, "pending")
+	if expectedUUID != "" {
+		q = q.Where("emergency_uuid = ?", expectedUUID)
+	}
+	result := q.Updates(map[string]any{
+		"status":          "accepted",
+		"accepted_at":     &now,
+		"dispatch_status": "assigned",
+		"sla_deadline":    nil,
+	})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, repository.ErrConflict
+	}
+	var row OrderTicketEntity
+	if err := r.db.Where("uuid = ?", id).First(&row).Error; err != nil {
+		return nil, err
+	}
+	return mapOrder(row), nil
+}
+
+func (r *OrderRepo) FindPendingPastSLA(now time.Time) ([]domain.OrderTicket, error) {
+	var rows []OrderTicketEntity
+	err := r.db.
+		Where("status = ? AND sla_deadline IS NOT NULL AND sla_deadline <= ? AND dispatch_status = ?",
+			"pending", now, "searching").
+		Order("sla_deadline ASC").
+		Limit(50).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.OrderTicket, len(rows))
+	for i, row := range rows {
+		result[i] = *mapOrder(row)
+	}
+	return result, nil
+}
+
+func (r *OrderRepo) Reassign(id, fromUUID, emergencyUUID, unitName string, round int, slaDeadline *time.Time, dispatchStatus string) (*domain.OrderTicket, error) {
+	updates := map[string]any{
+		"emergency_uuid":  emergencyUUID,
+		"unit_name":       unitName,
+		"dispatch_round":  round,
+		"sla_deadline":    slaDeadline,
+		"dispatch_status": dispatchStatus,
+		"status":          "pending",
+		"accepted_at":     nil,
+		"handler_name":    "",
+		"handling_notes":  "",
+		// Invalidate any previous live-track link when unit changes.
+		"track_token":          nil,
+		"track_enabled_at":     nil,
+		"track_expires_at":     nil,
+		"responder_lat":        0,
+		"responder_lng":        0,
+		"responder_updated_at": nil,
+	}
+	q := r.db.Model(&OrderTicketEntity{}).
+		Where("uuid = ? AND status IN ?", id, []string{"pending", "accepted"})
+	if fromUUID != "" {
+		q = q.Where("emergency_uuid = ?", fromUUID)
+	}
+	result := q.Updates(updates)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, repository.ErrConflict
+	}
+	var row OrderTicketEntity
+	if err := r.db.Where("uuid = ?", id).First(&row).Error; err != nil {
+		return nil, err
+	}
+	return mapOrder(row), nil
+}
+
+func (r *OrderRepo) MarkDispatchExhausted(id string) (*domain.OrderTicket, error) {
+	updates := map[string]any{
+		"dispatch_status": "exhausted",
+		"sla_deadline":    nil,
+	}
+	if err := r.db.Model(&OrderTicketEntity{}).Where("uuid = ? AND status = ?", id, "pending").Updates(updates).Error; err != nil {
 		return nil, err
 	}
 	var row OrderTicketEntity
 	if err := r.db.Where("uuid = ?", id).First(&row).Error; err != nil {
+		return nil, err
+	}
+	return mapOrder(row), nil
+}
+
+func (r *OrderRepo) MarkEscalated(id, hotline, label, emergencyUUID, unitName string) (*domain.OrderTicket, error) {
+	updates := map[string]any{
+		"dispatch_status":    "escalated",
+		"sla_deadline":       nil,
+		"escalation_hotline": hotline,
+		"escalation_label":   label,
+	}
+	if emergencyUUID != "" {
+		updates["emergency_uuid"] = emergencyUUID
+	}
+	if unitName != "" {
+		updates["unit_name"] = unitName
+	}
+	result := r.db.Model(&OrderTicketEntity{}).
+		Where("uuid = ? AND status = ?", id, "pending").
+		Updates(updates)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, repository.ErrConflict
+	}
+	var row OrderTicketEntity
+	if err := r.db.Where("uuid = ?", id).First(&row).Error; err != nil {
+		return nil, err
+	}
+	return mapOrder(row), nil
+}
+
+func (r *OrderRepo) FindActiveByPhone(phone string, typeID uint) (*domain.OrderTicket, error) {
+	variants := domain.PhoneVariants(phone)
+	if len(variants) == 0 {
+		return nil, repository.ErrNotFound
+	}
+	q := r.db.Model(&OrderTicketEntity{}).
+		Where("status IN ? AND requester_phone IN ?",
+			[]string{"pending", "accepted", "in_progress"}, variants)
+	if typeID > 0 {
+		q = q.Where("type_id = ? OR type_id = 0", typeID)
+	}
+	var row OrderTicketEntity
+	if err := q.Order("created_at DESC").First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repository.ErrNotFound
+		}
 		return nil, err
 	}
 	return mapOrder(row), nil
@@ -121,25 +324,197 @@ func mapOrder(row OrderTicketEntity) *domain.OrderTicket {
 	if src == "" {
 		src = "call"
 	}
-	return &domain.OrderTicket{
-		ID:             row.UUID.String(),
-		TicketNumber:   row.TicketNumber,
-		EmergencyUUID:  row.EmergencyUUID,
-		UnitName:       row.UnitName,
-		RequesterName:  row.RequesterName,
-		RequesterPhone: row.RequesterPhone,
-		Location:       row.Location,
-		Condition:      row.Condition,
-		PhotoURL:       row.PhotoURL,
-		RequesterLat:   row.RequesterLat,
-		RequesterLng:   row.RequesterLng,
-		Status:         row.Status,
-		Source:         src,
-		HandlerName:    row.HandlerName,
-		HandlingNotes:  row.HandlingNotes,
-		CompletedAt:    row.CompletedAt,
-		CreatedAt:      row.CreatedAt,
+	o := &domain.OrderTicket{
+		ID:                row.UUID.String(),
+		TicketNumber:      row.TicketNumber,
+		EmergencyUUID:     row.EmergencyUUID,
+		UnitName:          row.UnitName,
+		RequesterName:     row.RequesterName,
+		RequesterPhone:    row.RequesterPhone,
+		Location:          row.Location,
+		Condition:         row.Condition,
+		PhotoURL:          row.PhotoURL,
+		RequesterLat:      row.RequesterLat,
+		RequesterLng:      row.RequesterLng,
+		Status:            row.Status,
+		Source:            src,
+		HandlerName:       row.HandlerName,
+		HandlingNotes:     row.HandlingNotes,
+		TypeID:            row.TypeID,
+		RegencyID:         row.RegencyID,
+		ProvinceID:        row.ProvinceID,
+		DispatchRound:     row.DispatchRound,
+		SlaDeadline:       row.SlaDeadline,
+		DispatchStatus:    row.DispatchStatus,
+		EscalationHotline:  row.EscalationHotline,
+		EscalationLabel:    row.EscalationLabel,
+		TrackToken:         row.TrackToken,
+		TrackEnabledAt:     row.TrackEnabledAt,
+		TrackExpiresAt:     row.TrackExpiresAt,
+		ResponderLat:       row.ResponderLat,
+		ResponderLng:       row.ResponderLng,
+		ResponderUpdatedAt: row.ResponderUpdatedAt,
+		ArrivedAt:          row.ArrivedAt,
+		AcceptedAt:         row.AcceptedAt,
+		CompletedAt:        row.CompletedAt,
+		CreatedAt:          row.CreatedAt,
+		HasIncidentReport:  strings.TrimSpace(row.IncidentReport) != "",
+		IncidentReportAt:   row.IncidentReportAt,
 	}
+	if o.HasIncidentReport {
+		o.IncidentReport = json.RawMessage(row.IncidentReport)
+	}
+	o.CitizenPhase = domain.ResolveCitizenPhase(*o)
+	return o
+}
+
+func (r *OrderRepo) SaveIncidentReport(id, reportJSON string) (*domain.OrderTicket, error) {
+	if id == "" || strings.TrimSpace(reportJSON) == "" {
+		return nil, repository.ErrConflict
+	}
+	// Validate JSON
+	if !json.Valid([]byte(reportJSON)) {
+		return nil, repository.ErrConflict
+	}
+	now := time.Now()
+	result := r.db.Model(&OrderTicketEntity{}).
+		Where("uuid = ?", id).
+		Updates(map[string]any{
+			"incident_report":    reportJSON,
+			"incident_report_at": now,
+		})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, repository.ErrNotFound
+	}
+	return r.FindByID(id)
+}
+
+func (r *OrderRepo) EnableTrack(id, token string, expiresAt time.Time) (*domain.OrderTicket, error) {
+	now := time.Now()
+	result := r.db.Model(&OrderTicketEntity{}).
+		Where("uuid = ? AND status IN ?", id, []string{"accepted", "in_progress"}).
+		Updates(map[string]any{
+			"track_token":      token,
+			"track_enabled_at": now,
+			"track_expires_at": expiresAt,
+		})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, repository.ErrConflict
+	}
+	return r.FindByID(id)
+}
+
+func (r *OrderRepo) FindByTrackToken(token string) (*domain.OrderTicket, error) {
+	if token == "" {
+		return nil, repository.ErrNotFound
+	}
+	var row OrderTicketEntity
+	if err := r.db.Where("track_token = ?", token).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repository.ErrNotFound
+		}
+		return nil, err
+	}
+	return mapOrder(row), nil
+}
+
+func (r *OrderRepo) UpdateResponderLocation(token string, lat, lng float64) (*domain.OrderTicket, error) {
+	now := time.Now()
+	result := r.db.Model(&OrderTicketEntity{}).
+		Where("track_token = ? AND status IN ? AND (track_expires_at IS NULL OR track_expires_at > ?)",
+			token, []string{"accepted", "in_progress"}, now).
+		Updates(map[string]any{
+			"responder_lat":        lat,
+			"responder_lng":        lng,
+			"responder_updated_at": now,
+		})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, repository.ErrConflict
+	}
+	return r.FindByTrackToken(token)
+}
+
+func (r *OrderRepo) MarkArrivedByToken(token string) (*domain.OrderTicket, error) {
+	if token == "" {
+		return nil, repository.ErrNotFound
+	}
+	now := time.Now()
+	result := r.db.Model(&OrderTicketEntity{}).
+		Where("track_token = ? AND status IN ? AND arrived_at IS NULL",
+			token, []string{"accepted", "in_progress"}).
+		Updates(map[string]any{
+			"arrived_at": now,
+			"status":     "in_progress",
+		})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		// Already arrived or inactive — surface as conflict if token exists.
+		existing, err := r.FindByTrackToken(token)
+		if err != nil {
+			return nil, err
+		}
+		if existing.ArrivedAt != nil {
+			return existing, nil
+		}
+		return nil, repository.ErrConflict
+	}
+	return r.FindByTrackToken(token)
+}
+
+func (r *OrderRepo) MarkArrived(id string) (*domain.OrderTicket, error) {
+	if id == "" {
+		return nil, repository.ErrNotFound
+	}
+	now := time.Now()
+	result := r.db.Model(&OrderTicketEntity{}).
+		Where("uuid = ? AND status IN ? AND arrived_at IS NULL",
+			id, []string{"accepted", "in_progress"}).
+		Updates(map[string]any{
+			"arrived_at": now,
+			"status":     "in_progress",
+		})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		existing, err := r.FindByID(id)
+		if err != nil {
+			return nil, err
+		}
+		if existing.ArrivedAt != nil {
+			return existing, nil
+		}
+		return nil, repository.ErrConflict
+	}
+	return r.FindByID(id)
+}
+
+func (r *OrderRepo) DisableTrack(id string) (*domain.OrderTicket, error) {
+	result := r.db.Model(&OrderTicketEntity{}).
+		Where("uuid = ?", id).
+		Updates(map[string]any{
+			"track_token":          nil,
+			"track_enabled_at":     nil,
+			"track_expires_at":     nil,
+			"responder_lat":        0,
+			"responder_lng":        0,
+			"responder_updated_at": nil,
+		})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return r.FindByID(id)
 }
 
 // ── UnitCredentialRepo ────────────────────────────────────────────────────────

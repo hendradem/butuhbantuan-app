@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { toast } from "vue3-hot-toast";
+import { appToast } from "~/utils/appToast";
 
 const reviewSheet = useReviewSheetStore();
 const config = useRuntimeConfig();
 const baseUrl = config.public.apiBaseUrl;
+const toast = appToast();
 
 const unitHelpful = ref<boolean | null>(null);
 const appHelpful = ref<boolean | null>(null);
@@ -24,7 +25,7 @@ watch(() => reviewSheet.isOpen, (v) => {
 async function submit() {
   if (unitHelpful.value === null) return;
   submitting.value = true;
-  const toastId = toast.loading("Mengirim penilaian...");
+  toast.loading("Mengirim penilaian...");
   try {
     await $fetch(`${baseUrl}/api/v1/feedback/`, {
       method: "POST",
@@ -37,11 +38,11 @@ async function submit() {
         comment: comment.value.trim(),
       },
     });
-    toast.success("Terima kasih atas penilaianmu!", { id: toastId });
+    toast.success("Terima kasih atas penilaianmu!");
     submitted.value = true;
     setTimeout(() => reviewSheet.onClose(), 1800);
   } catch {
-    toast.error("Gagal mengirim penilaian", { id: toastId });
+    toast.error("Gagal mengirim penilaian");
     reviewSheet.onClose();
   } finally {
     submitting.value = false;

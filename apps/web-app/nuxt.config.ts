@@ -22,7 +22,6 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || "http://localhost:8080",
-      mapboxApiKey: process.env.NUXT_PUBLIC_MAPBOX_API_KEY || "",
       geoapifyApiKey: process.env.NUXT_PUBLIC_GEOAPIFY_API_KEY || "",
     },
   },

@@ -34,6 +34,9 @@ func (h *SOSHandler) Submit(c *fiber.Ctx) error {
 	if body.Name == "" || body.Phone == "" {
 		return response.Error(c, fiber.StatusBadRequest, "name and phone are required")
 	}
+	if body.TypeID == 0 {
+		return response.Error(c, fiber.StatusBadRequest, "type_id is required so we can route to the correct emergency unit")
+	}
 
 	alert, err := h.sosSvc.Submit(domain.SOSAlert{
 		Name:        body.Name,
@@ -49,6 +52,9 @@ func (h *SOSHandler) Submit(c *fiber.Ctx) error {
 	})
 	if err != nil {
 		return response.Error(c, fiber.StatusInternalServerError, "failed to submit SOS alert")
+	}
+	if alert.Reused {
+		return response.OK(c, "existing open ticket reused", alert)
 	}
 	return response.Created(c, "SOS alert submitted", alert)
 }

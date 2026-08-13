@@ -6,14 +6,27 @@ const emit = defineEmits<{ close: [] }>();
 
 const route = useRoute();
 const { collapsed, toggle } = useSidebar();
+const { pendingOrders, pendingSos, slaBreachCount } = useOpsAlerts();
 
-interface NavItem { label: string; to: string; icon: string }
+interface NavItem { label: string; to: string; icon: string; badgeKey?: "orders" | "sla" }
 interface NavGroup { label?: string; items: NavItem[] }
 
 const groups: NavGroup[] = [
   {
     items: [
       { label: "Overview", to: "/", icon: "lucide:layout-dashboard" },
+    ],
+  },
+  {
+    label: "Operasional",
+    items: [
+      { label: "Pesanan Masuk",    to: "/orders",          icon: "lucide:clipboard-list", badgeKey: "orders" },
+      { label: "Antrian Dispatch", to: "/orders/queue",    icon: "lucide:columns-3" },
+      { label: "SLA Breach",      to: "/orders/sla",      icon: "lucide:alarm-clock", badgeKey: "sla" },
+      { label: "Live Map Ops",    to: "/ops/map",         icon: "lucide:map" },
+      { label: "Feedback",        to: "/feedback",        icon: "lucide:message-square-heart" },
+      { label: "Laporan",         to: "/reports",         icon: "lucide:file-text" },
+      { label: "Mock · Steps",    to: "/labs/order-steps", icon: "lucide:waypoints" },
     ],
   },
   {
@@ -24,29 +37,53 @@ const groups: NavGroup[] = [
       { label: "Wilayah Tercakup", to: "/regions",         icon: "lucide:map-pin" },
     ],
   },
-  {
-    label: "Operasional",
-    items: [
-      { label: "Pesanan Masuk",    to: "/orders",          icon: "lucide:clipboard-list" },
-      { label: "Alert SOS",        to: "/sos",             icon: "lucide:siren" },
-      { label: "Laporan Kejadian", to: "/reports",         icon: "lucide:file-text" },
-    ],
-  },
-  {
-    label: "Insight",
-    items: [
-      { label: "Analitik",         to: "/analytics",       icon: "lucide:bar-chart-2" },
-      { label: "Feedback",         to: "/feedback",        icon: "lucide:message-square-text" },
-    ],
-  },
 ];
 
 function isActive(to: string) {
-  return to === "/" ? route.path === "/" : route.path.startsWith(to);
+  if (to === "/") return route.path === "/";
+  if (to === "/orders") {
+    // Detail tiket & list pesanan — bukan queue/sla
+    return (
+      route.path === "/orders" ||
+      (route.path.startsWith("/orders/") &&
+        !route.path.startsWith("/orders/queue") &&
+        !route.path.startsWith("/orders/sla"))
+    );
+  }
+  if (to === "/orders/queue") {
+    return route.path === "/orders/queue" || route.path.startsWith("/orders/queue/");
+  }
+  if (to === "/orders/sla") {
+    return route.path === "/orders/sla" || route.path.startsWith("/orders/sla/");
+  }
+  if (to === "/ops/map") {
+    return route.path === "/ops/map" || route.path.startsWith("/ops/map/");
+  }
+  if (to === "/labs/order-steps") {
+    return route.path === "/labs/order-steps" || route.path.startsWith("/labs/");
+  }
+  if (to === "/feedback") {
+    return route.path === "/feedback" || route.path.startsWith("/feedback/");
+  }
+  if (to === "/reports") {
+    return route.path === "/reports" || route.path.startsWith("/reports/");
+  }
+  // Data menus: list + nested detail
+  return route.path === to || route.path.startsWith(`${to}/`);
+}
+
+function badgeFor(item: NavItem): number {
+  if (item.badgeKey === "orders") {
+    return pendingOrders.value + pendingSos.value;
+  }
+  if (item.badgeKey === "sla") {
+    return slaBreachCount.value;
+  }
+  return 0;
 }
 
 function onNavClick() {
-  emit("close"); // close mobile drawer on navigation
+  emit("close");
 }
 </script>
 
@@ -57,7 +94,6 @@ function onNavClick() {
       collapsed ? 'w-[60px]' : 'w-64',
     ]"
   >
-    <!-- Brand + desktop collapse toggle -->
     <div class="h-[60px] flex items-center gap-3 px-3.5 border-b border-neutral-100 shrink-0">
       <div class="w-8 h-8 rounded-lg bg-emergency-600 flex items-center justify-center shrink-0">
         <Icon icon="lucide:siren" class="text-white text-base" />
@@ -66,7 +102,6 @@ function onNavClick() {
         <p class="text-sm font-semibold text-neutral-900 leading-none truncate">ButuhBantuan</p>
         <p class="text-xs text-neutral-400 leading-none mt-1">Admin Panel</p>
       </div>
-      <!-- Desktop: collapse toggle -->
       <button
         class="hidden lg:flex w-6 h-6 items-center justify-center rounded text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors ml-auto shrink-0"
         :title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
@@ -74,7 +109,6 @@ function onNavClick() {
       >
         <Icon :icon="collapsed ? 'lucide:chevrons-right' : 'lucide:chevrons-left'" class="text-sm" />
       </button>
-      <!-- Mobile: close button -->
       <button
         class="lg:hidden w-7 h-7 flex items-center justify-center rounded text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors ml-auto shrink-0"
         @click="emit('close')"
@@ -83,7 +117,6 @@ function onNavClick() {
       </button>
     </div>
 
-    <!-- Navigation -->
     <nav class="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-4">
       <div v-for="(group, gi) in groups" :key="gi" class="space-y-0.5">
         <p
@@ -100,7 +133,7 @@ function onNavClick() {
           :to="item.to"
           :title="collapsed ? item.label : undefined"
           :class="[
-            'flex items-center gap-2.5 rounded-lg text-sm font-medium transition-colors duration-150 group',
+            'flex items-center gap-2.5 rounded-lg text-sm font-medium transition-colors duration-150 group relative',
             collapsed ? 'justify-center px-0 py-2.5 w-full' : 'px-2.5 py-2',
             isActive(item.to)
               ? 'bg-primary-50 text-primary-700'
@@ -115,12 +148,20 @@ function onNavClick() {
               isActive(item.to) ? 'text-primary-600' : 'text-neutral-400 group-hover:text-neutral-600',
             ]"
           />
-          <span v-if="!collapsed" class="truncate">{{ item.label }}</span>
+          <span v-if="!collapsed" class="truncate flex-1">{{ item.label }}</span>
+          <span
+            v-if="badgeFor(item) > 0"
+            :class="[
+              'min-w-[18px] h-[18px] px-1 rounded-full bg-emergency-600 text-white text-[10px] font-bold flex items-center justify-center',
+              collapsed ? 'absolute top-1 right-1 min-w-[14px] h-3.5 text-[8px]' : 'ml-auto',
+            ]"
+          >
+            {{ badgeFor(item) > 99 ? "99+" : badgeFor(item) }}
+          </span>
         </NuxtLink>
       </div>
     </nav>
 
-    <!-- User section -->
     <div :class="['shrink-0 border-t border-neutral-100 p-2', collapsed ? 'flex justify-center' : '']">
       <div :class="['flex items-center rounded-lg p-2 hover:bg-neutral-100 transition-colors', collapsed ? 'justify-center' : 'gap-2.5']">
         <div class="w-7 h-7 rounded-full bg-primary-100 flex items-center justify-center shrink-0">

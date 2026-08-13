@@ -1,6 +1,6 @@
 import { getNearestDataWithEstimation } from "~/utils/turf";
 import { formatGeoAddress } from "~/utils/geo";
-import { toast } from "vue3-hot-toast";
+import { appToast } from "~/utils/appToast";
 
 const MAX_MATRIX_BATCH = 24; // Mapbox Matrix: max 25 coords total (1 origin + 24 destinations)
 const MAX_TRAVEL_MINUTES = 15;
@@ -13,11 +13,31 @@ export function useEmergencyApi() {
   const config = useRuntimeConfig();
   const emergencyStore = useEmergencyStore();
   const userLocation = useUserLocationStore();
+  const toast = appToast();
+  const {
+    saveEmergencySnapshot,
+    loadEmergencySnapshot,
+    saveTypes,
+    loadTypes,
+    markFromCache,
+    online,
+  } = useOfflineCache();
 
   const baseUrl = config.public.apiBaseUrl;
 
   async function fetchEmergencyTypes() {
-    return $fetch<{ data: any[] }>(`${baseUrl}/api/v1/emergency/type`);
+    try {
+      const res = await $fetch<{ data: any[] }>(`${baseUrl}/api/v1/emergency/type`);
+      if (res?.data?.length) saveTypes(res.data);
+      return res;
+    } catch (e) {
+      const cached = loadTypes();
+      if (cached.length) {
+        markFromCache(true);
+        return { data: cached };
+      }
+      throw e;
+    }
   }
 
   async function fetchEmergencyByProvince(provinceId: string) {
@@ -63,15 +83,16 @@ export function useEmergencyApi() {
     return results;
   }
 
-  // existingToastId: if the caller already showed a loading toast (e.g. on map click),
-  // pass its ID here so we update that toast rather than creating a duplicate.
-  async function loadEmergencyData(lat: number, lng: number, existingToastId?: string) {
+  /**
+   * @param skipLoadingToast — caller already showed the shared loading toast (e.g. map click debounce)
+   */
+  async function loadEmergencyData(lat: number, lng: number, skipLoadingToast = false) {
     const myEpoch = ++fetchEpoch;
 
     userLocation.setAddressLoading(true);
     emergencyStore.setLoading(true);
     try {
-      const toastId = existingToastId ?? toast.loading("Mencari layanan...");
+      if (!skipLoadingToast) toast.loading("Mencari layanan...");
 
       const geoWrapper = await $fetch<any>(
         `${baseUrl}/api/v1/geocoding/reverse?latitude=${lat}&longitude=${lng}`
@@ -79,7 +100,6 @@ export function useEmergencyApi() {
 
       // Bail out if a newer call superseded this one while we were awaiting
       if (myEpoch !== fetchEpoch) {
-        toast.dismiss(toastId);
         return;
       }
 
@@ -93,25 +113,45 @@ export function useEmergencyApi() {
 
       if (!regionName) {
         emergencyStore.setCoverage(false);
-        toast.error("Layanan belum tersedia di area ini", { id: toastId });
+        emergencyStore.setLastRegionName("");
+        toast.error("Layanan belum tersedia di area ini");
         emergencyStore.setFilteredEmergency([]);
+        markFromCache(false);
+        saveEmergencySnapshot({
+          savedAt: new Date().toISOString(),
+          lat,
+          lng,
+          regionName: "",
+          isCovered: false,
+          emergencies: [],
+        });
         return;
       }
+
+      emergencyStore.setLastRegionName(regionName);
 
       const cityRes = await $fetch<{ data: any[] }>(
         `${baseUrl}/api/v1/service/available-region/${encodeURIComponent(regionName)}`
       );
 
       if (myEpoch !== fetchEpoch) {
-        toast.dismiss(toastId);
         return;
       }
 
       const city = cityRes?.data?.[0];
       if (!city) {
         emergencyStore.setCoverage(false);
-        toast.error(`Layanan belum tersedia di ${regionName}`, { id: toastId });
+        toast.error(`Di luar wilayah layanan: ${regionName}`);
         emergencyStore.setFilteredEmergency([]);
+        markFromCache(false);
+        saveEmergencySnapshot({
+          savedAt: new Date().toISOString(),
+          lat,
+          lng,
+          regionName,
+          isCovered: false,
+          emergencies: [],
+        });
         return;
       }
 
@@ -132,7 +172,6 @@ export function useEmergencyApi() {
       const matrix = await fetchDistanceMatrix(lat, lng, emergencyList);
 
       if (myEpoch !== fetchEpoch) {
-        toast.dismiss(toastId);
         return;
       }
 
@@ -155,11 +194,37 @@ export function useEmergencyApi() {
       toShow.sort((a: any, b: any) => a.trip.duration - b.trip.duration);
 
       emergencyStore.setFilteredEmergency(toShow);
-      toast.success(`Layanan tersedia di ${regionName}`, { id: toastId });
+      markFromCache(false);
+      saveEmergencySnapshot({
+        savedAt: new Date().toISOString(),
+        lat,
+        lng,
+        regionName,
+        isCovered: true,
+        emergencies: toShow,
+      });
+      toast.success(`Layanan tersedia di ${regionName}`);
     } catch (err) {
       if (myEpoch !== fetchEpoch) return;
       console.error(err);
-      toast.error("Gagal mengambil data");
+      const snap = loadEmergencySnapshot();
+      if (snap?.emergencies?.length) {
+        emergencyStore.setCoverage(snap.isCovered);
+        emergencyStore.setLastRegionName(snap.regionName || "");
+        emergencyStore.setFilteredEmergency(snap.emergencies);
+        markFromCache(true);
+        toast.error(
+          online.value
+            ? "Gagal refresh — menampilkan data tersimpan"
+            : "Offline — menampilkan data tersimpan",
+        );
+      } else {
+        toast.error(
+          online.value
+            ? "Gagal mengambil data"
+            : "Offline — tidak ada data tersimpan. Hubungi 119.",
+        );
+      }
     } finally {
       // Only release loading state if this is still the active call
       if (myEpoch === fetchEpoch) {

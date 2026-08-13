@@ -52,10 +52,25 @@ type FeedbackUseCase interface {
 // OrderUseCase is the interface handlers use for order/ticket operations.
 type OrderUseCase interface {
 	Create(o domain.OrderTicket) (*domain.OrderTicket, error)
+	GetByID(id string) (*domain.OrderTicket, error)
 	GetByTicketNumber(number string) (*domain.OrderTicket, error)
 	GetAll() ([]domain.OrderTicket, error)
 	GetByUnit(emergencyUUID, unitName string) ([]domain.OrderTicket, error)
+	GetByWilayahScope(regencyID, provinceID string, provinceWide bool) ([]domain.OrderTicket, error)
 	UpdateStatus(id, status, handlerName, notes string) (*domain.OrderTicket, error)
+	// AcceptPending atomically accepts while still pending; expectedUUID pins the assignee for unit actors.
+	AcceptPending(id, expectedUUID string) (*domain.OrderTicket, error)
+	NotifyCitizenAccept(ticket *domain.OrderTicket, etaMinutes int)
+	RecordEvent(ev domain.OrderEvent) error
+	GetHistory(orderID string) ([]domain.OrderEvent, error)
+	EnableTrack(id string, actor string) (*domain.OrderTicket, error)
+	DisableTrack(id string, actor string) (*domain.OrderTicket, error)
+	GetByTrackToken(token string) (*domain.OrderTicket, error)
+	PingTrackLocation(token string, lat, lng float64) (*domain.OrderTicket, error)
+	MarkArrivedByToken(token string) (*domain.OrderTicket, error)
+	// MarkArrived records on-scene from unit/admin dashboard (no track token required).
+	MarkArrived(id string) (*domain.OrderTicket, error)
+	SaveIncidentReport(id, reportJSON string) (*domain.OrderTicket, error)
 }
 
 // UnitAuthUseCase is the interface handlers use for unit authentication.
@@ -81,4 +96,6 @@ type RegionUseCase interface {
 	SearchRegencies(q string) ([]domain.Regency, error)
 	GetProvinces() ([]domain.Province, error)
 	GetRegenciesByProvince(provinceID string) ([]domain.Regency, error)
+	GetCoveredProvinces() ([]domain.Province, error)
+	GetCoveredRegenciesByProvince(provinceID string) ([]domain.Regency, error)
 }

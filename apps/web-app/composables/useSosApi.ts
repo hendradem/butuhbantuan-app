@@ -14,8 +14,8 @@ export function useSosApi() {
     regency_id?: string;
     province_id?: string;
   }) {
-    const res = await $fetch<{ data: { ticket_number?: string } }>(
-      `${baseUrl}/api/v1/sos`,
+    const res = await $fetch<{ data: { ticket_number?: string; reused?: boolean } }>(
+      `${baseUrl}/api/v1/sos/`,
       { method: "POST", body: payload }
     );
     return res.data;

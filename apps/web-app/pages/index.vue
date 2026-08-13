@@ -54,6 +54,7 @@ async function boot() {
           style="height: calc(var(--vh, 1vh) * 100)"
         >
           <AddToHomeScreenBanner />
+          <OfflineBanner />
 
           <!-- Map -->
           <div class="h-[78%] bg-neutral-100">
@@ -77,6 +78,7 @@ async function boot() {
         <ReviewSheet />
         <ErrorSheet />
         <SosSheet />
+        <MoreSheet />
       </template>
     </div>
   </div>

@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
 
-const props = defineProps<{
-  lat: number;
-  lng: number;
-  label?: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    lat: number;
+    lng: number;
+    label?: string;
+    /** Floating Google Maps chip (default true) */
+    showLink?: boolean;
+  }>(),
+  { showLink: true },
+);
 
 const mapEl = ref<HTMLElement | null>(null);
 let mapInstance: any = null;
@@ -57,13 +62,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="relative rounded-xl overflow-hidden border border-neutral-200 bg-neutral-100">
-    <div ref="mapEl" class="w-full h-44" />
+  <div class="relative z-0 isolate rounded-lg overflow-hidden border border-neutral-200 bg-neutral-100">
+    <div ref="mapEl" class="relative z-0 w-full h-44 sm:h-52" />
     <a
+      v-if="showLink"
       :href="googleMapsUrl"
       target="_blank"
       rel="noopener noreferrer"
-      class="absolute bottom-2 right-2 flex items-center gap-1.5 bg-white rounded-lg shadow-md px-2.5 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+      class="absolute bottom-2 right-2 z-[1] flex items-center gap-1.5 bg-white rounded-lg shadow-md px-2.5 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
     >
       <Icon icon="logos:google-maps" class="text-sm" />
       Buka Google Maps

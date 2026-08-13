@@ -1,229 +1,514 @@
 <script setup lang="ts">
-import { Icon } from "@iconify/vue";
+import { Icon } from "@iconify/vue"
+import simpleheat from "simpleheat"
 
-const props = defineProps<{
-  points: Array<{ lat: number; lng: number; count: number; type: string }>;
-  loading?: boolean;
-}>();
-
-const mapEl = ref<HTMLDivElement | null>(null);
-const ready = ref(false);
-
-let map:         any = null;
-let L:           any = null;
-let heat:        any = null;
-let heatCanvas:  HTMLCanvasElement | null = null;
-let markerGroup: any = null;
-
-// ── Type → color mapping ──────────────────────────────────────────────────────
-function typeColor(type: string): string {
-  const t = type.toLowerCase();
-  if (/ambulan|medis|kesehatan|puskesmas|rumah sakit|rsud|rs |klinik/.test(t)) return "#ef4444";
-  if (/pemadam|kebakaran|damkar/.test(t))                                        return "#f97316";
-  if (/sar|penyelamat|rescue|basarnas/.test(t))                                  return "#3b82f6";
-  if (/polisi|polri|brimob/.test(t))                                             return "#1e40af";
-  if (/bpbd|bencana|disaster/.test(t))                                           return "#7c3aed";
-  if (/pln|listrik|gas/.test(t))                                                 return "#eab308";
-  // Deterministic fallback palette for unknown types
-  const palette = ["#ef4444","#f97316","#3b82f6","#22c55e","#a855f7","#ec4899","#14b8a6","#f59e0b"];
-  let h = 0;
-  for (let i = 0; i < type.length; i++) h = type.charCodeAt(i) + ((h << 5) - h);
-  return palette[Math.abs(h) % palette.length];
+export interface HeatPoint {
+  lat: number; lng: number; count: number; type: string
+  ticket_number?: string; status?: string; requester_name?: string
+  unit_name?: string; condition?: string; location?: string
+  created_at?: string; regency?: string; province?: string
 }
 
-// ── Legend — unique types in current dataset ──────────────────────────────────
-const legend = computed(() => {
-  const seen = new Map<string, string>();
-  for (const p of props.points) {
-    if (!seen.has(p.type)) seen.set(p.type, typeColor(p.type));
-  }
-  return [...seen.entries()].map(([label, color]) => ({ label, color }));
-});
+const props = defineProps<{ points: HeatPoint[]; loading?: boolean }>()
 
-const isEmpty = computed(() => !props.loading && props.points.length === 0);
+const router  = useRouter()
+const mapEl   = ref<HTMLDivElement | null>(null)
+const asideEl = ref<HTMLDivElement | null>(null)
+const ready   = ref(false)
+const selected = ref<string | null>(null)
+const showHeat = ref(true)
 
-// ── Aggregate for heatmap density (sum counts by location, ignore type) ───────
-function heatData(): [number, number, number][] {
-  const loc = new Map<string, { lat: number; lng: number; sum: number }>();
-  for (const p of props.points) {
-    const k = `${p.lat},${p.lng}`;
-    const e = loc.get(k);
-    if (e) e.sum += p.count;
-    else loc.set(k, { lat: p.lat, lng: p.lng, sum: p.count });
-  }
-  const agg = [...loc.values()];
-  const max = agg.reduce((m, v) => Math.max(m, v.sum), 1);
-  return agg.map(({ lat, lng, sum }) => {
-    const px = map.latLngToContainerPoint([lat, lng]);
-    return [px.x, px.y, sum / max];
-  });
+// ── Filters ───────────────────────────────────────────────────────────────────
+const fProv = ref(""), fReg = ref(""), fType = ref("")
+watch(fProv, () => { fReg.value = "" })
+
+const { loadAvailableRegions } = useCoveredWilayah()
+const coveredRegions = ref<{ province: string; regency: string }[]>([])
+
+async function loadCoveredFilters() {
+  const rows = await loadAvailableRegions()
+  coveredRegions.value = rows.map((r: any) => ({
+    province: r.province || "",
+    regency: r.regency || r.name || "",
+  })).filter((r: any) => r.province || r.regency)
 }
 
-// ── Draw simpleheat canvas (semi-transparent density background) ──────────────
-function drawHeat() {
-  if (!heat || !map || !heatCanvas || !props.points.length) return;
-  const size = map.getSize();
-  heatCanvas.width  = size.x;
-  heatCanvas.height = size.y;
-  heat.data(heatData()).draw(0.04); // very light — only visible when clustered
-}
+const provinces = computed(() => {
+  const fromCovered = coveredRegions.value.map(r => r.province).filter(Boolean)
+  const fromPoints = props.points.map(p => p.province).filter(Boolean) as string[]
+  return [...new Set([...fromCovered, ...fromPoints])].sort()
+})
 
-// ── Draw colored circleMarkers per type ──────────────────────────────────────
+const regencies = computed(() => {
+  const fromCovered = coveredRegions.value
+    .filter(r => !fProv.value || r.province === fProv.value)
+    .map(r => r.regency)
+    .filter(Boolean)
+  const fromPoints = props.points
+    .filter(p => !fProv.value || p.province === fProv.value)
+    .map(p => p.regency)
+    .filter(Boolean) as string[]
+  return [...new Set([...fromCovered, ...fromPoints])].sort()
+})
+
+const types = computed(() =>
+  [...new Set(props.points.map(p => p.type).filter(Boolean))].sort() as string[])
+
+// All orders matching filters (→ card list)
+const filtered = computed(() =>
+  props.points.filter(p => {
+    if (fProv.value && p.province !== fProv.value) return false
+    if (fReg.value  && p.regency  !== fReg.value)  return false
+    if (fType.value && p.type     !== fType.value)  return false
+    return true
+  })
+)
+
+// Orders with GPS (→ map markers)
+const withGPS = computed(() => filtered.value.filter(p => p.lat !== 0 && p.lng !== 0))
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+const COLORS: Record<string, string> = {
+  pending: "#f59e0b", accepted: "#3b82f6",
+  in_progress: "#f97316", completed: "#22c55e", cancelled: "#9ca3af",
+}
+const LABELS: Record<string, string> = {
+  pending: "Menunggu", accepted: "Diterima",
+  in_progress: "Diproses", completed: "Selesai", cancelled: "Dibatalkan",
+}
+const BADGE: Record<string, string> = {
+  pending:     "bg-yellow-50 text-yellow-700 border-yellow-200",
+  accepted:    "bg-blue-50 text-blue-700 border-blue-200",
+  in_progress: "bg-orange-50 text-orange-700 border-orange-200",
+  completed:   "bg-green-50 text-green-700 border-green-200",
+  cancelled:   "bg-neutral-100 text-neutral-500 border-neutral-200",
+}
+const sColor  = (s: string) => COLORS[s]  ?? "#9ca3af"
+const sLabel  = (s: string) => LABELS[s]  ?? s
+const sBadge  = (s: string) => BADGE[s]   ?? "bg-neutral-100 text-neutral-500 border-neutral-200"
+
+// ── Leaflet ───────────────────────────────────────────────────────────────────
+let map: any = null, L: any = null, layer: any = null
+let heatCanvas: HTMLCanvasElement | null = null
+let heat: ReturnType<typeof simpleheat> | null = null
+
 function drawMarkers() {
-  if (!markerGroup || !L || !props.points.length) return;
-  markerGroup.clearLayers();
-
-  for (const p of props.points) {
-    const color  = typeColor(p.type);
-    const radius = Math.max(6, Math.min(18, 5 + Math.sqrt(p.count) * 2.5));
-
+  if (!map || !L || !layer) return
+  layer.clearLayers()
+  withGPS.value.forEach(p => {
+    const isSel = selected.value === p.ticket_number
     L.circleMarker([p.lat, p.lng], {
-      radius,
-      color:       "#fff",
-      weight:      1.5,
-      fillColor:   color,
-      fillOpacity: 0.88,
+      radius: isSel ? 12 : 7,
+      fillColor: sColor(p.status ?? ""),
+      fillOpacity: isSel ? 1 : 0.85,
+      color: isSel ? "#111827" : "#ffffff",
+      weight: 1.5,
     })
-      .bindTooltip(
-        `<span style="font-weight:600">${p.type}</span><br/>${p.count} kejadian`,
-        { direction: "top", opacity: 0.95 },
-      )
-      .addTo(markerGroup);
+      .on("click", (e: any) => {
+        L.DomEvent.stopPropagation(e)
+        selected.value = p.ticket_number ?? null
+      })
+      .addTo(layer)
+  })
+}
+
+function drawHeat() {
+  if (!map || !L || !heat || !heatCanvas) return
+  if (!showHeat.value || !withGPS.value.length) {
+    heatCanvas.style.display = "none"
+    return
   }
+  heatCanvas.style.display = ""
+
+  const size = map.getSize()
+  const topLeft = map.containerPointToLayerPoint([0, 0])
+  L.DomUtil.setPosition(heatCanvas, topLeft)
+  heatCanvas.width = size.x
+  heatCanvas.height = size.y
+  heat.resize()
+
+  const data: [number, number, number][] = []
+  let max = 1
+  for (const p of withGPS.value) {
+    const pt = map.latLngToContainerPoint([p.lat, p.lng])
+    if (pt.x < -80 || pt.y < -80 || pt.x > size.x + 80 || pt.y > size.y + 80) continue
+    const w = Math.max(1, p.count || 1)
+    data.push([pt.x, pt.y, w])
+    if (w > max) max = w
+  }
+  // Clustered areas: bump max slightly so single points stay cooler
+  heat.data(data).max(Math.max(max, 3)).draw(0.05)
 }
 
-function renderAll() {
-  if (!map || !L) return;
-  drawHeat();
-  drawMarkers();
+function setupHeatLayer() {
+  if (!map || !L || heatCanvas) return
+  if (!map.getPane("heatPane")) {
+    map.createPane("heatPane")
+    const pane = map.getPane("heatPane")
+    pane.style.zIndex = "350" // under overlay markers (400), above tiles
+    pane.style.pointerEvents = "none"
+  }
+  const size = map.getSize()
+  heatCanvas = L.DomUtil.create("canvas", "leaflet-zoom-animated") as HTMLCanvasElement
+  heatCanvas.width = size.x
+  heatCanvas.height = size.y
+  heatCanvas.style.pointerEvents = "none"
+  heatCanvas.style.opacity = "0.7"
+  map.getPane("heatPane").appendChild(heatCanvas)
+
+  heat = simpleheat(heatCanvas)
+  heat.radius(26, 18)
+  heat.gradient({
+    0.25: "#3b82f6",
+    0.45: "#22c55e",
+    0.65: "#eab308",
+    0.8: "#f97316",
+    1.0: "#ef4444",
+  })
+
+  map.on("moveend zoomend resize viewreset", drawHeat)
+  drawHeat()
 }
 
-function fitPoints() {
-  if (!map || !props.points.length) return;
-  const lls = props.points.map((p) => [p.lat, p.lng] as [number, number]);
-  if (lls.length > 1) map.fitBounds(lls, { padding: [50, 50], maxZoom: 11 });
-  else map.setView(lls[0], 12);
+function fitMap() {
+  if (!map || !withGPS.value.length) return
+  const lls = withGPS.value.map(p => [p.lat, p.lng] as [number, number])
+  lls.length > 1
+    ? map.fitBounds(lls, { padding: [40, 40], maxZoom: 11 })
+    : map.setView(lls[0], 13)
 }
 
-// ── Map init ──────────────────────────────────────────────────────────────────
+// Selection change → redraw markers + scroll card into view
+watch(selected, (ticket) => {
+  drawMarkers()
+  if (!ticket) return
+  nextTick(() => {
+    asideEl.value
+      ?.querySelector<HTMLElement>(`[data-ticket="${ticket}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" })
+  })
+})
+
+/** Only blank the map on true first load — keep markers during soft refresh / period change. */
+watch(
+  () => props.loading,
+  (loading) => {
+    if (!map || !loading) return
+    if (props.points.length > 0) return
+    selected.value = null
+    layer?.clearLayers()
+    if (heatCanvas) heatCanvas.style.display = "none"
+  },
+)
+
+// Data / filter change → full refresh (markers, cards, densitas)
+watch(
+  () => props.points,
+  () => {
+    selected.value = null
+    if (!map) return
+    nextTick(() => {
+      drawMarkers()
+      drawHeat()
+      fitMap()
+    })
+  },
+  { deep: true },
+)
+
+watch(filtered, () => {
+  selected.value = null
+  if (!map) return
+  drawMarkers()
+  drawHeat()
+  fitMap()
+})
+
+watch(showHeat, () => drawHeat())
+
+function onCardClick(p: HeatPoint) {
+  selected.value = p.ticket_number ?? null
+  if (p.lat !== 0 && p.lng !== 0 && map)
+    map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 13), { duration: 0.5 })
+}
+
 async function initMap() {
-  if (!mapEl.value) return;
+  if (!mapEl.value) return
+  const { default: Leaflet } = await import("leaflet")
+  L = Leaflet
+  if (!mapEl.value) return
 
-  const [{ default: Leaflet }, { default: SimplHeat }] = await Promise.all([
-    import("leaflet"),
-    import("simpleheat"),
-  ]);
-  L = Leaflet;
-  if (!mapEl.value) return;
+  // Guard against HMR double-init
+  if ((mapEl.value as any)._leaflet_id) {
+    ;(mapEl.value as any)._leaflet_id = undefined
+  }
 
-  map = L.map(mapEl.value, { center: [-2.5, 118] as [number, number], zoom: 5 });
+  map = L.map(mapEl.value, { center: [-2.5, 118] as [number, number], zoom: 5 })
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "© OpenStreetMap contributors",
-  }).addTo(map);
+    maxZoom: 19, attribution: "© OpenStreetMap contributors",
+  }).addTo(map)
 
-  // Heat canvas — sits above tiles (z 300), below Leaflet marker pane (z 600)
-  heatCanvas = document.createElement("canvas");
-  heatCanvas.style.cssText = "position:absolute;top:0;left:0;pointer-events:none;z-index:300;";
-  mapEl.value.appendChild(heatCanvas);
+  layer = L.layerGroup().addTo(map)
+  setupHeatLayer()
+  map.on("click", () => { selected.value = null })
+  map.invalidateSize()
+  ready.value = true
 
-  heat = SimplHeat(heatCanvas);
-  heat.radius(45, 25);
-  heat.gradient({ 0.2: "#ffffb2", 0.5: "#fd8d3c", 0.75: "#f03b20", 1: "#bd0026" });
-
-  // Marker layer — standard Leaflet overlayPane (z 400+)
-  markerGroup = L.layerGroup().addTo(map);
-
-  map.on("moveend zoomend resize", renderAll);
-
-  map.invalidateSize();
-  ready.value = true;
-  renderAll();
-  fitPoints();
+  // Render whatever data is already in props
+  drawMarkers()
+  drawHeat()
+  fitMap()
 }
-
-watch(() => props.points, () => {
-  renderAll();
-  fitPoints();
-});
 
 onMounted(() => {
-  // setTimeout lets the browser finish layout before Leaflet reads clientHeight
-  setTimeout(initMap, 150);
-});
-
+  loadCoveredFilters()
+  setTimeout(initMap, 150)
+})
 onBeforeUnmount(() => {
-  if (map) { map.remove(); map = null; }
-  heatCanvas = null;
-  heat = null;
-});
+  if (map) {
+    map.off("moveend zoomend resize viewreset", drawHeat)
+    map.remove()
+    map = null
+  }
+  heatCanvas = null
+  heat = null
+  layer = null
+})
 </script>
 
 <template>
-  <div class="relative rounded-xl overflow-hidden border border-neutral-200">
-    <div ref="mapEl" style="width:100%;height:480px;background:#e5e3df" />
+  <div class="rounded-xl border border-neutral-200 bg-white">
 
-    <!-- Loading -->
-    <Transition name="fade">
-      <div
-        v-if="loading || (!ready && !isEmpty)"
-        class="absolute inset-0 flex items-center justify-center bg-neutral-100/80 z-[1000]"
+    <!-- Filter bar — z di atas Leaflet panes (~200–1000); overflow tidak di parent agar dropdown tidak terpotong -->
+    <div class="relative z-[1100] px-4 py-3 border-b border-neutral-100 flex flex-wrap items-center gap-2 bg-white rounded-t-xl">
+      <UiSelect v-model="fProv" class="!w-auto">
+        <option value="">Semua Provinsi</option>
+        <option v-for="p in provinces" :key="p" :value="p">{{ p }}</option>
+      </UiSelect>
+
+      <UiSelect v-model="fReg" class="!w-auto">
+        <option value="">Semua Kab/Kota</option>
+        <option v-for="r in regencies" :key="r" :value="r">{{ r }}</option>
+      </UiSelect>
+
+      <UiSelect v-model="fType" class="!w-auto">
+        <option value="">Semua Jenis</option>
+        <option v-for="t in types" :key="t" :value="t">{{ t }}</option>
+      </UiSelect>
+
+      <button
+        v-if="fProv || fReg || fType"
+        class="text-xs text-neutral-400 hover:text-neutral-700 flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-neutral-100"
+        @click="fProv = ''; fReg = ''; fType = ''"
       >
-        <div class="flex items-center gap-2 text-sm text-neutral-500 bg-white px-4 py-2 rounded-xl shadow">
-          <Icon icon="lucide:loader-2" class="animate-spin" />
-          Memuat peta...
-        </div>
-      </div>
-    </Transition>
+        <Icon icon="lucide:x" />
+        Reset
+      </button>
 
-    <!-- Empty -->
-    <div
-      v-if="isEmpty && ready"
-      class="absolute inset-0 flex items-center justify-center z-[1000] pointer-events-none"
-    >
-      <div class="bg-white/90 rounded-xl px-6 py-4 text-center shadow">
-        <Icon icon="lucide:map" class="text-neutral-300 text-3xl mb-2" />
-        <p class="text-sm font-medium text-neutral-500">Tidak ada data pada periode ini</p>
-      </div>
+      <button
+        type="button"
+        class="text-xs font-medium flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors"
+        :class="showHeat
+          ? 'bg-emergency-50 text-emergency-700 border-emergency-200'
+          : 'bg-white text-neutral-500 border-neutral-200 hover:text-neutral-700'"
+        :title="showHeat ? 'Sembunyikan densitas' : 'Tampilkan densitas'"
+        @click="showHeat = !showHeat"
+      >
+        <Icon icon="lucide:flame" class="text-sm" />
+        Heatmap
+      </button>
+
+      <span class="ml-auto text-xs text-neutral-400">
+        {{ filtered.length }} pesanan
+        <template v-if="withGPS.length !== filtered.length">
+          · {{ withGPS.length }} di peta
+        </template>
+      </span>
     </div>
 
-    <!-- Legend — type colors + density scale -->
-    <div
-      v-if="ready && !isEmpty"
-      class="absolute bottom-4 left-4 z-[1000] bg-white/96 backdrop-blur-sm rounded-xl shadow-lg px-4 py-3 text-xs max-w-[180px]"
-    >
-      <p class="font-semibold text-neutral-700 mb-2">Jenis Layanan</p>
-      <div class="space-y-1.5 mb-3">
+    <!-- Map + aside -->
+    <div class="flex overflow-hidden rounded-b-xl" style="height: 580px">
+
+      <!-- Map -->
+      <div class="flex-1 relative overflow-hidden min-w-0 isolate">
+        <div ref="mapEl" class="w-full h-full" style="background: #e5e3df" />
+
+        <!-- Loading -->
+        <div v-if="loading && props.points.length === 0" class="absolute inset-0 z-[500] flex items-center justify-center bg-white/70">
+          <div class="flex items-center gap-2 text-sm text-neutral-500 bg-white rounded-xl px-4 py-2 shadow">
+            <Icon icon="lucide:loader-2" class="animate-spin" />
+            Memuat peta...
+          </div>
+        </div>
         <div
-          v-for="item in legend"
-          :key="item.label"
-          class="flex items-center gap-2"
+          v-else-if="loading"
+          class="absolute top-3 right-3 z-[500] flex items-center gap-1.5 text-xs text-neutral-500 bg-white/95 rounded-lg px-2.5 py-1.5 shadow border border-neutral-100"
         >
-          <span
-            class="w-3 h-3 rounded-full shrink-0 border border-white shadow-sm"
-            :style="{ background: item.color }"
-          />
-          <span class="text-neutral-700 truncate">{{ item.label }}</span>
+          <Icon icon="lucide:loader-2" class="animate-spin text-sm" />
+          Memperbarui…
+        </div>
+
+        <!-- No data -->
+        <div v-if="ready && filtered.length === 0 && !loading" class="absolute inset-0 z-[500] pointer-events-none flex items-center justify-center">
+          <div class="bg-white/90 rounded-xl px-6 py-4 text-center shadow">
+            <Icon icon="lucide:map" class="text-neutral-300 text-3xl mb-2" />
+            <p class="text-sm text-neutral-500">Tidak ada data</p>
+          </div>
+        </div>
+
+        <!-- No GPS notice -->
+        <div v-if="ready && filtered.length > 0 && withGPS.length === 0 && !loading" class="absolute inset-0 z-[500] pointer-events-none flex items-center justify-center">
+          <div class="bg-white/90 rounded-xl px-5 py-4 text-center shadow max-w-xs">
+            <Icon icon="lucide:map-pin-off" class="text-neutral-300 text-3xl mb-2" />
+            <p class="text-sm text-neutral-600">Pesanan belum memiliki data GPS</p>
+            <p class="text-xs text-neutral-400 mt-1">Lihat daftar pesanan di panel kanan</p>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div v-if="ready && withGPS.length > 0" class="absolute bottom-3 left-3 z-[500] bg-white/95 rounded-xl shadow px-3 py-2.5 text-xs space-y-2.5">
+          <div>
+            <p class="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide mb-1.5">Status Pesanan</p>
+            <div v-for="[key, color] in Object.entries(COLORS)" :key="key" class="flex items-center gap-1.5 mb-0.5">
+              <span class="w-2.5 h-2.5 rounded-full" :style="{ background: color }" />
+              <span class="text-neutral-600 text-[11px]">{{ LABELS[key] }}</span>
+            </div>
+          </div>
+          <div v-if="showHeat">
+            <p class="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide mb-1.5">Densitas</p>
+            <div
+              class="h-2 rounded-full w-28"
+              style="background: linear-gradient(90deg, #3b82f6, #22c55e, #eab308, #f97316, #ef4444)"
+            />
+            <div class="flex justify-between text-[10px] text-neutral-400 mt-0.5">
+              <span>Rendah</span>
+              <span>Tinggi</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Click hint -->
+        <div v-if="ready && withGPS.length > 0 && !selected" class="absolute top-3 left-1/2 -translate-x-1/2 z-[500] pointer-events-none">
+          <span class="bg-neutral-800/70 text-white text-[11px] px-3 py-1.5 rounded-full">
+            Klik marker untuk melihat pesanan
+          </span>
         </div>
       </div>
-      <div class="border-t border-neutral-100 pt-2">
-        <p class="font-semibold text-neutral-700 mb-1.5">Kepadatan</p>
-        <div
-          class="h-2 rounded-full"
-          style="background:linear-gradient(to right,rgba(255,255,178,.4),rgba(253,141,60,.5),rgba(189,0,38,.6))"
-        />
-        <div class="flex justify-between text-neutral-400 mt-1">
-          <span>Rendah</span><span>Tinggi</span>
+
+      <!-- Aside: card list -->
+      <div
+        ref="asideEl"
+        data-dashboard-scroll
+        class="w-72 xl:w-80 shrink-0 border-l border-neutral-200 bg-neutral-50 overflow-y-auto flex flex-col"
+      >
+        <!-- Loading skeleton (initial only — parent should pass loading&&!points) -->
+        <div v-if="loading && !points.length" class="p-2 space-y-1.5">
+          <div
+            v-for="i in 5"
+            :key="i"
+            class="bg-white rounded-xl border border-neutral-200 overflow-hidden"
+          >
+            <div class="soft-skel h-0.5 rounded-none" />
+            <div class="p-3 space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <div class="soft-skel h-3 w-24" />
+                <div class="soft-skel h-4 rounded-full w-14" />
+              </div>
+              <div class="soft-skel h-3 w-28" />
+              <div class="soft-skel h-3 w-full" />
+              <div class="soft-skel h-2.5 w-3/4" />
+              <div class="flex justify-between">
+                <div class="soft-skel h-2.5 w-20" />
+                <div class="soft-skel h-2.5 w-12" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty -->
+        <div v-else-if="!filtered.length" class="flex-1 flex flex-col items-center justify-center gap-2 p-6 text-center">
+          <Icon icon="lucide:inbox" class="text-3xl text-neutral-200" />
+          <p class="text-sm text-neutral-500">Tidak ada pesanan</p>
+          <p class="text-xs text-neutral-400">Coba ubah filter atau periode</p>
+        </div>
+
+        <!-- Cards -->
+        <div v-else class="p-2 space-y-1.5">
+          <div
+            v-for="(p, i) in filtered"
+            :key="p.ticket_number ?? i"
+            :data-ticket="p.ticket_number"
+            class="bg-white rounded-xl border overflow-hidden transition-all duration-150 group cursor-pointer"
+            :class="selected === p.ticket_number
+              ? 'border-neutral-800 shadow-md ring-1 ring-neutral-800/10'
+              : 'border-neutral-200 hover:border-neutral-300 hover:shadow-sm'"
+            @click="onCardClick(p)"
+          >
+            <!-- Status accent -->
+            <div class="h-0.5" :style="{ background: sColor(p.status ?? '') }" />
+
+            <div class="p-3">
+              <!-- Ticket + badge -->
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <span class="text-xs font-bold font-mono text-neutral-900 truncate">{{ p.ticket_number ?? "—" }}</span>
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border shrink-0" :class="sBadge(p.status ?? '')">
+                  {{ sLabel(p.status ?? "") }}
+                </span>
+              </div>
+
+              <!-- Requester -->
+              <div class="flex items-center gap-1.5 mb-1.5">
+                <Icon icon="lucide:user" class="text-neutral-300 text-[11px] shrink-0" />
+                <span class="text-[11px] font-medium text-neutral-700 truncate">{{ p.requester_name || "—" }}</span>
+              </div>
+
+              <!-- Condition -->
+              <p class="text-[11px] text-neutral-500 line-clamp-2 mb-1.5">
+                {{ p.condition || "Kondisi tidak dicantumkan" }}
+              </p>
+
+              <!-- Location -->
+              <div class="flex items-start gap-1 mb-1.5">
+                <Icon
+                  :icon="p.lat !== 0 ? 'lucide:map-pin' : 'lucide:map-pin-off'"
+                  class="text-neutral-300 text-[10px] shrink-0 mt-0.5"
+                />
+                <span class="text-[10px] text-neutral-400 line-clamp-1">
+                  {{ p.location || (p.lat !== 0 ? `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}` : "Lokasi tidak tersedia") }}
+                </span>
+              </div>
+
+              <!-- Unit + time -->
+              <div class="flex items-center justify-between gap-2 text-[10px] text-neutral-400">
+                <div v-if="p.unit_name" class="flex items-center gap-1 truncate">
+                  <Icon icon="lucide:shield" class="shrink-0" />
+                  <span class="truncate">{{ p.unit_name }}</span>
+                </div>
+                <span class="shrink-0 ml-auto">{{ p.created_at }}</span>
+              </div>
+
+              <!-- Detail button (hover / selected) -->
+              <div
+                class="mt-2.5 pt-2 border-t border-neutral-100"
+                :class="selected === p.ticket_number ? 'block' : 'hidden group-hover:block'"
+              >
+                <button
+                  class="text-[11px] font-semibold text-primary-600 hover:text-primary-700 flex items-center gap-1"
+                  @click.stop="router.push(`/orders/${p.ticket_number}`)"
+                >
+                  <Icon icon="lucide:external-link" />
+                  Buka Detail Pesanan
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-      <p class="text-neutral-400 mt-2 border-t border-neutral-100 pt-2">
-        {{ props.points.length }} titik
-      </p>
     </div>
   </div>
 </template>
 
 <style scoped>
-.fade-enter-active, .fade-leave-active { transition: opacity 0.25s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s }
+.fade-enter-from, .fade-leave-to { opacity: 0 }
 </style>

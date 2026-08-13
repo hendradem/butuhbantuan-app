@@ -86,12 +86,19 @@ func (r *EmergencyRepo) FindByIDs(ids []string) ([]domain.Emergency, error) {
 func (r *EmergencyRepo) buildEntity(e domain.Emergency) EmergencyEntity {
 	lat, _ := strconv.ParseFloat(e.Coordinates[1], 64)
 	lng, _ := strconv.ParseFloat(e.Coordinates[0], 64)
+	tier := normalizePartnerTier(e.PartnerTier)
 	row := EmergencyEntity{
 		Name:                 e.Name,
 		OrganizationName:     e.OrganizationName,
 		OrganizationType:     e.OrganizationType,
 		EmergencyTypeID:      uint(e.EmergencyType.ID),
 		Description:          e.Description,
+		IsVerified:           tier == domain.PartnerTierPSC || tier == domain.PartnerTierVerified,
+		PartnerTier:          tier,
+		TrainedDriver:        e.Readiness.TrainedDriver,
+		HasOxygen:            e.Readiness.HasOxygen,
+		HasStretcher:         e.Readiness.HasStretcher,
+		EquipmentNotes:       e.Readiness.EquipmentNotes,
 		IsActive:             true,
 		Is24Hours:            e.Operational.Is24Hours,
 		OpenTime:             e.Operational.OpenTime,
@@ -125,7 +132,7 @@ func (r *EmergencyRepo) buildEntity(e domain.Emergency) EmergencyEntity {
 func (r *EmergencyRepo) UpdateOperational(id string, status domain.OperationalStatus) error {
 	result := r.db.Model(&EmergencyEntity{}).Where("uuid = ?", id).Updates(map[string]any{
 		"is_active":   status.IsActive,
-		"is_24_hours": status.Is24Hours,
+		"is24_hours":  status.Is24Hours,
 		"open_time":   status.OpenTime,
 		"close_time":  status.CloseTime,
 	})
@@ -204,8 +211,14 @@ func (r *EmergencyRepo) Upsert(e domain.Emergency) (*domain.Emergency, error) {
 		"organization_type":      row.OrganizationType,
 		"emergency_type_id":      row.EmergencyTypeID,
 		"description":            row.Description,
+		"is_verified":            row.IsVerified,
+		"partner_tier":           row.PartnerTier,
+		"trained_driver":         row.TrainedDriver,
+		"has_oxygen":             row.HasOxygen,
+		"has_stretcher":          row.HasStretcher,
+		"equipment_notes":        row.EquipmentNotes,
 		"is_active":              row.IsActive,
-		"is_24_hours":            row.Is24Hours,
+		"is24_hours":             row.Is24Hours,
 		"open_time":              row.OpenTime,
 		"close_time":             row.CloseTime,
 		"total_units":            row.TotalUnits,
@@ -261,11 +274,19 @@ func (r *EmergencyRepo) Update(e domain.Emergency) (*domain.Emergency, error) {
 	row.TipeEmergency = strings.Join(e.TipeEmergency, ",")
 	row.IsDispatcher = e.IsDispatcher
 	row.IsProvinceDispatcher = e.IsProvinceDispatcher
+	tier := normalizePartnerTier(e.PartnerTier)
+	row.PartnerTier = tier
+	row.IsVerified = tier == domain.PartnerTierPSC || tier == domain.PartnerTierVerified
+	row.TrainedDriver = e.Readiness.TrainedDriver
+	row.HasOxygen = e.Readiness.HasOxygen
+	row.HasStretcher = e.Readiness.HasStretcher
+	row.EquipmentNotes = e.Readiness.EquipmentNotes
 	row.Is24Hours = e.Operational.Is24Hours
 	row.OpenTime = e.Operational.OpenTime
 	row.CloseTime = e.Operational.CloseTime
 	row.TotalUnits = e.Fleet.Total
 	row.AvailableUnits = e.Fleet.Available
+	row.IsActive = e.Operational.IsActive
 
 	if err := r.db.Omit(clause.Associations).Save(&row).Error; err != nil {
 		return nil, err
@@ -375,6 +396,17 @@ func (r *EmergencyTypeRepo) DeleteType(id string) error {
 // ---------- Mappers ----------
 
 func mapEmergency(e EmergencyEntity) domain.Emergency {
+	tier := e.PartnerTier
+	if tier == "" {
+		// Legacy rows without partner_tier: derive from name / is_verified.
+		if looksLikePSC(e) {
+			tier = domain.PartnerTierPSC
+		} else if e.IsVerified {
+			tier = domain.PartnerTierVerified
+		} else {
+			tier = domain.PartnerTierCommunity
+		}
+	}
 	return domain.Emergency{
 		ID:                   e.UUID.String(),
 		Name:                 e.Name,
@@ -384,11 +416,18 @@ func mapEmergency(e EmergencyEntity) domain.Emergency {
 		Description:          e.Description,
 		Coordinates:          [2]string{strconv.FormatFloat(e.Longitude, 'f', 7, 64), strconv.FormatFloat(e.Latitude, 'f', 7, 64)},
 		TypeOfService:        e.TypeOfService,
-		TipeEmergency:        splitTipe(e.TipeEmergency),
+		TipeEmergency:        resolveTipeEmergency(e.TipeEmergency, e.TypeOfService),
 		IsDispatcher:         e.IsDispatcher,
 		IsProvinceDispatcher: e.IsProvinceDispatcher,
+		PartnerTier:          normalizePartnerTier(tier),
+		Readiness: domain.Readiness{
+			TrainedDriver:  e.TrainedDriver,
+			HasOxygen:      e.HasOxygen,
+			HasStretcher:   e.HasStretcher,
+			EquipmentNotes: e.EquipmentNotes,
+		},
 		EmergencyType: domain.EmergencyType{
-			ID:   e.EmergencyType.ID,
+			ID:   typeIDOr(e.EmergencyType.ID, e.EmergencyTypeID),
 			Name: e.EmergencyType.Name,
 			Icon: e.EmergencyType.Icon,
 		},
@@ -427,6 +466,13 @@ func mapManyEmergencies(rows []EmergencyEntity) []domain.Emergency {
 	return out
 }
 
+func typeIDOr(preloaded, fk uint) uint {
+	if preloaded != 0 {
+		return preloaded
+	}
+	return fk
+}
+
 func splitTipe(s string) []string {
 	if s == "" {
 		return []string{}
@@ -439,4 +485,69 @@ func splitTipe(s string) []string {
 		}
 	}
 	return out
+}
+
+// resolveTipeEmergency prefers explicit tipe_emergency; falls back to type_of_service labels.
+func resolveTipeEmergency(tipeCSV, typeOfService string) []string {
+	if tipes := splitTipe(tipeCSV); len(tipes) > 0 {
+		out := make([]string, 0, len(tipes))
+		for _, t := range tipes {
+			out = append(out, normalizeTipeLabel(t))
+		}
+		return out
+	}
+	parts := splitTipe(typeOfService)
+	out := make([]string, 0, len(parts))
+	seen := map[string]bool{}
+	for _, p := range parts {
+		n := normalizeTipeLabel(p)
+		if n == "" || seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
+	}
+	return out
+}
+
+func normalizeTipeLabel(s string) string {
+	v := strings.ToLower(strings.TrimSpace(s))
+	switch v {
+	case "emergency", "darurat":
+		return "emergency"
+	case "transport", "transportasi":
+		return "transport"
+	case "pemadam", "damkar":
+		return "pemadam"
+	case "pencarian dan pertolongan", "sar", "basarnas":
+		return "pencarian dan pertolongan"
+	default:
+		return v
+	}
+}
+
+func normalizePartnerTier(tier string) string {
+	switch strings.ToLower(strings.TrimSpace(tier)) {
+	case domain.PartnerTierPSC:
+		return domain.PartnerTierPSC
+	case domain.PartnerTierVerified:
+		return domain.PartnerTierVerified
+	default:
+		return domain.PartnerTierCommunity
+	}
+}
+
+func looksLikePSC(e EmergencyEntity) bool {
+	blob := strings.ToLower(strings.Join([]string{
+		e.Name, e.OrganizationName, e.OrganizationType, e.TypeOfService, e.Description,
+	}, " "))
+	for _, n := range []string{
+		"psc", "119", "spgdt", "dinas kesehatan", "dinkes",
+		"basarnas", "damkar", "pemadam", "pencarian dan pertolongan",
+	} {
+		if strings.Contains(blob, n) {
+			return true
+		}
+	}
+	return false
 }

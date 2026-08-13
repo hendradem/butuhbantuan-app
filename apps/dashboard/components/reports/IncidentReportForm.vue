@@ -5,7 +5,14 @@ const props = defineProps<{
   unitName?: string;
   storageKey?: string;
   ticket?: any;
+  /** Persist to API so unit & admin share the same report. */
+  mode?: "admin" | "unit";
 }>();
+
+const config = useRuntimeConfig();
+const baseUrl = config.public.apiBaseUrl as string;
+const { token: adminToken } = useAuth();
+const { unitHeaders } = useUnitAuth();
 
 // ── Report data persistence (per-ticket) ────────────────────────────────────────
 const REPORT_KEY = computed(() =>
@@ -13,6 +20,8 @@ const REPORT_KEY = computed(() =>
 );
 const savedAt = ref<string | null>(null);
 const isMounting = ref(true);
+const savingRemote = ref(false);
+const saveError = ref("");
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 // ── Template (localStorage) ────────────────────────────────────────────────────
@@ -95,28 +104,110 @@ const vehicle = ref("");
 function applyTicket(t: any) {
   if (!t) return;
   const d = new Date(t.created_at);
-  dateStr.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  timeStr.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (!Number.isNaN(d.getTime())) {
+    dateStr.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    timeStr.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
   if (t.location) location.value = t.location;
   if (victims.value.length === 0) victims.value = [newVictim()];
-  victims.value[0].name = t.requester_name ?? "";
-  victims.value[0].conditions = t.condition ?? "";
-  sources.value = `Masyarakat (No. Tiket: ${t.ticket_number})`;
+  // Prefill ringan dari e-tiket (bukan laporan lama tiket lain)
+  if (!victims.value[0].name) victims.value[0].name = t.requester_name ?? "";
+  if (!victims.value[0].conditions) victims.value[0].conditions = t.condition ?? "";
+  if (!sources.value || sources.value === "Masyarakat") {
+    sources.value = t.ticket_number
+      ? `Masyarakat (No. Tiket: ${t.ticket_number})`
+      : "Masyarakat";
+  }
 }
 
 function applyReportData(data: any) {
-  if (data.dateStr !== undefined) dateStr.value = data.dateStr;
-  if (data.timeStr !== undefined) timeStr.value = data.timeStr;
-  if (data.incidentType !== undefined) incidentType.value = data.incidentType;
-  if (data.location !== undefined) location.value = data.location;
-  if (data.maleCount !== undefined) maleCount.value = data.maleCount;
-  if (data.femaleCount !== undefined) femaleCount.value = data.femaleCount;
-  if (data.victims?.length) victims.value = data.victims;
-  if (data.sources !== undefined) sources.value = data.sources;
-  if (data.parties !== undefined) parties.value = data.parties;
-  if (data.volunteers?.length) volunteers.value = data.volunteers;
-  if (data.vehicle !== undefined) vehicle.value = data.vehicle;
-  if (data._savedAt) savedAt.value = data._savedAt;
+  if (!data || typeof data !== "object") return;
+  if (data.dateStr !== undefined) dateStr.value = String(data.dateStr || "");
+  if (data.timeStr !== undefined) timeStr.value = String(data.timeStr || "");
+  if (data.incidentType !== undefined) incidentType.value = String(data.incidentType || "");
+  if (data.location !== undefined) location.value = String(data.location || "");
+  if (data.maleCount !== undefined) maleCount.value = String(data.maleCount || "");
+  if (data.femaleCount !== undefined) femaleCount.value = String(data.femaleCount || "");
+  if (Array.isArray(data.victims) && data.victims.length) {
+    victims.value = data.victims.map((v: any) => ({
+      id: String(v.id || Math.random().toString(36).slice(2)),
+      name: String(v.name || ""),
+      age: String(v.age || ""),
+      gender: v.gender === "Perempuan" ? "Perempuan" : "Laki-laki",
+      address: String(v.address || ""),
+      conditions: String(v.conditions || ""),
+      treatments: String(v.treatments || ""),
+    }));
+  }
+  if (data.sources !== undefined) sources.value = String(data.sources || "");
+  if (data.parties !== undefined) parties.value = String(data.parties || "");
+  if (Array.isArray(data.volunteers) && data.volunteers.length) {
+    volunteers.value = data.volunteers.map((v: any) => ({
+      id: String(v.id || Math.random().toString(36).slice(2)),
+      name: String(v.name || ""),
+      role: String(v.role || ""),
+    }));
+  }
+  if (data.vehicle !== undefined) vehicle.value = String(data.vehicle || "");
+  if (data._savedAt) savedAt.value = String(data._savedAt);
+}
+
+function resetEventFields() {
+  const now = new Date();
+  dateStr.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  timeStr.value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  incidentType.value = "";
+  location.value = "";
+  maleCount.value = "";
+  femaleCount.value = "";
+  victims.value = [newVictim()];
+  sources.value = "Masyarakat";
+  parties.value = "";
+  volunteers.value = [{ id: Math.random().toString(36).slice(2), name: "", role: "" }];
+  vehicle.value = "";
+  savedAt.value = null;
+  saveError.value = "";
+}
+
+function loadTemplate() {
+  const savedTpl = localStorage.getItem(TPL_KEY.value);
+  if (savedTpl) {
+    try { applyTemplate(JSON.parse(savedTpl)); } catch { applyTemplate({}); }
+  } else {
+    applyTemplate({});
+  }
+}
+
+function hydrateFromTicket(t: any) {
+  if (!t?.ticket_number) {
+    resetEventFields();
+    return;
+  }
+  isMounting.value = true;
+  resetEventFields();
+  loadTemplate();
+
+  const fromServer = t.incident_report;
+  const savedLocal = (() => {
+    try { return localStorage.getItem(`bb-report-${t.ticket_number}`); } catch { return null; }
+  })();
+
+  if (fromServer && typeof fromServer === "object") {
+    applyReportData(fromServer);
+  } else if (typeof fromServer === "string" && fromServer) {
+    try { applyReportData(JSON.parse(fromServer)); } catch { applyTicket(t); }
+  } else if (savedLocal) {
+    try {
+      applyReportData(JSON.parse(savedLocal));
+      nextTick(() => { void persistReport(); });
+    } catch {
+      applyTicket(t);
+    }
+  } else {
+    applyTicket(t);
+  }
+
+  nextTick(() => { isMounting.value = false; });
 }
 
 // ── Auto-save (debounced 1.5s) ─────────────────────────────────────────────────
@@ -138,32 +229,77 @@ watch(formSnapshot, () => {
   if (isMounting.value) return;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    if (!REPORT_KEY.value) return;
-    const n = new Date();
-    const at = `${pad(n.getHours())}:${pad(n.getMinutes())}`;
-    localStorage.setItem(REPORT_KEY.value, JSON.stringify({ ...formSnapshot.value, _savedAt: at }));
-    savedAt.value = at;
+    void persistReport();
   }, 1500);
 }, { deep: true });
 
-// ── Mount ──────────────────────────────────────────────────────────────────────
-onMounted(() => {
-  const savedTpl = localStorage.getItem(TPL_KEY.value);
-  if (savedTpl) {
-    try { applyTemplate(JSON.parse(savedTpl)); } catch { applyTemplate({}); }
-  } else {
-    applyTemplate({});
+function authHeaders(): Record<string, string> {
+  if (props.mode === "admin") {
+    return adminToken.value ? { "X-Admin-Key": adminToken.value } : {};
   }
+  if (props.mode === "unit") return unitHeaders();
+  return {};
+}
 
-  if (REPORT_KEY.value) {
-    const savedReport = localStorage.getItem(REPORT_KEY.value);
-    if (savedReport) {
-      try { applyReportData(JSON.parse(savedReport)); } catch { /* ignore */ }
-    } else if (props.ticket) {
-      applyTicket(props.ticket);
+function apiPrefix() {
+  return props.mode === "admin" ? "/api/v1/admin/orders" : "/api/v1/unit/orders";
+}
+
+async function persistReport() {
+  if (!REPORT_KEY.value) return;
+  const orderId = props.ticket?.id;
+  // Jangan simpan draft ke key tiket lain — pastikan ticket_number di key cocok
+  const ticketNo = props.ticket?.ticket_number;
+  if (!ticketNo || REPORT_KEY.value !== `bb-report-${ticketNo}`) return;
+
+  const n = new Date();
+  const at = `${pad(n.getHours())}:${pad(n.getMinutes())}`;
+  const payload = { ...formSnapshot.value, _savedAt: at };
+  try {
+    localStorage.setItem(REPORT_KEY.value, JSON.stringify(payload));
+  } catch {
+    /* ignore */
+  }
+  savedAt.value = at;
+
+  if (!orderId || !props.mode) return;
+  const headers = authHeaders();
+  if (!Object.keys(headers).length) return;
+
+  savingRemote.value = true;
+  saveError.value = "";
+  try {
+    await $fetch(`${baseUrl}${apiPrefix()}/${orderId}/report`, {
+      method: "PUT",
+      headers,
+      body: { report: payload },
+    });
+  } catch (e: any) {
+    saveError.value = e?.data?.message || "Gagal menyimpan ke server (draft lokal tetap ada).";
+  } finally {
+    savingRemote.value = false;
+  }
+}
+
+// ── Mount / ticket change ──────────────────────────────────────────────────────
+watch(
+  () => [props.ticket?.id, props.ticket?.ticket_number] as const,
+  ([_id, number], prev) => {
+    if (!number) return;
+    // Remount-equivalent when ticket identity changes (keepalive-safe)
+    if (prev && prev[1] && prev[1] !== number) {
+      hydrateFromTicket(props.ticket);
+      return;
     }
-  }
+    if (!prev || !prev[1]) hydrateFromTicket(props.ticket);
+  },
+  { immediate: true },
+);
 
+onMounted(() => {
+  if (!props.ticket?.ticket_number) {
+    loadTemplate();
+  }
   nextTick(() => { isMounting.value = false; });
 });
 
@@ -172,17 +308,26 @@ const NUM_EMOJI = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","
 const DAYS = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
 const MONTHS = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
 
+function parseReportDate(date: string, time: string): Date | null {
+  const raw = `${date || ""}T${time || "00:00"}`;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 const message = computed(() => {
-  const d = new Date(`${dateStr.value}T${timeStr.value || "00:00"}`);
-  const dateFmt = `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  const d = parseReportDate(dateStr.value, timeStr.value);
+  const dateFmt = d
+    ? `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+    : (dateStr.value || "-");
   const timeFmt = timeStr.value ? timeStr.value.replace(":", ".") + " WIB" : "-";
+  const dayName = d ? DAYS[d.getDay()] : "-";
 
   const L: string[] = [];
 
   if (header.value.trim()) { L.push(header.value.trim()); L.push(""); }
 
   L.push("🔍 *HARI/TANGGAL:*");
-  L.push(` •   ${DAYS[d.getDay()]}, ${dateFmt}`);
+  L.push(` •   ${dayName}, ${dateFmt}`);
   L.push("");
 
   L.push("⏰ *PUKUL:*");
@@ -265,13 +410,33 @@ const message = computed(() => {
 // ── Copy ───────────────────────────────────────────────────────────────────────
 const copied = ref(false);
 async function copyMessage() {
-  await navigator.clipboard.writeText(message.value);
-  copied.value = true;
-  setTimeout(() => { copied.value = false; }, 2000);
+  try {
+    await navigator.clipboard.writeText(message.value);
+    copied.value = true;
+    setTimeout(() => { copied.value = false; }, 2000);
+  } catch {
+    /* ignore */
+  }
 }
 
-// ── Mobile tab ─────────────────────────────────────────────────────────────────
+// ── Mobile tab (local only — jangan ganggu ?ticket= di URL) ────────────────────
 const mobileTab = ref<"form" | "preview">("form");
+function setMobileTab(t: "form" | "preview") {
+  mobileTab.value = t;
+}
+
+const prefillHint = computed(() => {
+  if (!props.ticket?.ticket_number) return "";
+  if (props.ticket?.has_incident_report || props.ticket?.incident_report) {
+    return "Menampilkan laporan tersimpan untuk tiket ini.";
+  }
+  try {
+    if (REPORT_KEY.value && localStorage.getItem(REPORT_KEY.value)) {
+      return "Draft lokal untuk tiket ini dimuat ulang.";
+    }
+  } catch { /* ignore */ }
+  return "Sebagian field diisi dari data e-tiket — lengkapi sebelum salin/kirim.";
+});
 </script>
 
 <template>
@@ -280,7 +445,7 @@ const mobileTab = ref<"form" | "preview">("form");
     <button
       v-for="t in ['form', 'preview'] as const" :key="t"
       :class="['flex-1 py-2.5 text-sm font-medium transition-colors border-b-2', mobileTab === t ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500']"
-      @click="mobileTab = t"
+      @click="setMobileTab(t)"
     >
       {{ t === 'form' ? 'Form Isian' : 'Preview Pesan' }}
     </button>
@@ -293,16 +458,20 @@ const mobileTab = ref<"form" | "preview">("form");
     <div :class="['flex-1 min-w-0 p-4 sm:p-6 space-y-5', mobileTab === 'preview' ? 'hidden lg:block' : '']">
 
       <!-- Ticket info banner -->
-      <div v-if="ticket" class="bg-primary-50 rounded-xl border border-primary-200 px-4 py-3 flex items-center gap-3">
-        <Icon icon="lucide:ticket" class="text-primary-500 shrink-0 text-lg" />
-        <div class="flex-1 min-w-0">
-          <p class="text-sm font-semibold text-primary-800 font-mono">{{ ticket.ticket_number }}</p>
-          <p class="text-xs text-primary-600 truncate mt-0.5">{{ ticket.requester_name }}</p>
+      <div v-if="ticket" class="bg-primary-50 rounded-xl border border-primary-200 px-4 py-3 space-y-1.5">
+        <div class="flex items-center gap-3">
+          <Icon icon="lucide:ticket" class="text-primary-500 shrink-0 text-lg" />
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-primary-800 font-mono">{{ ticket.ticket_number }}</p>
+            <p class="text-xs text-primary-600 truncate mt-0.5">{{ ticket.requester_name }}</p>
+          </div>
+          <div v-if="savedAt" class="text-[10px] text-primary-600 shrink-0 flex items-center gap-1">
+            <Icon :icon="savingRemote ? 'lucide:loader-2' : 'lucide:check-circle'" :class="savingRemote && 'animate-spin'" />
+            {{ savingRemote ? "Menyimpan…" : `Tersimpan ${savedAt}` }}
+          </div>
         </div>
-        <div v-if="savedAt" class="text-[10px] text-primary-600 shrink-0 flex items-center gap-1">
-          <Icon icon="lucide:check-circle" class="text-primary-400" />
-          Tersimpan {{ savedAt }}
-        </div>
+        <p v-if="prefillHint" class="text-xs text-primary-700/80 pl-8">{{ prefillHint }}</p>
+        <p v-if="saveError" class="text-xs text-red-600 pl-8">{{ saveError }}</p>
       </div>
 
       <!-- Template settings -->

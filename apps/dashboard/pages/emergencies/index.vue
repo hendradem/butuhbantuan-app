@@ -1,24 +1,32 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
 import { toast } from "vue3-hot-toast";
+import { placeAnchoredMenu } from "~/utils/placeAnchoredMenu";
 
-definePageMeta({ title: "Layanan Darurat" });
+definePageMeta({ title: "Layanan Darurat", keepalive: true });
 
 const { get, post, put, del } = useApi();
 
-const search = ref("");
-const selectedType = ref("");
+const search = usePersistedQueryParam("bb-emergencies-q", "q", "", { syncQuery: false });
+const selectedType = usePersistedQueryParam("bb-emergencies-type", "type");
+const filterProvince = usePersistedQueryParam("bb-emergencies-province", "province");
 const pageSize = ref(10);
 const page = ref(1);
 
-const { data, pending, refresh } = await useAsyncData("emergencies-list", () =>
+const { loadProvinces, provinces: coveredProvinces } = useCoveredWilayah();
+await loadProvinces();
+
+const { data, pending, refresh: refreshEmergencies } = await useAsyncData("emergencies-list", () =>
   get<{ data: any[] }>("/api/v1/emergency/")
 );
 const { data: types } = await useAsyncData("types-filter", () =>
   get<{ data: any[] }>("/api/v1/emergency/type")
 );
 
-watch([search, selectedType], () => { page.value = 1; });
+const refresh = useSoftRefresh(refreshEmergencies);
+const showSkeleton = computed(() => isInitialPending(pending.value, data.value));
+
+watch([search, selectedType, filterProvince], () => { page.value = 1; });
 
 type EmSortCol = 'name' | 'organization_name' | 'type' | 'status';
 const sortCol = ref<EmSortCol>('name');
@@ -38,11 +46,15 @@ const filtered = computed(() => {
       (e: any) =>
         e.name?.toLowerCase().includes(q) ||
         e.organization_name?.toLowerCase().includes(q) ||
-        e.address?.regency?.toLowerCase().includes(q)
+        e.address?.regency?.toLowerCase().includes(q) ||
+        e.address?.province?.toLowerCase().includes(q)
     );
   }
   if (selectedType.value) {
     list = list.filter((e: any) => String(e.emergency_type?.id) === selectedType.value);
+  }
+  if (filterProvince.value) {
+    list = list.filter((e: any) => e.address?.province_id === filterProvince.value);
   }
   return [...list].sort((a: any, b: any) => {
     let va = '', vb = '';
@@ -70,6 +82,22 @@ function typeBadgeColor(name: string) {
   return m[name] ?? "bg-neutral-100 text-neutral-700";
 }
 
+function partnerTierLabel(tier?: string) {
+  switch (tier) {
+    case "psc": return "Resmi";
+    case "verified": return "Terverifikasi";
+    default: return "Komunitas";
+  }
+}
+
+function partnerTierBadgeClass(tier?: string) {
+  switch (tier) {
+    case "psc": return "bg-emerald-100 text-emerald-800";
+    case "verified": return "bg-indigo-100 text-indigo-700";
+    default: return "bg-neutral-100 text-neutral-600";
+  }
+}
+
 // ── Create ──────────────────────────────────────────────────────────────────
 const showCreate = ref(false);
 const creating = ref(false);
@@ -83,6 +111,8 @@ const createForm = reactive({
   regency_display: "", province_display: "",
   full_address: "", lat: "", lng: "",
   is_dispatcher: false, is_province_dispatcher: false,
+  partner_tier: "community",
+  trained_driver: false, has_oxygen: false, has_stretcher: false, equipment_notes: "",
   type_of_service: "", tipe_emergency: [] as string[],
   is_active: true, is_24_hours: false,
   open_time: "08:00", close_time: "17:00",
@@ -111,6 +141,13 @@ async function submitCreate() {
       },
       is_dispatcher: createForm.is_dispatcher,
       is_province_dispatcher: createForm.is_province_dispatcher,
+      partner_tier: createForm.partner_tier,
+      readiness: {
+        trained_driver: createForm.trained_driver,
+        has_oxygen: createForm.has_oxygen,
+        has_stretcher: createForm.has_stretcher,
+        equipment_notes: createForm.equipment_notes,
+      },
       type_of_service: createForm.type_of_service,
       tipe_emergency: createForm.tipe_emergency,
       operational: {
@@ -128,6 +165,8 @@ async function submitCreate() {
       phone: "", whatsapp: "", email: "", district_id: "", regency_id: "", province_id: "",
       regency_display: "", province_display: "",
       full_address: "", lat: "", lng: "", is_dispatcher: false, is_province_dispatcher: false,
+      partner_tier: "community",
+      trained_driver: false, has_oxygen: false, has_stretcher: false, equipment_notes: "",
       type_of_service: "", tipe_emergency: [],
       is_active: true, is_24_hours: false, open_time: "08:00", close_time: "17:00",
       total_units: 0, available_units: 0,
@@ -156,6 +195,8 @@ const editForm = reactive({
   regency_display: "", province_display: "",
   full_address: "", lat: "", lng: "",
   is_dispatcher: false, is_province_dispatcher: false,
+  partner_tier: "community",
+  trained_driver: false, has_oxygen: false, has_stretcher: false, equipment_notes: "",
   type_of_service: "", tipe_emergency: [] as string[],
   is_active: true, is_24_hours: false,
   open_time: "08:00", close_time: "17:00",
@@ -185,6 +226,11 @@ function openEdit(item: any) {
     lng: item.coordinates?.[0] ?? "",
     is_dispatcher: item.is_dispatcher ?? false,
     is_province_dispatcher: item.is_province_dispatcher ?? false,
+    partner_tier: item.partner_tier || "community",
+    trained_driver: item.readiness?.trained_driver ?? false,
+    has_oxygen: item.readiness?.has_oxygen ?? false,
+    has_stretcher: item.readiness?.has_stretcher ?? false,
+    equipment_notes: item.readiness?.equipment_notes ?? "",
     type_of_service: item.type_of_service ?? "",
     tipe_emergency: Array.isArray(item.tipe_emergency) ? item.tipe_emergency : [],
     is_active: item.operational?.is_active ?? true,
@@ -219,6 +265,13 @@ async function submitEdit() {
       },
       is_dispatcher: editForm.is_dispatcher,
       is_province_dispatcher: editForm.is_province_dispatcher,
+      partner_tier: editForm.partner_tier,
+      readiness: {
+        trained_driver: editForm.trained_driver,
+        has_oxygen: editForm.has_oxygen,
+        has_stretcher: editForm.has_stretcher,
+        equipment_notes: editForm.equipment_notes,
+      },
       type_of_service: editForm.type_of_service,
       tipe_emergency: editForm.tipe_emergency,
       operational: {
@@ -305,7 +358,10 @@ function toggleDropdown(item: any, event: MouseEvent) {
   if (dropdownItem.value?.id === item.id) { dropdownItem.value = null; return; }
   const btn = event.currentTarget as HTMLElement;
   const rect = btn.getBoundingClientRect();
-  dropdownPos.value = { top: rect.bottom + 4, right: window.innerWidth - rect.right };
+  dropdownPos.value = (() => {
+    const pos = placeAnchoredMenu(rect, { menuHeight: 160, alignRight: true });
+    return { top: pos.top, right: pos.right };
+  })();
   dropdownItem.value = item;
 }
 
@@ -342,12 +398,12 @@ async function executeDelete() {
     <div v-if="dropdownItem" class="fixed inset-0 z-[98]" @click="dropdownItem = null" />
 
     <!-- Page header -->
-    <div class="border-b border-neutral-200 bg-white px-4 sm:px-6 py-4">
+    <div class="page-subheader">
       <div class="flex items-center justify-between gap-4">
         <div>
-          <h1 class="text-xl font-semibold text-neutral-900">Layanan Darurat</h1>
-          <p class="text-sm text-neutral-500 mt-0.5">
-            <span v-if="pending">Memuat...</span>
+          <h1 class="page-subheader-title">Layanan Darurat</h1>
+          <p class="page-subheader-desc">
+            <span v-if="showSkeleton">Memuat...</span>
             <span v-else>{{ filtered.length }} dari {{ data?.data?.length ?? 0 }} layanan terdaftar</span>
           </p>
         </div>
@@ -360,59 +416,72 @@ async function executeDelete() {
 
     <!-- Table card -->
     <div class="p-4 sm:p-6">
-      <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden shadow-sm">
-
-        <!-- Toolbar inside card -->
-        <div class="px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3 border-b border-neutral-200">
-          <div class="relative flex-1 min-w-[160px] max-w-sm">
-            <Icon icon="lucide:search" class="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 text-sm pointer-events-none" />
-            <UiInput v-model="search" placeholder="Cari nama, organisasi, wilayah..." class="pl-9" />
+      <UiTableCard>
+        <template #toolbar>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <UiSearchInput
+              v-model="search"
+              placeholder="Cari nama, organisasi, wilayah..."
+              class="flex-1 min-w-[160px] max-w-sm"
+            />
+            <UiSelect v-model="selectedType" class="!w-auto">
+              <option value="">Semua Jenis</option>
+              <option v-for="t in (types?.data ?? [])" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
+            </UiSelect>
+            <UiSelect v-model="filterProvince" class="!w-auto">
+              <option value="">Semua Provinsi (tercakup)</option>
+              <option v-for="p in coveredProvinces" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </UiSelect>
+            <UiSelect v-model="pageSize" class="!w-auto" @change="page = 1">
+              <option :value="10">10 / halaman</option>
+              <option :value="25">25 / halaman</option>
+              <option :value="50">50 / halaman</option>
+            </UiSelect>
           </div>
-          <UiSelect v-model="selectedType" class="!w-auto">
-            <option value="">Semua Jenis</option>
-            <option v-for="t in (types?.data ?? [])" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
-          </UiSelect>
-          <UiSelect v-model="pageSize" class="!w-auto" @change="page = 1">
-            <option :value="10">10 / halaman</option>
-            <option :value="25">25 / halaman</option>
-            <option :value="50">50 / halaman</option>
-          </UiSelect>
-        </div>
+        </template>
 
         <!-- Table -->
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
+        <UiTable>
             <thead>
-              <tr class="bg-neutral-50 border-b border-neutral-200 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
-                <th class="px-6 py-4 text-left cursor-pointer hover:bg-neutral-100 select-none transition-colors group" @click="sortBy('name')">
-                  <div class="flex items-center gap-1.5">Layanan <Icon :icon="sortCol==='name'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='name'?'text-primary-500':'text-neutral-300 group-hover:text-neutral-400']" /></div>
+              <tr>
+                <th class="ui-th-sortable" @click="sortBy('name')">
+                  <span class="ui-th-label">
+                    Layanan
+                    <Icon :icon="sortCol==='name'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='name'?'text-neutral-700':'text-neutral-300']" />
+                  </span>
                 </th>
-                <th class="px-6 py-4 text-left hidden md:table-cell cursor-pointer hover:bg-neutral-100 select-none transition-colors group" @click="sortBy('type')">
-                  <div class="flex items-center gap-1.5">Jenis <Icon :icon="sortCol==='type'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='type'?'text-primary-500':'text-neutral-300 group-hover:text-neutral-400']" /></div>
+                <th class="ui-th-sortable hidden md:table-cell" @click="sortBy('type')">
+                  <span class="ui-th-label">
+                    Jenis
+                    <Icon :icon="sortCol==='type'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='type'?'text-neutral-700':'text-neutral-300']" />
+                  </span>
                 </th>
-                <th class="px-6 py-4 text-left hidden lg:table-cell">Wilayah</th>
-                <th class="px-6 py-4 text-left hidden sm:table-cell cursor-pointer hover:bg-neutral-100 select-none transition-colors group" @click="sortBy('status')">
-                  <div class="flex items-center gap-1.5">Status <Icon :icon="sortCol==='status'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='status'?'text-primary-500':'text-neutral-300 group-hover:text-neutral-400']" /></div>
+                <th class="hidden lg:table-cell">Wilayah</th>
+                <th class="ui-th-sortable hidden sm:table-cell" @click="sortBy('status')">
+                  <span class="ui-th-label">
+                    Status
+                    <Icon :icon="sortCol==='status'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='status'?'text-neutral-700':'text-neutral-300']" />
+                  </span>
                 </th>
-                <th class="px-6 py-4 text-right">Aksi</th>
+                <th class="ui-th-right"><span class="sr-only">Aksi</span></th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-neutral-100">
+            <tbody>
               <!-- Skeleton -->
-              <tr v-if="pending" v-for="i in 5" :key="`skel-${i}`" class="animate-pulse">
-                <td class="px-6 py-4">
+              <tr v-if="showSkeleton" v-for="i in 5" :key="`skel-${i}`">
+                <td>
                   <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-neutral-200 rounded-lg shrink-0" />
+                    <div class="soft-skel w-10 h-10 rounded-lg shrink-0" />
                     <div class="space-y-2 flex-1">
-                      <div class="h-3.5 bg-neutral-200 rounded w-36" />
-                      <div class="h-3 bg-neutral-100 rounded w-24" />
+                      <div class="soft-skel h-3.5 w-36" />
+                      <div class="soft-skel h-3 w-24" />
                     </div>
                   </div>
                 </td>
-                <td class="px-6 py-4 hidden md:table-cell"><div class="h-6 bg-neutral-100 rounded-full w-20" /></td>
-                <td class="px-6 py-4 hidden lg:table-cell"><div class="h-3.5 bg-neutral-100 rounded w-28" /></td>
-                <td class="px-6 py-4 hidden sm:table-cell"><div class="h-6 bg-neutral-100 rounded-full w-16" /></td>
-                <td class="px-6 py-4"><div class="h-9 bg-neutral-100 rounded-lg w-24 ml-auto" /></td>
+                <td class="hidden md:table-cell"><div class="soft-skel h-6 rounded-full w-20" /></td>
+                <td class="hidden lg:table-cell"><div class="soft-skel h-3.5 w-28" /></td>
+                <td class="hidden sm:table-cell"><div class="soft-skel h-6 rounded-full w-16" /></td>
+                <td class="ui-td-right"><div class="soft-skel h-8 rounded-lg w-8 ml-auto" /></td>
               </tr>
 
               <!-- Empty -->
@@ -427,9 +496,9 @@ async function executeDelete() {
               </tr>
 
               <!-- Data rows -->
-              <tr v-else v-for="item in paginated" :key="item.id" class="hover:bg-neutral-50 transition-colors">
+              <tr v-else v-for="item in paginated" :key="item.id">
                 <!-- Layanan -->
-                <td class="px-6 py-4">
+                <td>
                   <div class="flex items-center gap-3">
                     <img
                       v-if="item.organization_logo"
@@ -442,7 +511,12 @@ async function executeDelete() {
                     </div>
                     <div class="min-w-0">
                       <div class="flex items-center gap-2 flex-wrap">
-                        <p class="font-semibold text-neutral-900 text-sm">{{ item.name }}</p>
+                        <p class="ui-cell-title">{{ item.name }}</p>
+                        <span
+                          :class="['inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0', partnerTierBadgeClass(item.partner_tier)]"
+                        >
+                          {{ partnerTierLabel(item.partner_tier) }}
+                        </span>
                         <span
                           v-if="item.is_dispatcher"
                           class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 shrink-0"
@@ -451,72 +525,70 @@ async function executeDelete() {
                           Dispatcher
                         </span>
                       </div>
-                      <p class="text-xs text-neutral-400 mt-0.5 truncate max-w-[200px]">{{ item.organization_name }}</p>
+                      <p class="ui-cell-desc truncate max-w-[200px]">{{ item.organization_name }}</p>
                     </div>
                   </div>
                 </td>
 
                 <!-- Jenis -->
-                <td class="px-6 py-4 hidden md:table-cell">
-                  <span :class="['text-xs font-medium px-2.5 py-1 rounded-full', typeBadgeColor(item.emergency_type?.name)]">
-                    {{ item.emergency_type?.name ?? '—' }}
+                <td class="hidden md:table-cell">
+                  <span class="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-0.5 text-xs font-medium text-neutral-700 ring-1 ring-inset ring-neutral-200">
+                    {{ item.emergency_type?.name ?? "—" }}
                   </span>
                 </td>
 
                 <!-- Wilayah -->
-                <td class="px-6 py-4 hidden lg:table-cell">
-                  <p class="text-sm font-medium text-neutral-900">{{ item.address?.regency ?? '—' }}</p>
-                  <p class="text-xs text-neutral-400 mt-0.5">{{ item.address?.province }}</p>
+                <td class="hidden lg:table-cell">
+                  <p class="ui-cell-title">{{ item.address?.regency ?? '—' }}</p>
+                  <p class="ui-cell-desc">{{ item.address?.province }}</p>
                 </td>
 
                 <!-- Status -->
-                <td class="px-6 py-4 hidden sm:table-cell">
+                <td class="hidden sm:table-cell">
                   <button
                     :disabled="togglingId === item.id"
                     :class="[
-                      'inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors',
+                      'inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-0.5 text-xs font-medium ring-1 ring-inset transition-colors',
                       item.operational?.is_active !== false
-                        ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
-                        : 'bg-neutral-100 border-neutral-200 text-neutral-500 hover:bg-neutral-200',
+                        ? 'text-neutral-700 ring-neutral-200 hover:bg-neutral-50'
+                        : 'text-neutral-500 ring-neutral-200 hover:bg-neutral-50',
                       togglingId === item.id && 'opacity-50 cursor-not-allowed',
                     ]"
                     @click.stop="toggleActive(item)"
                   >
-                    <span :class="['w-1.5 h-1.5 rounded-full shrink-0', item.operational?.is_active !== false ? 'bg-green-500' : 'bg-neutral-400']" />
+                    <span :class="['h-1.5 w-1.5 rounded-full shrink-0', item.operational?.is_active !== false ? 'bg-green-500' : 'bg-neutral-400']" />
                     {{ item.operational?.is_active !== false ? 'Aktif' : 'Nonaktif' }}
                   </button>
-                  <p class="text-xs text-neutral-400 mt-1.5">
+                  <p class="ui-cell-desc">
                     <template v-if="item.operational?.is_24_hours">24 Jam</template>
                     <template v-else-if="item.operational?.open_time">{{ item.operational.open_time }}–{{ item.operational.close_time }}</template>
                   </p>
                 </td>
 
                 <!-- Aksi -->
-                <td class="px-6 py-4 text-right">
+                <td class="ui-td-right">
                   <button
                     type="button"
-                    class="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-neutral-900 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 focus:outline-none focus:ring-4 focus:ring-neutral-100 transition-colors"
+                    class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-neutral-700 bg-white rounded-lg shadow-sm ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50 transition-colors"
                     @click.stop="toggleDropdown(item, $event)"
                   >
                     Aksi
-                    <Icon icon="lucide:chevron-down" class="text-xs text-neutral-500" />
+                    <Icon icon="lucide:chevron-down" class="text-sm text-neutral-500" />
                   </button>
                 </td>
               </tr>
             </tbody>
-          </table>
-        </div>
+        </UiTable>
 
-        <!-- Pagination -->
-        <div v-if="!pending && filtered.length" class="px-6 py-4 border-t border-neutral-200">
+        <template v-if="filtered.length" #footer>
           <UiPagination
             v-model:page="page"
             :total-pages="totalPages"
             :total="filtered.length"
             :page-size="pageSize"
           />
-        </div>
-      </div>
+        </template>
+      </UiTableCard>
     </div>
 
     <!-- Row dropdown (teleported) -->
@@ -589,6 +661,11 @@ async function executeDelete() {
             <div class="flex flex-wrap items-center gap-2">
               <h3 class="text-base font-semibold text-neutral-900">{{ detailItem.name }}</h3>
               <span
+                :class="['inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full', partnerTierBadgeClass(detailItem.partner_tier)]"
+              >
+                {{ partnerTierLabel(detailItem.partner_tier) }}
+              </span>
+              <span
                 v-if="detailItem.is_dispatcher"
                 class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700"
               >
@@ -636,6 +713,27 @@ async function executeDelete() {
                 <p class="text-sm font-medium text-neutral-800">{{ detailItem.contact?.email || '—' }}</p>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Readiness -->
+        <div class="border border-neutral-200 rounded-xl overflow-hidden">
+          <div class="bg-neutral-50 px-4 py-2.5 border-b border-neutral-200">
+            <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Kesiapan</p>
+          </div>
+          <div class="px-4 py-3 flex flex-wrap gap-2">
+            <span
+              :class="['text-[11px] font-medium px-2 py-1 rounded-full', detailItem.readiness?.trained_driver ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-50 text-neutral-400']"
+            >Sopir terlatih</span>
+            <span
+              :class="['text-[11px] font-medium px-2 py-1 rounded-full', detailItem.readiness?.has_oxygen ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-50 text-neutral-400']"
+            >Oksigen</span>
+            <span
+              :class="['text-[11px] font-medium px-2 py-1 rounded-full', detailItem.readiness?.has_stretcher ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-50 text-neutral-400']"
+            >Brankar</span>
+            <p v-if="detailItem.readiness?.equipment_notes" class="w-full text-xs text-neutral-500 mt-1">
+              {{ detailItem.readiness.equipment_notes }}
+            </p>
           </div>
         </div>
 

@@ -26,7 +26,9 @@ func (r *SOSRepo) Create(s domain.SOSAlert) (*domain.SOSAlert, error) {
 	if err := r.db.Create(&row).Error; err != nil {
 		return nil, err
 	}
-	return mapSOS(row), nil
+	out := mapSOS(row)
+	out.Reused = s.Reused
+	return out, nil
 }
 
 func (r *SOSRepo) FindAll() ([]domain.SOSAlert, error) {

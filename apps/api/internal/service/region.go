@@ -46,3 +46,11 @@ func (s *RegionService) GetProvinces() ([]domain.Province, error) {
 func (s *RegionService) GetRegenciesByProvince(provinceID string) ([]domain.Regency, error) {
 	return s.repo.FindRegenciesByProvince(provinceID)
 }
+
+func (s *RegionService) GetCoveredProvinces() ([]domain.Province, error) {
+	return s.repo.FindCoveredProvinces()
+}
+
+func (s *RegionService) GetCoveredRegenciesByProvince(provinceID string) ([]domain.Regency, error) {
+	return s.repo.FindCoveredRegenciesByProvince(provinceID)
+}

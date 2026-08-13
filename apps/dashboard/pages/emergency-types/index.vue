@@ -2,16 +2,19 @@
 import { Icon } from "@iconify/vue";
 import { toast } from "vue3-hot-toast";
 
-definePageMeta({ title: "Jenis Layanan" });
+definePageMeta({ title: "Jenis Layanan", keepalive: true });
 
 const { get, post, put, del } = useApi();
 
-const { data, refresh } = await useAsyncData("types-manage", () =>
+const { data, pending, refresh: refreshRaw } = await useAsyncData("types-manage", () =>
   get<{ data: any[] }>("/api/v1/emergency/type")
 );
 const { data: emergencies } = await useAsyncData("emergencies-for-types", () =>
   get<{ data: any[] }>("/api/v1/emergency/")
 );
+
+const refresh = useSoftRefresh(refreshRaw);
+const showSkeleton = computed(() => isInitialPending(pending.value, data.value));
 
 const search = ref("");
 const page = ref(1);
@@ -126,11 +129,11 @@ async function executeDeleteType() {
 <template>
   <div>
     <!-- Page header -->
-    <div class="border-b border-neutral-200 bg-white px-4 sm:px-6 py-4">
+    <div class="page-subheader">
       <div class="flex items-center justify-between">
         <div>
-          <h1 class="text-xl font-semibold text-neutral-900">Jenis Layanan</h1>
-          <p class="text-sm text-neutral-500 mt-0.5">{{ filtered.length }} jenis terdaftar</p>
+          <h1 class="page-subheader-title">Jenis Layanan</h1>
+          <p class="page-subheader-desc">{{ filtered.length }} jenis terdaftar</p>
         </div>
         <UiButton @click="showCreate = true">
           <Icon icon="lucide:plus" class="text-sm" />
@@ -141,73 +144,93 @@ async function executeDeleteType() {
 
     <!-- Toolbar -->
     <div class="bg-white border-b border-neutral-100 px-4 sm:px-6 py-3">
-      <div class="relative max-w-xs">
-        <Icon icon="lucide:search" class="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 text-sm" />
-        <input
-          v-model="search"
-          type="text"
-          placeholder="Cari jenis layanan..."
-          class="w-full pl-8 pr-3 py-1.5 text-sm border border-neutral-200 rounded-lg bg-neutral-50 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-colors"
-        />
-      </div>
+      <UiSearchInput
+        v-model="search"
+        placeholder="Cari jenis layanan..."
+        class="max-w-xs"
+      />
     </div>
 
     <!-- Content -->
     <div class="p-4 sm:p-6">
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        <div
-          v-for="type in paginated"
-          :key="type.id"
-          class="bg-white rounded-xl border border-neutral-200 p-5 flex flex-col gap-4 hover:border-neutral-300 transition-colors"
-        >
-          <div class="flex items-start gap-3">
-            <div :class="['w-10 h-10 rounded-xl flex items-center justify-center shrink-0', typeStyle(type.name).bg]">
-              <Icon :icon="typeStyle(type.name).icon" class="text-lg text-neutral-600" />
+        <template v-if="showSkeleton">
+          <div
+            v-for="i in 4"
+            :key="`skel-${i}`"
+            class="bg-white rounded-xl border border-neutral-200 p-5 flex flex-col gap-4"
+          >
+            <div class="flex items-start gap-3">
+              <div class="soft-skel w-10 h-10 rounded-xl shrink-0" />
+              <div class="flex-1 space-y-2 pt-1">
+                <div class="soft-skel h-3.5 w-28" />
+                <div class="soft-skel h-2.5 w-20" />
+              </div>
             </div>
-            <div class="flex-1 min-w-0">
-              <p class="font-semibold text-neutral-900 text-sm">{{ type.name }}</p>
-              <p class="text-xs text-neutral-400 mt-0.5 truncate">{{ type.icon }}</p>
+            <div class="soft-skel h-9 rounded-lg" />
+            <div class="soft-skel h-2.5 w-full" />
+            <div class="flex justify-end gap-2 border-t border-neutral-100 pt-3">
+              <div class="soft-skel h-7 w-14" />
+              <div class="soft-skel h-7 w-14" />
+            </div>
+          </div>
+        </template>
+
+        <template v-else>
+          <div
+            v-for="type in paginated"
+            :key="type.id"
+            class="bg-white rounded-xl border border-neutral-200 p-5 flex flex-col gap-4 hover:border-neutral-300 transition-colors"
+          >
+            <div class="flex items-start gap-3">
+              <div :class="['w-10 h-10 rounded-xl flex items-center justify-center shrink-0', typeStyle(type.name).bg]">
+                <Icon :icon="typeStyle(type.name).icon" class="text-lg text-neutral-600" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-semibold text-neutral-900 text-sm">{{ type.name }}</p>
+                <p class="text-xs text-neutral-400 mt-0.5 truncate">{{ type.icon }}</p>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between px-3 py-2 bg-neutral-50 rounded-lg">
+              <span class="text-xs text-neutral-500">Layanan aktif</span>
+              <span class="text-sm font-bold text-neutral-900">{{ countForType(type.name) }}</span>
+            </div>
+
+            <p v-if="type.description" class="text-xs text-neutral-500 line-clamp-2 -mt-1">{{ type.description }}</p>
+
+            <div class="flex justify-end gap-2 border-t border-neutral-100 pt-3">
+              <UiButton variant="secondary" size="sm" @click="openEdit(type)">
+                <Icon icon="lucide:pencil" class="text-xs" />
+                Edit
+              </UiButton>
+              <UiButton
+                variant="danger"
+                size="sm"
+                :loading="deletingId === type.id"
+                @click="confirmDeleteType(type.id, type.name)"
+              >
+                <Icon icon="lucide:trash-2" class="text-xs" />
+                Hapus
+              </UiButton>
             </div>
           </div>
 
-          <div class="flex items-center justify-between px-3 py-2 bg-neutral-50 rounded-lg">
-            <span class="text-xs text-neutral-500">Layanan aktif</span>
-            <span class="text-sm font-bold text-neutral-900">{{ countForType(type.name) }}</span>
+          <div v-if="!filtered.length" class="col-span-full">
+            <UiEmptyState title="Belum ada jenis layanan" description="Tambah kategori untuk mulai mengelola layanan darurat.">
+              <template #icon>
+                <Icon icon="lucide:tag" class="text-neutral-400 text-2xl" />
+              </template>
+              <UiButton size="sm" variant="secondary" @click="showCreate = true">
+                <Icon icon="lucide:plus" class="text-sm" />
+                Tambah Jenis Pertama
+              </UiButton>
+            </UiEmptyState>
           </div>
-
-          <p v-if="type.description" class="text-xs text-neutral-500 line-clamp-2 -mt-1">{{ type.description }}</p>
-
-          <div class="flex justify-end gap-2 border-t border-neutral-100 pt-3">
-            <UiButton variant="secondary" size="sm" @click="openEdit(type)">
-              <Icon icon="lucide:pencil" class="text-xs" />
-              Edit
-            </UiButton>
-            <UiButton
-              variant="danger"
-              size="sm"
-              :loading="deletingId === type.id"
-              @click="confirmDeleteType(type.id, type.name)"
-            >
-              <Icon icon="lucide:trash-2" class="text-xs" />
-              Hapus
-            </UiButton>
-          </div>
-        </div>
-
-        <div v-if="!filtered.length" class="col-span-full">
-          <UiEmptyState title="Belum ada jenis layanan" description="Tambah kategori untuk mulai mengelola layanan darurat.">
-            <template #icon>
-              <Icon icon="lucide:tag" class="text-neutral-400 text-2xl" />
-            </template>
-            <UiButton size="sm" variant="secondary" @click="showCreate = true">
-              <Icon icon="lucide:plus" class="text-sm" />
-              Tambah Jenis Pertama
-            </UiButton>
-          </UiEmptyState>
-        </div>
+        </template>
       </div>
 
-      <div v-if="totalPages > 1" class="mt-4 px-1">
+      <div v-if="!showSkeleton && totalPages > 1" class="mt-4 px-1">
         <UiPagination v-model:page="page" :total-pages="totalPages" />
       </div>
     </div>

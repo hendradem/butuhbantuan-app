@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-definePageMeta({ title: "Feedback Masyarakat" });
+import { placeAnchoredMenu } from "~/utils/placeAnchoredMenu";
+definePageMeta({ title: "Arsip Feedback", keepalive: true });
 
 function convertPhoneNumber(raw: string): string {
   const digits = raw.replace(/\D/g, "");
@@ -11,16 +12,38 @@ function convertPhoneNumber(raw: string): string {
 
 const { authGet } = useApi();
 
-const { data: statsData, refresh: refreshStats } = await useAsyncData("fb-stats", () =>
+const { data: statsData, pending: statsPending, refresh: refreshStatsRaw } = await useAsyncData("fb-stats", () =>
   authGet<{ data: { total: number; unit_helpful_rate: number; app_helpful_rate: number } }>("/api/v1/feedback/stats")
 );
 
-const { data: groupedData, refresh: refreshGrouped } = await useAsyncData("fb-grouped", () =>
+const { data: groupedData, pending: groupedPending, refresh: refreshGroupedRaw } = await useAsyncData("fb-grouped", () =>
   authGet<{ data: any[] }>("/api/v1/feedback/grouped")
 );
 
+const refreshStats = useSoftRefresh(refreshStatsRaw);
+const refreshGrouped = useSoftRefresh(refreshGroupedRaw);
+const feedbackRefreshing = computed(() => statsPending.value || groupedPending.value);
+
 const stats = computed(() => statsData.value?.data);
 const groups = computed(() => groupedData.value?.data ?? []);
+const showFeedbackSkeleton = computed(
+  () => isInitialPending(groupedPending.value, groupedData.value),
+);
+const showStatsSkeleton = computed(
+  () => isInitialPending(statsPending.value, statsData.value),
+);
+
+const search = usePersistedQueryParam("bb-feedback-q", "q", "", { syncQuery: false });
+const filteredGroups = computed(() => {
+  const q = search.value.trim().toLowerCase();
+  if (!q) return groups.value;
+  return groups.value.filter(
+    (g: any) =>
+      g.unit_name?.toLowerCase().includes(q) ||
+      g.emergency_uuid?.toLowerCase().includes(q) ||
+      g.latest_comment?.toLowerCase().includes(q),
+  );
+});
 
 // ── Row dropdown ──────────────────────────────────────────────────────────────
 const dropdownItem = ref<any>(null);
@@ -29,7 +52,10 @@ function toggleDropdown(item: any, event: MouseEvent) {
   if (dropdownItem.value?.emergency_uuid === item.emergency_uuid) { dropdownItem.value = null; return; }
   const btn = event.currentTarget as HTMLElement;
   const rect = btn.getBoundingClientRect();
-  dropdownPos.value = { top: rect.bottom + 4, right: window.innerWidth - rect.right };
+  dropdownPos.value = (() => {
+    const pos = placeAnchoredMenu(rect, { menuHeight: 160, alignRight: true });
+    return { top: pos.top, right: pos.right };
+  })();
   dropdownItem.value = item;
 }
 
@@ -116,14 +142,24 @@ function rateTextColor(rate: number) {
     <div v-if="dropdownItem" class="fixed inset-0 z-[98]" @click="dropdownItem = null" />
 
     <!-- Page header -->
-    <div class="border-b border-neutral-200 bg-white px-4 sm:px-6 py-4">
+    <div class="page-subheader">
       <div class="flex items-center justify-between gap-4">
-        <div>
-          <h1 class="text-xl font-semibold text-neutral-900">Feedback Masyarakat</h1>
-          <p class="text-sm text-neutral-500 mt-0.5">Penilaian dari pengguna setelah menghubungi layanan darurat</p>
+        <div class="flex items-center gap-3 min-w-0">
+          <NuxtLink
+            to="/settings"
+            class="flex items-center justify-center w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 transition-colors shrink-0"
+          >
+            <Icon icon="lucide:arrow-left" class="text-neutral-700 text-sm" />
+          </NuxtLink>
+          <div class="min-w-0">
+            <h1 class="page-subheader-title">Arsip Feedback</h1>
+            <p class="page-subheader-desc truncate">
+              Penilaian warga · biasanya dari detail pesanan
+            </p>
+          </div>
         </div>
-        <UiButton variant="secondary" @click="refreshGrouped(); refreshStats()">
-          <Icon icon="lucide:refresh-cw" class="text-sm" />
+        <UiButton variant="secondary" :disabled="feedbackRefreshing && !!groupedData" @click="refreshGrouped(); refreshStats()">
+          <Icon icon="lucide:refresh-cw" class="text-sm" :class="{ 'animate-spin': feedbackRefreshing }" />
           Refresh
         </UiButton>
       </div>
@@ -133,35 +169,92 @@ function rateTextColor(rate: number) {
 
       <!-- Stats cards -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div class="bg-white rounded-xl border border-neutral-200 p-5">
-          <p class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">Total Penilaian</p>
-          <p class="text-3xl font-bold text-neutral-900">{{ stats?.total ?? 0 }}</p>
-          <p class="text-xs text-neutral-400 mt-1">dari pengguna aplikasi</p>
-        </div>
-        <div class="bg-white rounded-xl border border-neutral-200 p-5">
-          <p class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">Unit Membantu</p>
-          <p class="text-3xl font-bold text-green-600">{{ Math.round(stats?.unit_helpful_rate ?? 0) }}%</p>
-          <div class="mt-2 h-1.5 rounded-full bg-neutral-100 overflow-hidden">
-            <div class="h-full rounded-full bg-green-500 transition-all" :style="{ width: `${stats?.unit_helpful_rate ?? 0}%` }" />
+        <template v-if="showStatsSkeleton">
+          <div
+            v-for="i in 3"
+            :key="`stat-skel-${i}`"
+            class="bg-white rounded-xl border border-neutral-200 p-5 space-y-3"
+          >
+            <div class="soft-skel h-2.5 w-24" />
+            <div class="soft-skel h-8 w-16" />
+            <div class="soft-skel h-1.5 rounded-full w-full" />
           </div>
-        </div>
-        <div class="bg-white rounded-xl border border-neutral-200 p-5">
-          <p class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">Aplikasi Berguna</p>
-          <p class="text-3xl font-bold text-primary-600">{{ Math.round(stats?.app_helpful_rate ?? 0) }}%</p>
-          <div class="mt-2 h-1.5 rounded-full bg-neutral-100 overflow-hidden">
-            <div class="h-full rounded-full bg-primary-500 transition-all" :style="{ width: `${stats?.app_helpful_rate ?? 0}%` }" />
+        </template>
+        <template v-else>
+          <div class="bg-white rounded-xl border border-neutral-200 p-5">
+            <p class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">Total Penilaian</p>
+            <p class="text-3xl font-bold text-neutral-900">{{ stats?.total ?? 0 }}</p>
+            <p class="text-xs text-neutral-400 mt-1">dari pengguna aplikasi</p>
           </div>
-        </div>
+          <div class="bg-white rounded-xl border border-neutral-200 p-5">
+            <p class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">Unit Membantu</p>
+            <p class="text-3xl font-bold text-green-600">{{ Math.round(stats?.unit_helpful_rate ?? 0) }}%</p>
+            <div class="mt-2 h-1.5 rounded-full bg-neutral-100 overflow-hidden">
+              <div class="h-full rounded-full bg-green-500 transition-all" :style="{ width: `${stats?.unit_helpful_rate ?? 0}%` }" />
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-neutral-200 p-5">
+            <p class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">Aplikasi Berguna</p>
+            <p class="text-3xl font-bold text-primary-600">{{ Math.round(stats?.app_helpful_rate ?? 0) }}%</p>
+            <div class="mt-2 h-1.5 rounded-full bg-neutral-100 overflow-hidden">
+              <div class="h-full rounded-full bg-primary-500 transition-all" :style="{ width: `${stats?.app_helpful_rate ?? 0}%` }" />
+            </div>
+          </div>
+        </template>
       </div>
 
       <!-- Grouped table -->
-      <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-        <div class="px-5 py-4 border-b border-neutral-100">
-          <h2 class="text-sm font-semibold text-neutral-900">Per Unit Layanan</h2>
-          <p class="text-xs text-neutral-400 mt-0.5">{{ groups.length }} unit dengan penilaian</p>
-        </div>
+      <UiTableCard>
+        <template #toolbar>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <p class="text-sm font-medium text-neutral-700 mr-auto">
+              {{ filteredGroups.length }} unit dengan penilaian
+            </p>
+            <UiSearchInput
+              v-model="search"
+              placeholder="Cari unit..."
+              class="w-full sm:w-[220px]"
+            />
+          </div>
+        </template>
 
-        <div v-if="!groups.length" class="py-4">
+        <UiTable v-if="showFeedbackSkeleton">
+            <thead>
+              <tr>
+                <th>Unit Layanan</th>
+                <th class="text-center">Total</th>
+                <th class="hidden sm:table-cell">Unit Membantu</th>
+                <th class="hidden md:table-cell">App Berguna</th>
+                <th class="hidden lg:table-cell">Komentar Terbaru</th>
+                <th class="ui-th-right"><span class="sr-only">Aksi</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="i in 5" :key="`fb-skel-${i}`">
+                <td class="space-y-2">
+                  <div class="soft-skel h-3.5 w-36" />
+                  <div class="soft-skel h-2.5 w-28" />
+                </td>
+                <td class="text-center">
+                  <div class="mx-auto soft-skel w-8 h-8 rounded-full" />
+                </td>
+                <td class="hidden sm:table-cell">
+                  <div class="soft-skel h-1.5 rounded-full w-full" />
+                </td>
+                <td class="hidden md:table-cell">
+                  <div class="soft-skel h-1.5 rounded-full w-full" />
+                </td>
+                <td class="hidden lg:table-cell">
+                  <div class="soft-skel h-2.5 w-40" />
+                </td>
+                <td class="ui-td-right">
+                  <div class="ml-auto soft-skel h-8 rounded-lg w-8" />
+                </td>
+              </tr>
+            </tbody>
+        </UiTable>
+
+        <div v-else-if="!filteredGroups.length" class="py-4">
           <UiEmptyState title="Belum ada feedback" description="Penilaian akan muncul setelah pengguna menghubungi layanan darurat.">
             <template #icon>
               <Icon icon="lucide:message-square" class="text-neutral-400 text-2xl" />
@@ -169,85 +262,82 @@ function rateTextColor(rate: number) {
           </UiEmptyState>
         </div>
 
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-sm">
+        <UiTable v-else>
             <thead>
-              <tr class="border-b border-neutral-100 bg-neutral-50 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
-                <th class="px-5 py-3 text-left">Unit Layanan</th>
-                <th class="px-5 py-3 text-center">Total</th>
-                <th class="px-5 py-3 text-left hidden sm:table-cell">Unit Membantu</th>
-                <th class="px-5 py-3 text-left hidden md:table-cell">App Berguna</th>
-                <th class="px-5 py-3 text-left hidden lg:table-cell">Komentar Terbaru</th>
-                <th class="px-5 py-3 text-right">Aksi</th>
+              <tr>
+                <th>Unit Layanan</th>
+                <th class="text-center">Total</th>
+                <th class="hidden sm:table-cell">Unit Membantu</th>
+                <th class="hidden md:table-cell">App Berguna</th>
+                <th class="hidden lg:table-cell">Komentar Terbaru</th>
+                <th class="ui-th-right"><span class="sr-only">Aksi</span></th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-neutral-100">
+            <tbody>
               <tr
-                v-for="group in groups"
+                v-for="group in filteredGroups"
                 :key="group.emergency_uuid"
-                class="hover:bg-neutral-50 transition-colors"
               >
                 <!-- Unit name -->
-                <td class="px-5 py-4">
-                  <p class="font-medium text-neutral-900">{{ group.unit_name }}</p>
-                  <p class="text-xs text-neutral-400 mt-0.5">{{ group.unit_helpful_count }} membantu dari {{ group.total }}</p>
+                <td>
+                  <p class="ui-cell-title">{{ group.unit_name }}</p>
+                  <p class="ui-cell-desc">{{ group.unit_helpful_count }} membantu dari {{ group.total }}</p>
                 </td>
 
                 <!-- Total -->
-                <td class="px-5 py-4 text-center">
+                <td class="text-center">
                   <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-neutral-100 text-sm font-bold text-neutral-700">
                     {{ group.total }}
                   </span>
                 </td>
 
                 <!-- Unit helpful rate -->
-                <td class="px-5 py-4 hidden sm:table-cell">
+                <td class="hidden sm:table-cell">
                   <div class="flex items-center gap-2">
                     <div class="flex-1 h-1.5 rounded-full bg-neutral-100 overflow-hidden min-w-[60px]">
                       <div :class="['h-full rounded-full transition-all', rateColor(group.unit_helpful_rate)]" :style="{ width: `${group.unit_helpful_rate}%` }" />
                     </div>
-                    <span :class="['text-xs font-semibold w-9 text-right', rateTextColor(group.unit_helpful_rate)]">
+                    <span :class="['text-sm font-medium tabular-nums w-10 text-right', rateTextColor(group.unit_helpful_rate)]">
                       {{ Math.round(group.unit_helpful_rate) }}%
                     </span>
                   </div>
                 </td>
 
                 <!-- App helpful rate -->
-                <td class="px-5 py-4 hidden md:table-cell">
+                <td class="hidden md:table-cell">
                   <div class="flex items-center gap-2">
                     <div class="flex-1 h-1.5 rounded-full bg-neutral-100 overflow-hidden min-w-[60px]">
                       <div :class="['h-full rounded-full transition-all', rateColor(group.app_helpful_rate)]" :style="{ width: `${group.app_helpful_rate}%` }" />
                     </div>
-                    <span :class="['text-xs font-semibold w-9 text-right', rateTextColor(group.app_helpful_rate)]">
+                    <span :class="['text-sm font-medium tabular-nums w-10 text-right', rateTextColor(group.app_helpful_rate)]">
                       {{ Math.round(group.app_helpful_rate) }}%
                     </span>
                   </div>
                 </td>
 
                 <!-- Recent comment snippet -->
-                <td class="px-5 py-4 hidden lg:table-cell max-w-[220px]">
-                  <p v-if="group.recent_comments?.length" class="text-xs text-neutral-500 truncate italic">
+                <td class="hidden lg:table-cell max-w-[220px]">
+                  <p v-if="group.recent_comments?.length" class="ui-cell-desc truncate italic">
                     "{{ group.recent_comments[0] }}"
                   </p>
-                  <span v-else class="text-xs text-neutral-300">—</span>
+                  <span v-else class="text-sm text-neutral-300">—</span>
                 </td>
 
                 <!-- Actions -->
-                <td class="px-5 py-4 text-right">
+                <td class="ui-td-right">
                   <button
                     type="button"
-                    class="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-neutral-900 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 focus:outline-none focus:ring-4 focus:ring-neutral-100 transition-colors"
+                    class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-neutral-700 bg-white rounded-lg shadow-sm ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50 transition-colors"
                     @click.stop="toggleDropdown(group, $event)"
                   >
                     Aksi
-                    <Icon icon="lucide:chevron-down" class="text-xs text-neutral-500" />
+                    <Icon icon="lucide:chevron-down" class="text-sm text-neutral-500" />
                   </button>
                 </td>
               </tr>
             </tbody>
-          </table>
-        </div>
-      </div>
+        </UiTable>
+      </UiTableCard>
     </div>
 
     <!-- Row dropdown (teleported) -->

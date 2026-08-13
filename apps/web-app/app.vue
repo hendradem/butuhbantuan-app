@@ -8,6 +8,7 @@ import { Toaster } from "vue3-hot-toast";
   <Toaster
     position="top-center"
     :toastOptions="{
+      duration: 2500,
       style: {
         borderRadius: '50px',
         background: '#333',

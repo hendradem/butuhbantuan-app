@@ -1,6 +1,8 @@
 <script setup lang="ts">
 const exploreSheet = useExploreSheetStore();
 const emergencyStore = useEmergencyStore();
+const route = useRoute();
+const router = useRouter();
 
 const { fetchEmergencyTypes } = useEmergencyApi();
 const { data: emergencyTypeData, pending: loading } = useAsyncData(
@@ -15,6 +17,26 @@ function handleServiceClick(service: any) {
   exploreSheet.setSheetData({ emergencyType: service, emergency: filtered });
   exploreSheet.onOpen();
 }
+
+// Deep-link from e-ticket "Cari Unit Lain" → /?type_id=N
+watch(
+  [
+    () => route.query.type_id,
+    () => emergencyTypeData.value,
+    () => emergencyStore.filteredEmergency.length,
+  ],
+  ([typeIdRaw, typesPayload]) => {
+    const typeId = Number(typeIdRaw);
+    if (!typeId || !typesPayload?.data?.length) return;
+
+    const service = typesPayload.data.find((t: any) => Number(t.id) === typeId);
+    if (!service) return;
+
+    handleServiceClick(service);
+    router.replace({ path: "/", query: {} });
+  },
+  { immediate: true }
+);
 </script>
 
 <template>

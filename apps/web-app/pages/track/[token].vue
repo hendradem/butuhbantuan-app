@@ -1,0 +1,571 @@
+<script setup lang="ts">
+import { Icon } from "@iconify/vue";
+import { convertPhoneNumber } from "~/utils/convertPhoneNumber";
+
+definePageMeta({ layout: false });
+
+const route = useRoute();
+const config = useRuntimeConfig();
+const apiBase = config.public.apiBaseUrl as string;
+const token = computed(() => String(route.params.token || ""));
+
+type TrackSession = {
+  ticket_number: string;
+  unit_name: string;
+  status: string;
+  can_share?: boolean;
+  requester_name?: string;
+  requester_phone?: string;
+  requester_lat: number;
+  requester_lng: number;
+  location: string;
+  condition?: string;
+  photo_url?: string;
+  track_expires_at?: string | null;
+  responder_lat?: number;
+  responder_lng?: number;
+  responder_updated_at?: string | null;
+  arrived_at?: string | null;
+  accepted_at?: string | null;
+  travel_sec?: number;
+};
+
+const session = ref<TrackSession | null>(null);
+const loadError = ref("");
+const pending = ref(true);
+const sharing = ref(false);
+const permissionDenied = ref(false);
+const lastPingAt = ref<Date | null>(null);
+const pingError = ref("");
+const accuracy = ref<number | null>(null);
+const lightboxPhoto = ref<string | null>(null);
+const markingArrive = ref(false);
+const arriveError = ref("");
+const showDetails = ref(false);
+
+let watchId: number | null = null;
+let pingInFlight = false;
+
+function assetUrl(url: string): string {
+  if (!url) return "";
+  if (url.startsWith("http")) return url;
+  return apiBase + url;
+}
+
+const canShare = computed(() => {
+  if (!session.value) return false;
+  if (typeof session.value.can_share === "boolean") return session.value.can_share;
+  return session.value.status === "accepted" || session.value.status === "in_progress";
+});
+
+const hasArrived = computed(() => !!session.value?.arrived_at);
+
+const phaseLabel = computed(() => {
+  if (hasArrived.value) return "Tiba di lokasi";
+  if (sharing.value) return "Membagikan lokasi";
+  if (canShare.value) return "Siap berbagi";
+  return "Selesai";
+});
+
+const phaseHint = computed(() => {
+  if (hasArrived.value) return "Status dikirim ke e-tiket";
+  if (sharing.value) return "GPS dikirim ke e-tiket pelapor";
+  if (canShare.value) return "Izinkan GPS, lalu tandai tiba";
+  return "Sesi berbagi tidak aktif";
+});
+
+const travelBadge = computed(() => {
+  if (!hasArrived.value) return null;
+  const label = formatTravel(session.value?.travel_sec);
+  return label ? `Tempuh ${label}` : null;
+});
+
+/** First load only — refresh must not flash skeleton. */
+const showSkeleton = computed(() => pending.value && !session.value);
+
+const phaseColor = computed(() => {
+  if (hasArrived.value) return "bg-emerald-50 text-emerald-800 border-emerald-200";
+  if (sharing.value) return "bg-blue-50 text-blue-800 border-blue-200";
+  if (canShare.value) return "bg-amber-50 text-amber-800 border-amber-200";
+  return "bg-neutral-50 text-neutral-700 border-neutral-200";
+});
+
+const urgencyBanner = computed(() => {
+  if (hasArrived.value) return null;
+  if (!canShare.value) return { text: "Sesi berbagi tidak aktif", tone: "bg-neutral-700" };
+  return null;
+});
+
+const cardTitle = computed(() => session.value?.unit_name || "Petugas lapangan");
+const cardSubtitle = computed(() => phaseHint.value);
+
+function formatTravel(sec: number | undefined | null): string {
+  const s = Math.max(0, Math.round(Number(sec) || 0));
+  if (s < 60) return `${s} dtk`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  if (m < 60) return r ? `${m} mnt ${r} dtk` : `${m} mnt`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return rm ? `${h} jam ${rm} mnt` : `${h} jam`;
+}
+
+async function loadSession() {
+  const isFirst = !session.value;
+  if (isFirst) pending.value = true;
+  loadError.value = "";
+  try {
+    const res = await $fetch<{ data: TrackSession }>(`${apiBase}/api/v1/track/${token.value}`);
+    session.value = res.data ?? null;
+    if (session.value && !canShare.value && sharing.value) stopSharing();
+  } catch (e: any) {
+    const status = e?.statusCode || e?.status;
+    if (status === 410) loadError.value = "Link sudah kedaluwarsa atau pesanan tidak aktif.";
+    else if (status === 404) loadError.value = "Link tidak ditemukan. Minta posko kirim link baru.";
+    else loadError.value = "Gagal memuat sesi berbagi lokasi.";
+    if (isFirst) session.value = null;
+  } finally {
+    pending.value = false;
+  }
+}
+
+async function ping(lat: number, lng: number) {
+  if (!token.value || pingInFlight || !canShare.value) return;
+  pingInFlight = true;
+  pingError.value = "";
+  try {
+    await $fetch(`${apiBase}/api/v1/track/${token.value}`, {
+      method: "POST",
+      body: { lat, lng },
+    });
+    lastPingAt.value = new Date();
+    if (session.value) {
+      session.value.responder_lat = lat;
+      session.value.responder_lng = lng;
+      session.value.responder_updated_at = lastPingAt.value.toISOString();
+    }
+  } catch (e: any) {
+    const status = e?.statusCode || e?.status;
+    if (status === 410 || status === 404) {
+      stopSharing();
+      if (session.value) session.value.can_share = false;
+      pingError.value = "Pesanan sudah selesai — pengiriman lokasi dihentikan.";
+    } else {
+      pingError.value = "Gagal mengirim lokasi. Mencoba lagi…";
+    }
+  } finally {
+    pingInFlight = false;
+  }
+}
+
+function startSharing() {
+  if (!canShare.value) {
+    pingError.value = "Pesanan sudah selesai — lokasi tidak perlu dibagikan lagi.";
+    return;
+  }
+  if (!import.meta.client || !navigator.geolocation) {
+    pingError.value = "Perangkat ini tidak mendukung GPS.";
+    return;
+  }
+  permissionDenied.value = false;
+  pingError.value = "";
+  sharing.value = true;
+
+  watchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      accuracy.value = pos.coords.accuracy;
+      void ping(pos.coords.latitude, pos.coords.longitude);
+    },
+    (err) => {
+      if (err.code === err.PERMISSION_DENIED) {
+        permissionDenied.value = true;
+        sharing.value = false;
+      } else {
+        pingError.value = "GPS sementara tidak tersedia. Pastikan lokasi aktif.";
+      }
+    },
+    { enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 }
+  );
+}
+
+function stopSharing() {
+  if (watchId != null && navigator.geolocation) {
+    navigator.geolocation.clearWatch(watchId);
+  }
+  watchId = null;
+  sharing.value = false;
+}
+
+async function markArrived() {
+  if (!token.value || markingArrive.value || hasArrived.value) return;
+  markingArrive.value = true;
+  arriveError.value = "";
+  try {
+    const res = await $fetch<{ data: { arrived_at?: string; travel_sec?: number; status?: string } }>(
+      `${apiBase}/api/v1/track/${token.value}/arrive`,
+      { method: "POST" }
+    );
+    if (session.value) {
+      session.value.arrived_at = res.data?.arrived_at || new Date().toISOString();
+      session.value.travel_sec = res.data?.travel_sec ?? session.value.travel_sec;
+      if (res.data?.status) session.value.status = res.data.status;
+    }
+    stopSharing();
+  } catch (e: any) {
+    arriveError.value = e?.data?.message || "Gagal mencatat kedatangan";
+  } finally {
+    markingArrive.value = false;
+  }
+}
+
+const mapsUrl = computed(() => {
+  const s = session.value;
+  if (!s?.requester_lat || !s?.requester_lng) return "";
+  return `https://www.google.com/maps?q=${s.requester_lat},${s.requester_lng}`;
+});
+
+const waPelaporUrl = computed(() => {
+  const s = session.value;
+  const phone = String(s?.requester_phone || "").trim();
+  if (!phone) return "";
+  const digits = convertPhoneNumber(phone);
+  if (!digits) return "";
+  const maps = mapsUrl.value;
+  const text = encodeURIComponent(
+    [
+      `Halo ${s?.requester_name || "Pelapor"}, kami dari ${s?.unit_name || "unit darurat"}.`,
+      `Terkait tiket ${s?.ticket_number || ""} — kami sedang menuju lokasi Anda.`,
+      maps ? `Konfirmasi titik: ${maps}` : null,
+      `Mohon tetap di tempat yang aman.`,
+    ]
+      .filter(Boolean)
+      .join("\n")
+  );
+  return `https://wa.me/${digits}?text=${text}`;
+});
+
+const lastPingLabel = computed(() => {
+  if (!lastPingAt.value) return null;
+  return lastPingAt.value.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+});
+
+onMounted(() => {
+  void loadSession();
+});
+onUnmounted(() => {
+  stopSharing();
+});
+</script>
+
+<template>
+  <div class="min-h-screen bg-white">
+    <div class="sticky top-0 z-10 bg-white border-b border-neutral-200 px-4 py-3.5 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+        <Icon icon="lucide:navigation" class="text-red-600 text-base" />
+      </div>
+      <div class="min-w-0">
+        <p class="text-base font-semibold text-neutral-900 leading-tight">Bagikan lokasi</p>
+        <p class="text-sm text-neutral-500">ButuhBantuan · Petugas lapangan</p>
+      </div>
+    </div>
+
+    <div class="flex flex-col items-center py-4 px-4">
+      <div class="w-full max-w-sm space-y-3">
+        <!-- Soft skeleton — mirrors card anatomy -->
+        <div v-if="showSkeleton" class="space-y-3">
+          <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+            <div class="px-4 pt-4 pb-3 bg-neutral-50 border-b border-neutral-100">
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex-1 space-y-2 pt-0.5">
+                  <div class="soft-skel h-4 w-36" />
+                  <div class="soft-skel h-3 w-48" />
+                </div>
+                <div class="space-y-2 shrink-0">
+                  <div class="soft-skel h-4 w-24 ml-auto" />
+                  <div class="soft-skel h-3 w-14 ml-auto" />
+                </div>
+              </div>
+              <div class="mt-3 rounded-lg bg-white px-3 py-2.5 ring-1 ring-inset ring-neutral-200/80 space-y-2">
+                <div class="soft-skel h-6 w-28 rounded-full" />
+                <div class="soft-skel h-3 w-40" />
+              </div>
+            </div>
+            <div class="px-4 py-3 border-t border-dashed border-neutral-200 space-y-2">
+              <div class="soft-skel h-11 w-full rounded-lg" />
+              <div class="soft-skel h-11 w-full rounded-lg" />
+            </div>
+            <div class="px-4 py-3 border-t border-dashed border-neutral-200 space-y-2">
+              <div class="soft-skel h-3 w-16" />
+              <div class="soft-skel h-3 w-full" />
+              <div class="soft-skel h-3 w-4/5" />
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-neutral-200 p-4 space-y-3">
+            <div class="flex items-start gap-3">
+              <div class="soft-skel w-10 h-10 rounded-full shrink-0" />
+              <div class="flex-1 space-y-2 pt-1">
+                <div class="soft-skel h-4 w-44" />
+                <div class="soft-skel h-3 w-full" />
+                <div class="soft-skel h-3 w-3/4" />
+              </div>
+            </div>
+            <div class="soft-skel h-12 w-full rounded-lg" />
+          </div>
+        </div>
+
+        <div v-else-if="loadError" class="bg-white rounded-xl border border-neutral-200 p-8 text-center">
+          <Icon icon="lucide:link-2-off" class="text-neutral-300 text-4xl mx-auto mb-3" />
+          <p class="font-semibold text-neutral-900">{{ loadError }}</p>
+          <button type="button" class="mt-4 text-sm text-primary-600 font-medium" @click="loadSession">
+            Coba lagi
+          </button>
+        </div>
+
+        <template v-else-if="session">
+          <!-- Main card — order-card anatomy (match e-ticket) -->
+          <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+            <div
+              v-if="urgencyBanner"
+              class="px-4 py-2 text-center text-sm font-medium text-white"
+              :class="urgencyBanner.tone"
+            >
+              {{ urgencyBanner.text }}
+            </div>
+
+            <div class="px-4 pt-4 pb-3 bg-neutral-50 border-b border-neutral-100">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <h1 class="text-base font-semibold text-neutral-900 leading-snug truncate">
+                    {{ cardTitle }}
+                  </h1>
+                  <p class="mt-0.5 text-sm text-neutral-500 leading-snug line-clamp-2">
+                    {{ cardSubtitle }}
+                  </p>
+                </div>
+                <div class="shrink-0 text-right">
+                  <p class="text-sm font-semibold text-neutral-900 font-mono tracking-wide">
+                    {{ session.ticket_number }}
+                  </p>
+                  <button
+                    type="button"
+                    class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-neutral-400 hover:text-neutral-700"
+                    @click="loadSession"
+                  >
+                    <Icon icon="lucide:refresh-cw" class="text-xs" />
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              <div class="mt-3 rounded-lg bg-white px-3 py-2.5 ring-1 ring-inset ring-neutral-200/80">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <span
+                    class="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full border"
+                    :class="phaseColor"
+                  >
+                    {{ phaseLabel }}
+                  </span>
+                  <span
+                    v-if="travelBadge"
+                    class="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full border bg-emerald-50 text-emerald-800 border-emerald-200"
+                  >
+                    <Icon icon="lucide:timer" class="text-sm" />
+                    {{ travelBadge }}
+                  </span>
+                </div>
+                <div class="mt-2 flex items-center gap-3 text-xs text-neutral-500">
+                  <span class="inline-flex items-center gap-1.5 min-w-0">
+                    <Icon icon="lucide:user" class="text-sm shrink-0 text-neutral-400" />
+                    <span class="truncate">{{ session.requester_name || "Pelapor" }}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Primary CTAs -->
+            <div class="px-4 py-3 border-t border-dashed border-neutral-200 space-y-2">
+              <a
+                v-if="waPelaporUrl"
+                :href="waPelaporUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex items-center justify-center gap-2 w-full py-3 rounded-lg bg-green-600 text-white font-semibold text-sm active:scale-[0.98] transition-all"
+              >
+                <Icon icon="mdi:whatsapp" class="text-lg" />
+                WhatsApp pelapor
+              </a>
+              <a
+                v-if="mapsUrl"
+                :href="mapsUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex items-center justify-center gap-2 w-full py-3 rounded-lg bg-neutral-900 text-white font-semibold text-sm active:scale-[0.98] transition-all"
+              >
+                <Icon icon="lucide:map-pin" class="text-base" />
+                Buka lokasi di Maps
+              </a>
+            </div>
+
+            <!-- Preview / detail -->
+            <div
+              v-if="!showDetails && (session.location || session.condition)"
+              class="border-t border-dashed border-neutral-200 px-4 py-3 space-y-3"
+            >
+              <div v-if="session.location" class="min-w-0">
+                <p class="text-sm font-semibold text-neutral-900">Lokasi</p>
+                <p class="text-sm text-neutral-500 mt-0.5 line-clamp-2 leading-snug">{{ session.location }}</p>
+              </div>
+              <div v-else-if="session.condition" class="min-w-0">
+                <p class="text-sm font-semibold text-neutral-900">Kondisi</p>
+                <p class="text-sm text-neutral-500 mt-0.5 line-clamp-2 leading-snug">{{ session.condition }}</p>
+              </div>
+            </div>
+
+            <div v-if="showDetails" class="border-t border-dashed border-neutral-200 divide-y divide-neutral-100 text-sm">
+              <div class="px-4 py-3 grid grid-cols-2 gap-3">
+                <div>
+                  <p class="text-neutral-500 text-xs">Pelapor</p>
+                  <p class="font-medium text-neutral-900 mt-0.5">{{ session.requester_name || "—" }}</p>
+                </div>
+                <div>
+                  <p class="text-neutral-500 text-xs">No. HP</p>
+                  <p class="font-medium text-neutral-900 mt-0.5">{{ session.requester_phone || "—" }}</p>
+                </div>
+              </div>
+              <div v-if="session.location || session.condition" class="px-4 py-3 space-y-2">
+                <div v-if="session.location" class="flex items-start gap-2 text-neutral-700">
+                  <Icon icon="lucide:map-pin" class="shrink-0 mt-0.5 text-neutral-400 text-base" />
+                  <span class="leading-snug">{{ session.location }}</span>
+                </div>
+                <div v-if="session.condition" class="flex items-start gap-2 text-neutral-700">
+                  <Icon icon="lucide:activity" class="shrink-0 mt-0.5 text-neutral-400 text-base" />
+                  <span class="leading-snug">{{ session.condition }}</span>
+                </div>
+              </div>
+              <div v-if="session.photo_url" class="px-4 py-3">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1.5 font-medium text-primary-600 px-3 py-2 rounded-lg bg-primary-50 text-sm"
+                  @click="lightboxPhoto = assetUrl(session.photo_url!)"
+                >
+                  <Icon icon="lucide:camera" class="text-base" />
+                  Lihat Foto
+                </button>
+              </div>
+            </div>
+
+            <div class="px-4 pb-3 pt-1">
+              <button
+                type="button"
+                class="w-full py-2 rounded-lg bg-neutral-50 text-sm font-medium text-neutral-600 hover:bg-neutral-100 transition-colors"
+                @click="showDetails = !showDetails"
+              >
+                {{ showDetails ? "Sembunyikan detail" : "Lihat detail" }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Kartu aksi: bagikan → tandai tiba (hilang setelah tiba) -->
+          <div
+            v-if="canShare && !hasArrived"
+            class="bg-white rounded-xl border border-neutral-200 p-4 space-y-3"
+          >
+            <div class="flex items-start gap-3">
+              <div
+                class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 ring-1 ring-inset"
+                :class="sharing
+                  ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/10'
+                  : 'bg-neutral-50 text-neutral-500 ring-neutral-500/10'"
+              >
+                <Icon :icon="sharing ? 'lucide:radio' : 'lucide:navigation'" class="text-lg" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-base font-semibold text-neutral-900">
+                  {{ sharing ? "Lokasi sedang dibagikan" : "Bagikan lokasi ke pelapor" }}
+                </p>
+                <p class="text-sm text-neutral-500 mt-1 leading-snug">
+                  {{
+                    sharing
+                      ? "Tekan Sudah sampai saat tiba di lokasi. Jaga layar tetap aktif bila memungkinkan."
+                      : "Izinkan GPS dulu, lalu tandai Sudah sampai setelah tiba."
+                  }}
+                </p>
+                <p v-if="lastPingLabel" class="text-sm text-emerald-700 mt-2 font-medium">
+                  Terkirim · {{ lastPingLabel }}
+                  <span v-if="accuracy != null"> · akurasi ±{{ Math.round(accuracy) }} m</span>
+                </p>
+                <p v-if="permissionDenied" class="text-sm text-amber-700 mt-2">
+                  Izin lokasi ditolak. Aktifkan lokasi di pengaturan browser, lalu coba lagi.
+                </p>
+                <p v-if="pingError" class="text-sm text-red-600 mt-2">{{ pingError }}</p>
+              </div>
+            </div>
+
+            <template v-if="!sharing">
+              <button
+                type="button"
+                class="w-full py-3.5 rounded-lg bg-red-600 text-white font-semibold text-base active:scale-[0.98] transition-transform"
+                @click="startSharing"
+              >
+                Izinkan &amp; bagikan lokasi
+              </button>
+              <button
+                type="button"
+                class="w-full text-center text-sm font-medium text-emerald-700 hover:text-emerald-800 py-1 disabled:opacity-50"
+                :disabled="markingArrive"
+                @click="markArrived"
+              >
+                {{ markingArrive ? "Mencatat…" : "Sudah sampai (tanpa bagikan)" }}
+              </button>
+              <p v-if="arriveError" class="text-sm text-red-600">{{ arriveError }}</p>
+            </template>
+
+            <template v-else>
+              <button
+                type="button"
+                class="w-full py-3.5 rounded-lg bg-emerald-600 text-white font-semibold text-base active:scale-[0.98] transition-transform disabled:opacity-50"
+                :disabled="markingArrive"
+                @click="markArrived"
+              >
+                {{ markingArrive ? "Mencatat…" : "Sudah sampai" }}
+              </button>
+              <button
+                type="button"
+                class="w-full text-center text-sm font-medium text-neutral-500 hover:text-neutral-800 py-1"
+                @click="stopSharing"
+              >
+                Berhenti berbagi lokasi
+              </button>
+              <p v-if="arriveError" class="text-sm text-red-600">{{ arriveError }}</p>
+            </template>
+          </div>
+
+          <p class="text-center text-xs text-neutral-400">
+            Link hanya untuk petugas yang ditugaskan · ButuhBantuan &copy; {{ new Date().getFullYear() }}
+          </p>
+        </template>
+      </div>
+    </div>
+
+    <Teleport to="body">
+      <div
+        v-if="lightboxPhoto"
+        class="fixed inset-0 z-[9999] bg-black/85 flex items-center justify-center p-4"
+        @click="lightboxPhoto = null"
+      >
+        <img :src="lightboxPhoto" class="max-w-full max-h-[85vh] rounded-xl object-contain" @click.stop />
+        <button
+          type="button"
+          class="absolute top-4 right-4 w-9 h-9 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center"
+          @click="lightboxPhoto = null"
+        >
+          <Icon icon="lucide:x" class="text-white text-xl" />
+        </button>
+      </div>
+    </Teleport>
+  </div>
+</template>

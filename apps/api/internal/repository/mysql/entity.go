@@ -53,8 +53,13 @@ type EmergencyEntity struct {
 	EmergencyType        EmergencyTypeEntity `gorm:"foreignKey:EmergencyTypeID"`
 	Description          string              `gorm:"type:text"`
 	IsVerified           bool                `gorm:"type:tinyint(1);default:0"`
+	PartnerTier          string              `gorm:"type:varchar(20);default:community;index"` // psc | verified | community
+	TrainedDriver        bool                `gorm:"type:tinyint(1);default:0"`
+	HasOxygen            bool                `gorm:"type:tinyint(1);default:0"`
+	HasStretcher         bool                `gorm:"type:tinyint(1);default:0"`
+	EquipmentNotes       string              `gorm:"type:varchar(500)"`
 	IsActive             bool                `gorm:"type:tinyint(1);default:1;index"`
-	Is24Hours            bool                `gorm:"type:tinyint(1);default:0"`
+	Is24Hours            bool                `gorm:"column:is24_hours;type:tinyint(1);default:0"`
 	OpenTime             string              `gorm:"type:varchar(5);default:'08:00'"`
 	CloseTime            string              `gorm:"type:varchar(5);default:'17:00'"`
 	TotalUnits           int                 `gorm:"default:0"`
@@ -143,11 +148,77 @@ type OrderTicketEntity struct {
 	Source         string     `gorm:"type:varchar(20);default:'call';index"` // "call" | "sos"
 	HandlerName    string     `gorm:"type:varchar(255)"`
 	HandlingNotes  string     `gorm:"type:text"`
-	AcceptedAt     *time.Time `gorm:"index"`
-	CompletedAt    *time.Time `gorm:"index"`
-	CancelledAt    *time.Time
-	CreatedAt      time.Time  `gorm:"autoCreateTime"`
-	UpdatedAt      time.Time  `gorm:"autoUpdateTime"`
+	TypeID         uint       `gorm:"default:0;index"`
+	RegencyID      string     `gorm:"type:varchar(10);index"`
+	ProvinceID     string     `gorm:"type:varchar(10);index"`
+	DispatchRound  int        `gorm:"default:0"`
+	SlaDeadline    *time.Time `gorm:"index"`
+	DispatchStatus    string     `gorm:"type:varchar(20);default:''"` // searching | assigned | exhausted | escalated
+	EscalationHotline string     `gorm:"type:varchar(50)"`
+	EscalationLabel   string     `gorm:"type:varchar(255)"`
+	// Live responder tracking (magic link from posko → HP petugas).
+	TrackToken         string     `gorm:"type:char(36);index"`
+	TrackEnabledAt     *time.Time
+	TrackExpiresAt     *time.Time `gorm:"index"`
+	ResponderLat       float64    `gorm:"type:double;default:0"`
+	ResponderLng       float64    `gorm:"type:double;default:0"`
+	ResponderUpdatedAt *time.Time
+	ArrivedAt          *time.Time `gorm:"index"` // on-scene (petugas tekan "Sudah sampai")
+	AcceptedAt         *time.Time `gorm:"index"`
+	CompletedAt        *time.Time `gorm:"index"`
+	CancelledAt        *time.Time
+	// Incident report drafted by unit/admin (JSON blob shared across dashboards).
+	IncidentReport   string     `gorm:"type:longtext"`
+	IncidentReportAt *time.Time
+	CreatedAt        time.Time `gorm:"autoCreateTime"`
+	UpdatedAt        time.Time `gorm:"autoUpdateTime"`
+}
+
+// DispatchAttemptEntity audits each unit offer during auto-dispatch / escalation.
+type DispatchAttemptEntity struct {
+	ID            uint       `gorm:"primaryKey"`
+	UUID          uuid.UUID  `gorm:"type:char(36);uniqueIndex;not null"`
+	OrderID       string     `gorm:"type:char(36);index;not null"`
+	TicketNumber  string     `gorm:"type:varchar(30);index;not null"`
+	EmergencyUUID string     `gorm:"type:char(36);index;not null"`
+	UnitName      string     `gorm:"type:varchar(255)"`
+	Round         int        `gorm:"not null;default:1"`
+	Status        string     `gorm:"type:varchar(20);default:'offered';index"`
+	DistanceKm    float64    `gorm:"type:double;default:0"`
+	Score         float64    `gorm:"type:double;default:0"`
+	RejectReason  string     `gorm:"type:varchar(40)"`
+	RejectNote    string     `gorm:"type:varchar(255)"`
+	OfferedAt     time.Time  `gorm:"autoCreateTime"`
+	ResolvedAt    *time.Time
+}
+
+func (e *DispatchAttemptEntity) BeforeCreate(_ *gorm.DB) error {
+	if e.UUID == uuid.Nil {
+		e.UUID = uuid.New()
+	}
+	return nil
+}
+
+// OrderEventEntity stores the human-readable timeline for a ticket.
+type OrderEventEntity struct {
+	ID           uint      `gorm:"primaryKey"`
+	UUID         uuid.UUID `gorm:"type:char(36);uniqueIndex;not null"`
+	OrderID      string    `gorm:"type:char(36);index;not null"`
+	TicketNumber string    `gorm:"type:varchar(30);index;not null"`
+	Type         string    `gorm:"type:varchar(30);index;not null"`
+	Message      string    `gorm:"type:text;not null"`
+	Actor        string    `gorm:"type:varchar(30);default:'system'"`
+	FromUnit     string    `gorm:"type:varchar(255)"`
+	ToUnit       string    `gorm:"type:varchar(255)"`
+	Tier         string    `gorm:"column:dispatch_tier;type:varchar(30);index"`
+	CreatedAt    time.Time `gorm:"autoCreateTime;index"`
+}
+
+func (e *OrderEventEntity) BeforeCreate(_ *gorm.DB) error {
+	if e.UUID == uuid.Nil {
+		e.UUID = uuid.New()
+	}
+	return nil
 }
 
 type SOSAlertEntity struct {

@@ -23,7 +23,16 @@ func NewStreamHandler(h *hub.Hub) *StreamHandler {
 // events (new_order) and sends a heartbeat every 25 s to keep proxies alive.
 func (h *StreamHandler) Stream(c *fiber.Ctx) error {
 	uuid := c.Locals("emergency_uuid").(string)
-	events, unsub := h.hub.Subscribe(uuid)
+	return h.stream(c, uuid)
+}
+
+// AdminStream opens SSE for admin ops (broadcast channel).
+func (h *StreamHandler) AdminStream(c *fiber.Ctx) error {
+	return h.stream(c, hub.AdminChannel)
+}
+
+func (h *StreamHandler) stream(c *fiber.Ctx, channel string) error {
+	events, unsub := h.hub.Subscribe(channel)
 
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")

@@ -1,7 +1,6 @@
-
 <script setup lang="ts">
 import type { Map as LeafletMap, Marker, Polyline } from "leaflet";
-import { toast } from "vue3-hot-toast";
+import { appToast } from "~/utils/appToast";
 
 const leafletStore = useLeafletStore();
 const emergencyStore = useEmergencyStore();
@@ -9,8 +8,8 @@ const emergencyDataStore = useEmergencyDataStore();
 const userLocationStore = useUserLocationStore();
 const appError = useAppErrorStore();
 const detailSheet = useDetailSheetStore();
-const exploreSheet = useExploreSheetStore();
 const { loadEmergencyData } = useEmergencyApi();
+const toast = appToast();
 
 const mapContainer = ref<HTMLElement | null>(null);
 let map: LeafletMap | null = null;
@@ -23,7 +22,8 @@ let routeRenderToken = 0;
 onMounted(async () => {
   if (!mapContainer.value) return;
 
-  const L = await import("leaflet");
+  const Lmod = await import("leaflet");
+  const L = (Lmod as any).default ?? Lmod;
   await import("leaflet/dist/leaflet.css");
 
   const indonesiaBounds = L.latLngBounds(L.latLng(-11, 95), L.latLng(6, 141));
@@ -38,23 +38,24 @@ onMounted(async () => {
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "© OpenStreetMap contributors",
+    maxZoom: 19,
   }).addTo(map);
+
+  // Leaflet often needs a reflow when mounted inside % height containers.
+  requestAnimationFrame(() => {
+    map?.invalidateSize();
+  });
+  setTimeout(() => map?.invalidateSize(), 250);
 
   leafletStore.setMapInstance(map);
 
-  // Tap on map → set manual location + relocate marker + refetch (debounced 1.5s)
   let mapClickTimer: ReturnType<typeof setTimeout> | null = null;
-  let mapClickToastId: string | undefined;
 
   map.on("click", (e: any) => {
     if (mapClickTimer) clearTimeout(mapClickTimer);
-    // Dismiss previous loading toast if map is tapped again before it resolves
-    if (mapClickToastId) toast.dismiss(mapClickToastId);
 
     const { lat, lng } = e.latlng;
-
-    // Show loading toast immediately on tap
-    mapClickToastId = toast.loading("Mencari layanan di area ini...");
+    toast.loading("Mencari layanan di area ini...");
 
     userLocationStore.setManualLocation(true);
     userLocationStore.updateCoordinate(lat, lng);
@@ -64,13 +65,10 @@ onMounted(async () => {
     detailSheet.onClose();
 
     mapClickTimer = setTimeout(async () => {
-      await loadEmergencyData(lat, lng, mapClickToastId);
-      mapClickToastId = undefined;
+      await loadEmergencyData(lat, lng, true);
     }, 1500);
   });
 
-  // Continuously track GPS — always saves the latest fix to gpsLat/gpsLong.
-  // updateGPSCoordinate forwards to lat/long only when not in manual mode.
   if (navigator?.geolocation) {
     let isFirstFix = true;
     gpsWatchId = navigator.geolocation.watchPosition(
@@ -78,23 +76,12 @@ onMounted(async () => {
         const { latitude: lat, longitude: lng } = pos.coords;
         const wasFirst = isFirstFix;
         isFirstFix = false;
-
-        // Capture coords BEFORE updateGPSCoordinate overwrites them — otherwise
-        // storedLat === lat and movedFar is always false (the previous bug).
-        const prevLat = userLocationStore.lat;
-        const prevLng = userLocationStore.long;
         userLocationStore.updateGPSCoordinate(lat, lng);
-
-        // Always load emergency data on the first real GPS fix.
-        // boot() in index.vue only sets the map center (getCurrentPosition, fast but inaccurate).
-        // This is the single authoritative trigger for the initial data load.
         if (wasFirst && !userLocationStore.isManualLocation) {
           loadEmergencyData(lat, lng);
         }
       },
       (err) => {
-        // watchPosition is the ground truth — if it gets PERMISSION_DENIED,
-        // the user has genuinely blocked location access.
         if (err.code === 1) {
           appError.setErrorMessage("permission_denied");
           appError.onOpenSheet();
@@ -110,7 +97,6 @@ onMounted(async () => {
     { immediate: true }
   );
 
-  // Grey-out map tiles when current area has no coverage
   watch(
     () => emergencyStore.isCovered,
     (covered) => {
@@ -126,12 +112,8 @@ onMounted(async () => {
     [() => userLocationStore.lat, () => userLocationStore.long],
     ([lat, lng], [prevLat, prevLng]) => {
       if (!lat || !lng) return;
-      // pan if this is the first fix OR a large jump (e.g. from search)
       const jumped = Math.abs(lat - (prevLat ?? 0)) > 0.01 || Math.abs(lng - (prevLng ?? 0)) > 0.01;
       renderCurrentLocation(L, lat, lng, jumped);
-
-      // Only re-render route on significant position jumps (search / map click),
-      // not on every GPS tick — that was causing concurrent OSRM fetches and double polylines.
       if (jumped) {
         const end = leafletStore.routeEndPoint;
         if (end.lat && end.lng) {
@@ -150,8 +132,9 @@ onMounted(async () => {
     async (endPoint) => {
       if (endPoint.lat && endPoint.lng) {
         await renderRoute(L, endPoint);
-      } else {
-        if (routeLine) { routeLine.remove(); routeLine = null; }
+      } else if (routeLine) {
+        routeLine.remove();
+        routeLine = null;
       }
     }
   );
@@ -172,7 +155,7 @@ function renderCurrentLocation(L: any, lat: number, lng: number, panMap = false)
       iconSize: [25, 25],
     });
     currentLocationMarker = L.marker([lat, lng], { icon }).addTo(map!);
-    panMap = true; // always pan on first render
+    panMap = true;
   }
 
   if (panMap) map.setView([lat, lng], 13);
@@ -233,34 +216,34 @@ function onMarkerClick(item: any) {
 async function renderRoute(L: any, endPoint: { lat: number; lng: number }) {
   if (!map) return;
 
-  if (routeLine) { routeLine.remove(); routeLine = null; }
+  if (routeLine) {
+    routeLine.remove();
+    routeLine = null;
+  }
 
   const token = ++routeRenderToken;
-  const routeToastId = toast.loading("Mencari rute...");
+  toast.loading("Mencari rute...");
 
   const userLat = userLocationStore.lat;
   const userLng = userLocationStore.long;
 
   if (!userLat || !userLng) {
     map.setView([endPoint.lat, endPoint.lng], 14);
-    toast.dismiss(routeToastId);
+    toast.dismiss();
     return;
   }
 
   try {
-    // OSRM: coordinates are lng,lat
     const url = `https://router.project-osrm.org/route/v1/driving/${userLng},${userLat};${endPoint.lng},${endPoint.lat}?overview=full&geometries=geojson`;
     const res = await fetch(url);
     const data = await res.json();
     const coords = data?.routes?.[0]?.geometry?.coordinates as [number, number][] | undefined;
 
     if (token !== routeRenderToken) {
-      toast.dismiss(routeToastId);
       return;
     }
 
     if (coords?.length) {
-      // OSRM returns [lng, lat], Leaflet needs [lat, lng]
       const latlngs = coords.map((c) => [c[1], c[0]] as [number, number]);
       routeLine = L.polyline(latlngs, {
         color: "#3b82f6",
@@ -268,23 +251,21 @@ async function renderRoute(L: any, endPoint: { lat: number; lng: number }) {
         opacity: 0.85,
       }).addTo(map!);
       map.fitBounds((routeLine as any).getBounds(), { padding: [60, 60] });
-      toast.success("Rute ditemukan", { id: routeToastId, duration: 1500 });
+      toast.success("Rute ditemukan", { duration: 1500 });
       return;
     }
   } catch {
     if (token !== routeRenderToken) {
-      toast.dismiss(routeToastId);
       return;
     }
   }
 
-  // Fallback: dashed straight line
   routeLine = L.polyline(
     [[userLat, userLng], [endPoint.lat, endPoint.lng]],
     { color: "#3b82f6", weight: 3, dashArray: "6, 8", opacity: 0.85 }
   ).addTo(map!);
   map.fitBounds((routeLine as any).getBounds(), { padding: [60, 60] });
-  toast.dismiss(routeToastId);
+  toast.dismiss();
 }
 </script>
 

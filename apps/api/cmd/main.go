@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/butuhbantuan/api/internal/domain"
 	jsonrepo "github.com/butuhbantuan/api/internal/repository/json"
@@ -25,20 +28,24 @@ import (
 
 func main() {
 	seed := flag.Bool("seed", false, "seed database from data/*.json (requires STORAGE=mysql)")
+	seedWilayah := flag.Bool("seed-wilayah", false, "seed national province/regency master only")
 	flag.Parse()
 
 	cfg := config.Load()
 
 	var (
-		emergencyRepo  repository.EmergencyRepository
-		typeRepo       repository.EmergencyTypeRepository
-		regionRepo     repository.RegionRepository
-		feedbackRepo   repository.FeedbackRepository
-		orderRepo      repository.OrderRepository
-		unitCredRepo   repository.UnitCredentialRepository
-		sosRepo        repository.SOSRepository
-		pushRepo       repository.PushRepository
-		analyticsRepo  repository.AnalyticsRepository
+		emergencyRepo repository.EmergencyRepository
+		typeRepo      repository.EmergencyTypeRepository
+		regionRepo    repository.RegionRepository
+		feedbackRepo  repository.FeedbackRepository
+		orderRepo     repository.OrderRepository
+		unitCredRepo  repository.UnitCredentialRepository
+		sosRepo       repository.SOSRepository
+		pushRepo      repository.PushRepository
+		analyticsRepo repository.AnalyticsRepository
+		attemptRepo   repository.DispatchAttemptRepository
+		eventRepo     repository.OrderEventRepository
+		tileRepo      repository.MapTileUsageRepository
 	)
 
 	switch cfg.Storage {
@@ -57,6 +64,9 @@ func main() {
 		mysqlSOS := mysqlrepo.NewSOSRepo(db)
 		mysqlPush := mysqlrepo.NewPushRepo(db)
 		mysqlAnalytics := mysqlrepo.NewAnalyticsRepo(db)
+		mysqlAttempt := mysqlrepo.NewDispatchAttemptRepo(db)
+		mysqlEvent := mysqlrepo.NewOrderEventRepo(db)
+		mysqlTiles := mysqlrepo.NewMapTileUsageRepo(db)
 
 		emergencyRepo = mysqlEmergency
 		typeRepo = mysqlType
@@ -67,6 +77,17 @@ func main() {
 		sosRepo = mysqlSOS
 		pushRepo = mysqlPush
 		analyticsRepo = mysqlAnalytics
+		attemptRepo = mysqlAttempt
+		eventRepo = mysqlEvent
+		tileRepo = mysqlTiles
+
+		if *seedWilayah {
+			if err := seedNationalWilayah(mysqlEmergency); err != nil {
+				log.Fatalf("seed-wilayah failed: %v", err)
+			}
+			log.Println("wilayah seeding completed")
+			return
+		}
 
 		if *seed {
 			if err := runSeed(mysqlEmergency, mysqlType, mysqlRegion); err != nil {
@@ -117,20 +138,52 @@ func main() {
 	var orderSvc service.OrderUseCase
 	var unitAuthSvc service.UnitAuthUseCase
 	var sosSvc service.SOSUseCase
+	var dispatchSvc service.DispatchUseCase
+
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	defer workerCancel()
+
 	if orderRepo != nil {
-		orderSvc = service.NewOrderService(orderRepo, eventHub, pushSvc)
+		osvc := service.NewOrderService(orderRepo, eventHub, pushSvc)
+		if attemptRepo != nil {
+			osvc.WithAttemptRepo(attemptRepo)
+		}
+		if eventRepo != nil {
+			osvc.WithEventRepo(eventRepo)
+		}
+		orderSvc = osvc
 		unitAuthSvc = service.NewUnitAuthService(unitCredRepo)
+
+		if attemptRepo != nil {
+			dispatchSvc = service.NewDispatchService(
+				emergencyRepo,
+				orderRepo,
+				attemptRepo,
+				orderSvc,
+				eventHub,
+				pushSvc,
+				time.Duration(cfg.DispatchSLASecs)*time.Second,
+			).WithTypeRepo(typeRepo)
+			go service.NewEscalationWorker(dispatchSvc, 15*time.Second).Start(workerCtx)
+			log.Printf("auto-dispatch enabled (sla=%ds)", cfg.DispatchSLASecs)
+		} else {
+			dispatchSvc = service.NewNoopDispatchService()
+		}
+
 		if sosRepo != nil {
-			sosSvc = service.NewSOSService(sosRepo, orderRepo, emergencyRepo)
+			sosSvc = service.NewSOSService(sosRepo, dispatchSvc).WithOrderRepo(orderRepo)
 		}
 	} else {
 		orderSvc = service.NewNoopOrderService()
 		unitAuthSvc = service.NewNoopUnitAuthService()
 		unitCredRepo = &repository.NoopUnitCredentialRepository{}
+		dispatchSvc = service.NewNoopDispatchService()
 	}
 	if sosSvc == nil {
 		sosSvc = service.NewNoopSOSService()
 	}
+
+	mapTilesSvc := service.NewMapTilesService(tileRepo, true)
 
 	app := fiber.New()
 	app.Use(logger.New())
@@ -142,7 +195,7 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	router.Register(app, emergencySvc, emergencySvc, regionSvc, feedbackSvc, orderSvc, unitAuthSvc, sosSvc, pushSvc, analyticsSvc, unitCredRepo, cfg, eventHub)
+	router.Register(app, emergencySvc, emergencySvc, regionSvc, feedbackSvc, orderSvc, unitAuthSvc, sosSvc, pushSvc, analyticsSvc, dispatchSvc, unitCredRepo, mapTilesSvc, cfg, eventHub)
 
 	// Graceful shutdown on SIGINT / SIGTERM
 	quit := make(chan os.Signal, 1)
@@ -150,6 +203,7 @@ func main() {
 	go func() {
 		<-quit
 		log.Println("shutting down server...")
+		workerCancel()
 		if err := app.Shutdown(); err != nil {
 			log.Printf("shutdown error: %v", err)
 		}
@@ -162,18 +216,22 @@ func main() {
 }
 
 // runSeed loads data/*.json and inserts into MySQL.
-// Runs province → regency → district first to satisfy FK constraints.
+// Runs national wilayah → emergency-derived districts → types → coverage → emergencies.
 func runSeed(
 	eRepo *mysqlrepo.EmergencyRepo,
 	typeRepo *mysqlrepo.EmergencyTypeRepo,
 	regionRepo *mysqlrepo.RegionRepo,
 ) error {
+	if err := seedNationalWilayah(eRepo); err != nil {
+		return err
+	}
+
 	var emergencies []domain.Emergency
 	if err := loadDataFile("data/emergencies.json", &emergencies); err != nil {
 		return fmt.Errorf("emergencies.json: %w", err)
 	}
 
-	// Extract unique region data from emergency records to satisfy FK constraints.
+	// Extract districts (and any missing region rows) from emergency records for FK safety.
 	provincesMap := map[string]domain.Province{}
 	regenciesMap := map[string]domain.Regency{}
 	districtsMap := map[string]domain.District{}
@@ -210,9 +268,9 @@ func runSeed(
 	}
 
 	if err := eRepo.UpsertRegionData(provinces, regencies, districts); err != nil {
-		return fmt.Errorf("region data: %w", err)
+		return fmt.Errorf("region data from emergencies: %w", err)
 	}
-	log.Printf("region data seeded: %d provinces, %d regencies, %d districts",
+	log.Printf("emergency-derived regions upserted: %d provinces, %d regencies, %d districts",
 		len(provinces), len(regencies), len(districts))
 
 	// Emergency types
@@ -227,7 +285,18 @@ func runSeed(
 	}
 	log.Printf("emergency types seeded: %d", len(types))
 
-	// Available regions
+	// Resolve type IDs by name so seed JSON ids cannot point at the wrong row
+	// when types were created earlier with different auto-increment order.
+	liveTypes, err := typeRepo.FindAllTypes()
+	if err != nil {
+		return fmt.Errorf("list types: %w", err)
+	}
+	typeIDByName := map[string]uint{}
+	for _, t := range liveTypes {
+		typeIDByName[strings.ToLower(strings.TrimSpace(t.Name))] = t.ID
+	}
+
+	// Available regions = coverage allowlist (not the full national master).
 	var regions []domain.AvailableRegion
 	if err := loadDataFile("data/available_regions.json", &regions); err != nil {
 		return fmt.Errorf("available_regions.json: %w", err)
@@ -242,6 +311,9 @@ func runSeed(
 	// Emergencies — Upsert so re-seeding doesn't create duplicates.
 	ok, fail := 0, 0
 	for _, e := range emergencies {
+		if id, okName := typeIDByName[strings.ToLower(strings.TrimSpace(e.EmergencyType.Name))]; okName {
+			e.EmergencyType.ID = id
+		}
 		if _, err := eRepo.Upsert(e); err != nil {
 			log.Printf("emergency %q: %v", e.Name, err)
 			fail++
@@ -252,6 +324,72 @@ func runSeed(
 	log.Printf("emergencies seeded: %d ok, %d failed", ok, fail)
 
 	return nil
+}
+
+type wilayahRow struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	ProvinceID string `json:"province_id"`
+}
+
+func seedNationalWilayah(eRepo *mysqlrepo.EmergencyRepo) error {
+	var provincesRaw []wilayahRow
+	if err := loadDataFile("data/wilayah/provinces.json", &provincesRaw); err != nil {
+		return fmt.Errorf("wilayah/provinces.json: %w", err)
+	}
+	var regenciesRaw []wilayahRow
+	if err := loadDataFile("data/wilayah/regencies.json", &regenciesRaw); err != nil {
+		return fmt.Errorf("wilayah/regencies.json: %w", err)
+	}
+
+	provinces := make([]domain.Province, 0, len(provincesRaw))
+	for _, p := range provincesRaw {
+		name := strings.TrimSpace(p.Name)
+		if name == "" || p.ID == "" {
+			continue
+		}
+		provinces = append(provinces, domain.Province{ID: p.ID, Name: titleWilayah(name)})
+	}
+
+	regencies := make([]domain.Regency, 0, len(regenciesRaw))
+	for _, r := range regenciesRaw {
+		if r.ID == "" || r.ProvinceID == "" {
+			continue
+		}
+		regencies = append(regencies, domain.Regency{
+			ID:         r.ID,
+			ProvinceID: r.ProvinceID,
+			Name:       titleWilayah(strings.TrimSpace(r.Name)),
+		})
+	}
+
+	if err := eRepo.UpsertRegionData(provinces, regencies, nil); err != nil {
+		return fmt.Errorf("national wilayah: %w", err)
+	}
+	log.Printf("national wilayah seeded: %d provinces, %d regencies", len(provinces), len(regencies))
+	return nil
+}
+
+func titleWilayah(s string) string {
+	parts := strings.Fields(strings.ToLower(s))
+	for i, p := range parts {
+		if p == "" {
+			continue
+		}
+		// Keep common Indonesian particles lowercase after first word? Keep simple Title Case.
+		parts[i] = strings.ToUpper(p[:1]) + p[1:]
+	}
+	out := strings.Join(parts, " ")
+	repl := []struct{ old, neu string }{
+		{"Di Yogyakarta", "DI Yogyakarta"},
+		{"Dki Jakarta", "DKI Jakarta"},
+		{"Kabupaten ", "Kabupaten "},
+		{"Kota ", "Kota "},
+	}
+	for _, r := range repl {
+		out = strings.ReplaceAll(out, r.old, r.neu)
+	}
+	return out
 }
 
 func loadDataFile(path string, dest any) error {

@@ -19,11 +19,12 @@ type District struct {
 }
 
 type AvailableRegion struct {
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	RegencyID string  `json:"regency_id"`
-	Regency   string  `json:"regency"`
-	Province  string  `json:"province"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	RegencyID  string  `json:"regency_id"`
+	Regency    string  `json:"regency"`
+	ProvinceID string  `json:"province_id,omitempty"`
+	Province   string  `json:"province"`
+	Latitude   float64 `json:"latitude"`
+	Longitude  float64 `json:"longitude"`
 }

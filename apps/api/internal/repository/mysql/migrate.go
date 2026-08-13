@@ -21,6 +21,9 @@ func Migrate(db *gorm.DB) error {
 		&UnitCredentialEntity{},
 		&SOSAlertEntity{},
 		&PushSubscriptionEntity{},
+		&DispatchAttemptEntity{},
+		&OrderEventEntity{},
+		&MapTileUsageEntity{},
 	)
 }
 

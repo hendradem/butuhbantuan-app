@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { toast } from "vue3-hot-toast";
 import { convertPhoneNumber } from "~/utils/convertPhoneNumber";
+import { appToast } from "~/utils/appToast";
 
 const sheet = useConfirmationSheetStore();
 const reviewSheet = useReviewSheetStore();
+const toast = appToast();
 
 function onContactClick(e: Event) {
   e.stopPropagation();

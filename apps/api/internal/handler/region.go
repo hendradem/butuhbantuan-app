@@ -82,7 +82,15 @@ func (h *RegionHandler) DeleteAvailableRegion(c *fiber.Ctx) error {
 }
 
 func (h *RegionHandler) GetProvinces(c *fiber.Ctx) error {
-	data, err := h.svc.GetProvinces()
+	var (
+		data []domain.Province
+		err  error
+	)
+	if isTruthy(c.Query("covered_only")) {
+		data, err = h.svc.GetCoveredProvinces()
+	} else {
+		data, err = h.svc.GetProvinces()
+	}
 	if err != nil {
 		if errors.Is(err, repository.ErrNotSupported) {
 			return response.NotImplemented(c)
@@ -94,10 +102,20 @@ func (h *RegionHandler) GetProvinces(c *fiber.Ctx) error {
 
 func (h *RegionHandler) GetRegenciesByProvince(c *fiber.Ctx) error {
 	provinceID := c.Query("province_id")
-	if provinceID == "" {
+	coveredOnly := isTruthy(c.Query("covered_only"))
+	// covered_only may omit province_id to list all covered kab/kota
+	if provinceID == "" && !coveredOnly {
 		return response.Error(c, fiber.StatusBadRequest, "province_id is required")
 	}
-	data, err := h.svc.GetRegenciesByProvince(provinceID)
+	var (
+		data []domain.Regency
+		err  error
+	)
+	if coveredOnly {
+		data, err = h.svc.GetCoveredRegenciesByProvince(provinceID)
+	} else {
+		data, err = h.svc.GetRegenciesByProvince(provinceID)
+	}
 	if err != nil {
 		if errors.Is(err, repository.ErrNotSupported) {
 			return response.NotImplemented(c)
@@ -120,4 +138,13 @@ func (h *RegionHandler) SearchRegencies(c *fiber.Ctx) error {
 		return response.Error(c, fiber.StatusInternalServerError, "failed to search regencies")
 	}
 	return response.OK(c, "success", data)
+}
+
+func isTruthy(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "y":
+		return true
+	default:
+		return false
+	}
 }

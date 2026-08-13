@@ -21,7 +21,9 @@ func Register(
 	sosSvc service.SOSUseCase,
 	pushSvc service.PushUseCase,
 	analyticsSvc service.AnalyticsUseCase,
+	dispatchSvc service.DispatchUseCase,
 	unitCredRepo repository.UnitCredentialRepository,
+	mapTilesSvc service.MapTilesUseCase,
 	cfg *config.Config,
 	eventHub *hub.Hub,
 ) {
@@ -31,12 +33,13 @@ func Register(
 	geocoding := handler.NewGeocodingHandler(cfg, emergencySvc)
 	authH := handler.NewAuthHandler(cfg)
 	feedbackH := handler.NewFeedbackHandler(feedbackSvc)
-	orderH := handler.NewOrderHandler(orderSvc)
-	unitH := handler.NewUnitHandler(unitAuthSvc, orderSvc, emergencySvc, feedbackSvc)
+	orderH := handler.NewOrderHandler(orderSvc, emergencySvc)
+	unitH := handler.NewUnitHandler(unitAuthSvc, orderSvc, emergencySvc, feedbackSvc).WithDispatch(dispatchSvc)
 	sosH := handler.NewSOSHandler(sosSvc)
 	pushH := handler.NewPushHandler(pushSvc)
 	streamH := handler.NewStreamHandler(eventHub)
 	analyticsH := handler.NewAnalyticsHandler(analyticsSvc)
+	mapTilesH := handler.NewMapTilesHandler(mapTilesSvc)
 
 	adminAuth := middleware.AdminAuth(cfg.AdminAPIKey)
 	unitAuth := middleware.UnitAuth(unitCredRepo)
@@ -45,6 +48,11 @@ func Register(
 	v1.Get("/health", handler.Health)
 	v1.Post("/auth/login", authH.Login)
 	v1.Post("/upload", handler.UploadFile)
+
+	// Map tiles: public status + usage reporting for free-tier fallback
+	maps := v1.Group("/maps")
+	maps.Get("/tiles", mapTilesH.Status)
+	maps.Post("/tiles/usage", mapTilesH.Report)
 
 	em := v1.Group("/emergency")
 	em.Get("/", emergency.GetAll)
@@ -94,15 +102,36 @@ func Register(
 	ord.Post("/", orderH.Create)
 	ord.Get("/ticket/:number", orderH.GetByTicketNumber)
 
+	track := v1.Group("/track")
+	track.Post("/:token/arrive", orderH.MarkArrived)
+	track.Get("/:token", orderH.GetTrackSession)
+	track.Post("/:token", orderH.PingTrackLocation)
+
 	unit := v1.Group("/unit")
 	unit.Post("/auth/login", unitH.Login)
 	unit.Get("/profile", unitAuth, unitH.GetProfile)
 	unit.Get("/orders", unitAuth, unitH.GetOrders)
+	unit.Post("/orders", unitAuth, unitH.CreateOrder)
 	unit.Put("/orders/:id", unitAuth, unitH.UpdateOrder)
+	unit.Post("/orders/:id/accept", unitAuth, unitH.AcceptOrder)
+	unit.Post("/orders/:id/reject", unitAuth, unitH.RejectOrder)
+	unit.Post("/orders/:id/reassign", unitAuth, unitH.ReassignOrder)
+	unit.Post("/orders/:id/escalate-psc", unitAuth, unitH.EscalateOrder)
+	unit.Get("/orders/:id/candidates", unitAuth, unitH.ListOrderCandidates)
+	unit.Get("/orders/:id/history", unitAuth, unitH.GetOrderHistory)
+	unit.Post("/orders/:id/track/enable", unitAuth, unitH.EnableTrack)
+	unit.Post("/orders/:id/track/disable", unitAuth, unitH.DisableTrack)
+	unit.Post("/orders/:id/arrive", unitAuth, unitH.MarkArrived)
+	unit.Put("/orders/:id/report", unitAuth, unitH.SaveIncidentReport)
 	unit.Get("/feedback", unitAuth, unitH.GetFeedback)
 	unit.Patch("/fleet", unitAuth, unitH.UpdateFleet)
 	unit.Patch("/availability", unitAuth, unitH.UpdateAvailability)
 	unit.Get("/stream", unitAuth, streamH.Stream)
+
+	// Dispatcher wilayah ops — gated server-side (403 if not dispatcher).
+	unit.Get("/ops/orders", unitAuth, unitH.GetOpsOrders)
+	unit.Get("/ops/units", unitAuth, unitH.GetOpsUnits)
+	unit.Get("/ops/stats", unitAuth, unitH.GetOpsStats)
 
 	sos := v1.Group("/sos")
 	sos.Post("/", sosH.Submit)
@@ -116,6 +145,20 @@ func Register(
 	admin := v1.Group("/admin")
 	admin.Post("/units/:uuid/credentials", adminAuth, unitH.SetCredentials)
 	admin.Get("/orders", adminAuth, unitH.GetAllOrders)
+	admin.Post("/orders", adminAuth, orderH.CreateManual)
+	admin.Post("/orders/:id/accept", adminAuth, unitH.AdminAcceptOrder)
+	admin.Post("/orders/:id/reject", adminAuth, unitH.AdminRejectOrder)
+	admin.Post("/orders/:id/reassign", adminAuth, unitH.AdminReassignOrder)
+	admin.Post("/orders/:id/escalate-psc", adminAuth, unitH.AdminEscalateOrder)
+	admin.Post("/orders/:id/cancel", adminAuth, unitH.AdminCancelOrder)
+	admin.Get("/orders/:id/candidates", adminAuth, unitH.AdminListOrderCandidates)
+	admin.Get("/orders/:id/history", adminAuth, unitH.GetOrderHistory)
+	admin.Post("/orders/:id/track/enable", adminAuth, unitH.AdminEnableTrack)
+	admin.Post("/orders/:id/track/disable", adminAuth, unitH.AdminDisableTrack)
+	admin.Post("/orders/:id/arrive", adminAuth, unitH.AdminMarkArrived)
+	admin.Put("/orders/:id/report", adminAuth, unitH.AdminSaveIncidentReport)
 	admin.Get("/analytics", adminAuth, analyticsH.Get)
 	admin.Get("/analytics/heatmap", adminAuth, analyticsH.GetHeatmap)
+	admin.Get("/maps/tiles", adminAuth, mapTilesH.Status)
+	admin.Get("/stream", adminAuth, streamH.AdminStream)
 }

@@ -1,12 +1,32 @@
 <script setup lang="ts">
 type Variant = "primary" | "success" | "warning" | "danger" | "neutral";
 defineProps<{ variant?: Variant; dot?: boolean }>();
-const variantClasses: Record<Variant, string> = { primary:"bg-primary-50 text-primary-700 ring-primary-200", success:"bg-success-50 text-success-700 ring-success-200", warning:"bg-warning-50 text-warning-700 ring-warning-200", danger:"bg-emergency-50 text-emergency-700 ring-emergency-200", neutral:"bg-neutral-100 text-neutral-700 ring-neutral-200" };
-const dotClasses: Record<Variant, string> = { primary:"bg-primary-500", success:"bg-success-500", warning:"bg-warning-500", danger:"bg-emergency-500", neutral:"bg-neutral-400" };
+
+const variantClasses: Record<Variant, string> = {
+  primary: "bg-blue-50 text-blue-800 border-blue-200",
+  success: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  warning: "bg-amber-50 text-amber-800 border-amber-200",
+  danger: "bg-red-50 text-red-800 border-red-200",
+  neutral: "bg-neutral-50 text-neutral-700 border-neutral-200",
+};
+
+const dotClasses: Record<Variant, string> = {
+  primary: "bg-blue-600",
+  success: "bg-emerald-600",
+  warning: "bg-amber-600",
+  danger: "bg-red-600",
+  neutral: "bg-neutral-500",
+};
 </script>
+
 <template>
-  <span :class="['inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset', variantClasses[variant ?? 'neutral']]">
-    <span v-if="dot" :class="['h-1.5 w-1.5 rounded-full', dotClasses[variant ?? 'neutral']]" />
+  <span
+    :class="[
+      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
+      variantClasses[variant ?? 'neutral'],
+    ]"
+  >
+    <span v-if="dot" :class="['h-1.5 w-1.5 rounded-full shrink-0', dotClasses[variant ?? 'neutral']]" />
     <slot />
   </span>
 </template>

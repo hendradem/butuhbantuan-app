@@ -110,12 +110,16 @@ watch(query, (val) => {
         />
 
         <!-- Loading skeleton -->
-        <div v-if="loading" class="px-4 pt-3 space-y-3">
-          <div v-for="i in 4" :key="i" class="flex items-start gap-3 animate-pulse">
-            <div class="w-4 h-4 bg-gray-200 rounded-full mt-1 shrink-0" />
+        <div v-if="loading" class="divide-y divide-gray-100">
+          <div
+            v-for="i in 4"
+            :key="i"
+            class="w-full px-4 py-3 flex items-start gap-3 animate-pulse"
+          >
+            <div class="w-4 h-4 bg-red-100 rounded-sm mt-0.5 shrink-0" />
             <div class="flex-1 space-y-2">
-              <div class="h-3 bg-gray-200 rounded w-3/4" />
-              <div class="h-3 bg-gray-100 rounded w-1/2" />
+              <div class="h-3.5 bg-neutral-200 rounded w-4/5" />
+              <div class="h-3 bg-neutral-100 rounded w-1/2" />
             </div>
           </div>
         </div>

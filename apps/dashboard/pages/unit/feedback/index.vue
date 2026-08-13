@@ -1,23 +1,37 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
 
-definePageMeta({ layout: "unit", title: "Feedback" });
+definePageMeta({ layout: "unit", title: "Arsip Feedback", keepalive: true });
 
 const { unitHeaders, logout } = useUnitAuth();
 const config = useRuntimeConfig();
 const baseUrl = config.public.apiBaseUrl as string;
 
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, pending, error, refresh: refreshFeedback } = await useAsyncData(
   "unit-feedback",
   () => $fetch<{ data: any[] }>(`${baseUrl}/api/v1/unit/feedback`, { headers: unitHeaders() }),
   { server: false }
 );
+
+const refresh = useSoftRefresh(refreshFeedback);
+const showSkeleton = computed(() => isInitialPending(pending.value, data.value));
 
 watch(error, (err: any) => {
   if (err?.status === 401 || err?.statusCode === 401) logout();
 });
 
 const feedbacks = computed(() => data.value?.data ?? []);
+
+const search = usePersistedQueryParam("bb-unit-feedback-q", "q", "", { syncQuery: false });
+const filteredFeedbacks = computed(() => {
+  const q = search.value.trim().toLowerCase();
+  if (!q) return feedbacks.value;
+  return feedbacks.value.filter(
+    (f: any) =>
+      f.comment?.toLowerCase().includes(q) ||
+      String(f.call_type || "").toLowerCase().includes(q),
+  );
+});
 
 const stats = computed(() => {
   const list = feedbacks.value;
@@ -50,14 +64,30 @@ const CALL_LABELS: Record<string, string> = {
 <template>
   <div>
     <!-- Header -->
-    <div class="border-b border-neutral-200 bg-white px-4 sm:px-6 py-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-lg font-semibold text-neutral-900">Feedback Layanan</h1>
-          <p class="text-sm text-neutral-500 mt-0.5">Penilaian dari masyarakat yang menggunakan layanan Anda</p>
+    <div class="page-subheader">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex items-center gap-3 min-w-0">
+          <NuxtLink
+            to="/unit/settings"
+            class="flex items-center justify-center w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 transition-colors shrink-0"
+          >
+            <Icon icon="lucide:arrow-left" class="text-neutral-700 text-sm" />
+          </NuxtLink>
+          <div class="min-w-0">
+            <h1 class="page-subheader-title">Arsip Feedback</h1>
+            <p class="page-subheader-desc truncate">
+              Semua penilaian warga · biasanya dari detail pesanan
+            </p>
+          </div>
         </div>
-        <UiButton variant="secondary" size="sm" @click="refresh()">
-          <Icon icon="lucide:refresh-cw" class="text-sm" />
+        <UiButton
+          variant="secondary"
+          size="sm"
+          class="w-full sm:w-auto justify-center"
+          :disabled="pending && !!data"
+          @click="refresh()"
+        >
+          <Icon icon="lucide:refresh-cw" class="text-sm" :class="{ 'animate-spin': pending }" />
           Refresh
         </UiButton>
       </div>
@@ -67,37 +97,68 @@ const CALL_LABELS: Record<string, string> = {
 
       <!-- Stats -->
       <div class="grid grid-cols-3 gap-3">
-        <div class="bg-white rounded-xl border border-neutral-200 p-4 text-center">
-          <p class="text-xs text-neutral-500 font-medium">Total Feedback</p>
-          <p class="text-2xl font-bold text-neutral-900 mt-1">{{ stats.total }}</p>
-        </div>
-        <div class="bg-white rounded-xl border border-neutral-200 p-4 text-center">
-          <p class="text-xs text-neutral-500 font-medium">Unit Membantu</p>
-          <p class="text-2xl font-bold mt-1" :class="stats.unitHelpfulRate >= 70 ? 'text-green-600' : stats.unitHelpfulRate >= 40 ? 'text-yellow-600' : 'text-red-500'">
-            {{ stats.unitHelpfulRate }}%
-          </p>
-        </div>
-        <div class="bg-white rounded-xl border border-neutral-200 p-4 text-center">
-          <p class="text-xs text-neutral-500 font-medium">Aplikasi Berguna</p>
-          <p class="text-2xl font-bold mt-1" :class="stats.appHelpfulRate >= 70 ? 'text-green-600' : stats.appHelpfulRate >= 40 ? 'text-yellow-600' : 'text-red-500'">
-            {{ stats.appHelpfulRate }}%
-          </p>
-        </div>
+        <template v-if="showSkeleton">
+          <div
+            v-for="i in 3"
+            :key="`usk-${i}`"
+            class="bg-white rounded-xl border border-neutral-200 p-4 text-center space-y-2"
+          >
+            <div class="soft-skel h-2.5 w-16 mx-auto" />
+            <div class="soft-skel h-7 w-12 mx-auto" />
+          </div>
+        </template>
+        <template v-else>
+          <div class="bg-white rounded-xl border border-neutral-200 p-4 text-center">
+            <p class="text-xs text-neutral-500 font-medium">Total Feedback</p>
+            <p class="text-2xl font-bold text-neutral-900 mt-1">{{ stats.total }}</p>
+          </div>
+          <div class="bg-white rounded-xl border border-neutral-200 p-4 text-center">
+            <p class="text-xs text-neutral-500 font-medium">Unit Membantu</p>
+            <p class="text-2xl font-bold mt-1" :class="stats.unitHelpfulRate >= 70 ? 'text-green-600' : stats.unitHelpfulRate >= 40 ? 'text-yellow-600' : 'text-red-500'">
+              {{ stats.unitHelpfulRate }}%
+            </p>
+          </div>
+          <div class="bg-white rounded-xl border border-neutral-200 p-4 text-center">
+            <p class="text-xs text-neutral-500 font-medium">Aplikasi Berguna</p>
+            <p class="text-2xl font-bold mt-1" :class="stats.appHelpfulRate >= 70 ? 'text-green-600' : stats.appHelpfulRate >= 40 ? 'text-yellow-600' : 'text-red-500'">
+              {{ stats.appHelpfulRate }}%
+            </p>
+          </div>
+        </template>
       </div>
 
       <!-- Feedback list -->
-      <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-        <div class="px-4 sm:px-5 py-3 border-b border-neutral-100 flex items-center gap-2">
-          <Icon icon="lucide:message-square" class="text-neutral-400 text-sm" />
-          <p class="text-sm font-medium text-neutral-700">Riwayat Feedback</p>
+      <UiTableCard>
+        <template #toolbar>
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2.5 w-full min-w-0">
+            <p class="text-sm font-medium text-neutral-700 sm:mr-auto shrink-0">
+              Riwayat feedback
+            </p>
+            <UiSearchInput
+              v-model="search"
+              placeholder="Cari komentar..."
+              class="w-full sm:w-[220px] sm:max-w-xs"
+            />
+          </div>
+        </template>
+
+        <div v-if="showSkeleton" class="divide-y divide-neutral-100">
+          <div
+            v-for="i in 4"
+            :key="`fbrow-${i}`"
+            class="px-4 sm:px-5 py-4 space-y-3"
+          >
+            <div class="flex items-center gap-2">
+              <div class="soft-skel h-5 rounded-full w-20" />
+              <div class="soft-skel h-5 rounded-full w-24" />
+              <div class="soft-skel h-5 rounded-full w-16" />
+              <div class="soft-skel h-2.5 w-16 ml-auto" />
+            </div>
+            <div class="soft-skel h-3 w-4/5" />
+          </div>
         </div>
 
-        <div v-if="pending" class="flex items-center justify-center py-16 gap-2 text-neutral-400 text-sm">
-          <UiSpinner size="sm" />
-          Memuat...
-        </div>
-
-        <div v-else-if="!feedbacks.length" class="py-2">
+        <div v-else-if="!filteredFeedbacks.length" class="py-2">
           <UiEmptyState title="Belum ada feedback" description="Feedback akan muncul di sini setelah layanan selesai ditangani.">
             <template #icon>
               <Icon icon="lucide:message-square-off" class="text-neutral-400 text-2xl" />
@@ -107,7 +168,7 @@ const CALL_LABELS: Record<string, string> = {
 
         <div v-else class="divide-y divide-neutral-100">
           <div
-            v-for="fb in feedbacks"
+            v-for="fb in filteredFeedbacks"
             :key="fb.id"
             class="px-4 sm:px-5 py-4 hover:bg-neutral-50 transition-colors"
           >
@@ -155,7 +216,7 @@ const CALL_LABELS: Record<string, string> = {
             </p>
           </div>
         </div>
-      </div>
+      </UiTableCard>
 
     </div>
   </div>

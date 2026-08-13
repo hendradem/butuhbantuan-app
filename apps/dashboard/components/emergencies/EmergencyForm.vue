@@ -25,6 +25,11 @@ const props = defineProps<{
     lng: string;
     is_dispatcher: boolean;
     is_province_dispatcher: boolean;
+    partner_tier: string;
+    trained_driver: boolean;
+    has_oxygen: boolean;
+    has_stretcher: boolean;
+    equipment_notes: string;
     type_of_service: string;
     tipe_emergency: string[];
     is_active: boolean;
@@ -36,9 +41,18 @@ const props = defineProps<{
   };
 }>();
 
+const partnerTierOptions = [
+  { value: "psc", title: "Resmi", desc: "PSC 119, Damkar, Basarnas, SPGDT — prioritas tertinggi" },
+  { value: "verified", title: "Terverifikasi", desc: "Unit komunitas yang sudah diverifikasi (mis. PMI)" },
+  { value: "community", title: "Komunitas", desc: "Unit informal / grup WA — default" },
+] as const;
+
+function setPartnerTier(value: string) {
+  props.form.partner_tier = value;
+}
+
 const config = useRuntimeConfig();
 const baseUrl = config.public.apiBaseUrl as string;
-const ic = "w-full pl-8 pr-3 py-2.5 text-sm border border-neutral-300 rounded-lg bg-neutral-50 text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-4 focus:ring-primary-100 focus:border-primary-500 transition-colors";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const authToken = useCookie<string | null>("dashboard-token");
@@ -96,7 +110,9 @@ watch(() => props.form.province_id, async (v) => {
 async function fetchProvinces() {
   provincesLoading.value = true;
   try {
-    const res = await $fetch<{ data: any[] }>(`${baseUrl}/api/v1/service/province`);
+    const res = await $fetch<{ data: any[] }>(
+      `${baseUrl}/api/v1/service/province?covered_only=1`
+    );
     provinces.value = res.data ?? [];
   } catch {
     provinces.value = [];
@@ -110,7 +126,7 @@ async function fetchRegenciesByProvince(provinceId: string) {
   regenciesLoading.value = true;
   try {
     const res = await $fetch<{ data: any[] }>(
-      `${baseUrl}/api/v1/service/regency?province_id=${provinceId}`
+      `${baseUrl}/api/v1/service/regency?province_id=${provinceId}&covered_only=1`
     );
     regencies.value = res.data ?? [];
   } catch {
@@ -149,11 +165,19 @@ const addrDropStyle = computed(() => {
   const el = addressInputRef.value;
   if (!el) return {};
   const rect = el.getBoundingClientRect();
-  return {
-    top: `${rect.bottom + 4}px`,
-    left: `${rect.left}px`,
-    width: `${rect.width}px`,
-  };
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const openUp = spaceBelow < 220 && rect.top > spaceBelow;
+  return openUp
+    ? {
+        bottom: `${window.innerHeight - rect.top + 4}px`,
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+      }
+    : {
+        top: `${rect.bottom + 4}px`,
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+      };
 });
 
 let addrTimer: ReturnType<typeof setTimeout>;
@@ -200,7 +224,7 @@ function selectAddress(item: any) {
 </script>
 
 <template>
-  <div class="space-y-5 max-h-[65vh] overflow-y-auto pr-1">
+  <div class="space-y-5 pr-1">
 
     <!-- Basic Info -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -295,17 +319,17 @@ function selectAddress(item: any) {
 
       <!-- Province → Regency cascade -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-        <UiFormField label="Provinsi">
+        <UiFormField label="Provinsi (wilayah tercakup)">
           <UiSelect
             v-model="selectedProvinceId"
             :disabled="provincesLoading"
-            :placeholder="provincesLoading ? 'Memuat...' : 'Pilih provinsi'"
+            :placeholder="provincesLoading ? 'Memuat...' : (provinces.length ? 'Pilih provinsi' : 'Belum ada wilayah tercakup')"
             @change="onProvinceChange"
           >
             <option v-for="p in provinces" :key="p.id" :value="p.id">{{ p.name }}</option>
           </UiSelect>
         </UiFormField>
-        <UiFormField label="Kabupaten / Kota">
+        <UiFormField label="Kabupaten / Kota (tercakup)">
           <UiSelect
             v-model="form.regency_id"
             :disabled="!selectedProvinceId || regenciesLoading"
@@ -316,6 +340,10 @@ function selectAddress(item: any) {
           </UiSelect>
         </UiFormField>
       </div>
+      <p v-if="!provincesLoading && !provinces.length" class="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-3">
+        Belum ada wilayah tercakup. Tambah kab/kota dulu di menu
+        <NuxtLink to="/regions" class="font-semibold underline">Wilayah Tercakup</NuxtLink>.
+      </p>
 
       <!-- Full address -->
       <div class="mb-3">
@@ -329,22 +357,18 @@ function selectAddress(item: any) {
         <label class="block text-sm font-medium text-neutral-900 mb-2">
           Cari Alamat <span class="font-normal text-neutral-400 text-xs">(untuk mengisi koordinat otomatis)</span>
         </label>
-        <div class="relative">
-          <Icon icon="lucide:search" class="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 text-sm pointer-events-none" />
-          <input
-            ref="addressInputRef"
+        <div ref="addressInputRef" class="relative">
+          <UiSearchInput
             v-model="addressQuery"
-            type="text"
             placeholder="Ketik alamat lengkap..."
-            :class="ic"
             autocomplete="off"
-            @input="onAddressInput"
+            @update:model-value="onAddressInput"
             @blur="hideAddressDrop"
           />
           <Icon
             v-if="addressLoading"
             icon="lucide:loader-2"
-            class="animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 text-sm"
+            class="animate-spin absolute right-8 top-1/2 -translate-y-1/2 text-neutral-400 text-sm pointer-events-none z-10"
           />
         </div>
         <!-- Dropdown teleported outside overflow container -->
@@ -410,6 +434,74 @@ function selectAddress(item: any) {
           />
           <span class="text-sm text-neutral-700">Dispatcher tingkat provinsi</span>
         </label>
+      </div>
+    </div>
+
+    <!-- Partner tier -->
+    <div class="border-t border-neutral-100 pt-4">
+      <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">Tingkat Mitra</p>
+      <p class="text-xs text-neutral-400 mb-3">Kualitas &amp; kepercayaan — terpisah dari peran dispatcher cascade.</p>
+      <div class="space-y-2" role="radiogroup" aria-label="Tingkat mitra">
+        <label
+          v-for="opt in partnerTierOptions"
+          :key="opt.value"
+          class="flex items-start gap-2.5 cursor-pointer rounded-lg border px-3 py-2.5 transition-colors"
+          :class="form.partner_tier === opt.value ? 'border-primary-300 bg-primary-50/60' : 'border-neutral-200 hover:bg-neutral-50'"
+          @click.prevent="setPartnerTier(opt.value)"
+        >
+          <input
+            type="radio"
+            name="partner_tier"
+            :value="opt.value"
+            :checked="form.partner_tier === opt.value"
+            class="mt-0.5 w-4 h-4 border-neutral-300 text-primary-600 focus:ring-primary-500 pointer-events-none"
+            tabindex="-1"
+          />
+          <span>
+            <span class="block text-sm font-medium text-neutral-800">{{ opt.title }}</span>
+            <span class="block text-xs text-neutral-500 mt-0.5">{{ opt.desc }}</span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Readiness -->
+    <div class="border-t border-neutral-100 pt-4">
+      <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">Kesiapan di lapangan</p>
+      <p class="text-xs text-neutral-400 mb-3">Dipakai untuk ranking kandidat dispatch.</p>
+      <div class="space-y-2">
+        <label class="flex items-center gap-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+            :checked="form.trained_driver"
+            @change="form.trained_driver = ($event.target as HTMLInputElement).checked"
+          />
+          <span class="text-sm text-neutral-700">Sopir terlatih / bersertifikat</span>
+        </label>
+        <label class="flex items-center gap-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+            :checked="form.has_oxygen"
+            @change="form.has_oxygen = ($event.target as HTMLInputElement).checked"
+          />
+          <span class="text-sm text-neutral-700">Tersedia oksigen</span>
+        </label>
+        <label class="flex items-center gap-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+            :checked="form.has_stretcher"
+            @change="form.has_stretcher = ($event.target as HTMLInputElement).checked"
+          />
+          <span class="text-sm text-neutral-700">Tersedia brankar / stretcher</span>
+        </label>
+      </div>
+      <div class="mt-3">
+        <UiFormField label="Catatan peralatan (opsional)">
+          <UiInput v-model="form.equipment_notes" placeholder="Mis. AED, suction, incubator..." />
+        </UiFormField>
       </div>
     </div>
 

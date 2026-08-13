@@ -28,10 +28,10 @@ body {
 
 @layer components {
   .badge {
-    @apply bg-white text-gray-800 border border-gray-100 rounded-full text-xs font-medium p-[2px] px-2;
+    @apply inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-neutral-50 text-neutral-700 text-xs font-medium px-2.5 py-0.5;
   }
   .badge-icon {
-    @apply flex items-center;
+    @apply inline-flex items-center gap-1;
   }
   .searchbox {
     @apply bg-gray-100 border-0 text-gray-900 text-sm rounded-xl focus:border-0 focus:outline-none block w-full px-10 py-3 placeholder-gray-400 pr-[45px] truncate;
@@ -54,6 +54,24 @@ body {
   .bottom-sheet-shadow {
     box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.15);
   }
+
+  /* Soft skeleton — gentle shimmer, avoids harsh pulse flash */
+  .soft-skel {
+    @apply rounded-md bg-neutral-100/80;
+    background-image: linear-gradient(
+      90deg,
+      rgba(245, 245, 245, 0.55) 0%,
+      rgba(229, 229, 229, 0.9) 45%,
+      rgba(245, 245, 245, 0.55) 100%
+    );
+    background-size: 200% 100%;
+    animation: soft-skel-shimmer 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes soft-skel-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
 }
 
 /* Map markers */

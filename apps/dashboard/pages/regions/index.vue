@@ -1,16 +1,26 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import { placeAnchoredMenu } from "~/utils/placeAnchoredMenu";
 
-definePageMeta({ title: "Wilayah Tercakup" });
+definePageMeta({ title: "Wilayah Tercakup", keepalive: true });
 
 const { get, post, put, del } = useApi();
+const { loadProvinces } = useCoveredWilayah();
 const search = ref("");
 const page = ref(1);
 const pageSize = ref(10);
 
-const { data, pending, refresh } = await useAsyncData("regions-manage", () =>
+const { data, pending, refresh: refreshRegions } = await useAsyncData("regions-manage", () =>
   get<{ data: any[] }>("/api/v1/service/available-region")
 );
+
+const softRefresh = useSoftRefresh(refreshRegions);
+const showSkeleton = computed(() => isInitialPending(pending.value, data.value));
+
+async function refreshCoverage() {
+  await softRefresh();
+  await loadProvinces(true);
+}
 
 watch(search, () => { page.value = 1; });
 
@@ -39,7 +49,10 @@ function toggleDropdown(item: any, event: MouseEvent) {
   if (dropdownItem.value?.id === item.id) { dropdownItem.value = null; return; }
   const btn = event.currentTarget as HTMLElement;
   const rect = btn.getBoundingClientRect();
-  dropdownPos.value = { top: rect.bottom + 4, right: window.innerWidth - rect.right };
+  dropdownPos.value = (() => {
+    const pos = placeAnchoredMenu(rect, { menuHeight: 140, alignRight: true });
+    return { top: pos.top, right: pos.right };
+  })();
   dropdownItem.value = item;
 }
 
@@ -60,7 +73,7 @@ async function submitCreate() {
     });
     showCreate.value = false;
     Object.assign(createForm, { name: "", regency_id: "", latitude: "", longitude: "" });
-    await refresh();
+    await refreshCoverage();
   } finally {
     creating.value = false;
   }
@@ -94,7 +107,7 @@ async function submitEdit() {
       longitude: parseFloat(editForm.longitude) || 0,
     });
     showEdit.value = false;
-    await refresh();
+    await refreshCoverage();
   } finally {
     editing.value = false;
   }
@@ -116,7 +129,7 @@ async function executeDelete() {
   showDeleteConfirm.value = false;
   try {
     await del(`/api/v1/service/available-region/${deleteTarget.value.id}`);
-    await refresh();
+    await refreshCoverage();
   } finally {
     deletingId.value = null;
     deleteTarget.value = null;
@@ -130,13 +143,15 @@ async function executeDelete() {
     <div v-if="dropdownItem" class="fixed inset-0 z-[98]" @click="dropdownItem = null" />
 
     <!-- Page header -->
-    <div class="border-b border-neutral-200 bg-white px-4 sm:px-6 py-4">
+    <div class="page-subheader">
       <div class="flex items-center justify-between gap-4">
         <div>
-          <h1 class="text-xl font-semibold text-neutral-900">Wilayah Tercakup</h1>
-          <p class="text-sm text-neutral-500 mt-0.5">
-            <span v-if="pending">Memuat...</span>
-            <span v-else>{{ filtered.length }} dari {{ data?.data?.length ?? 0 }} wilayah terdaftar</span>
+          <h1 class="page-subheader-title">Wilayah Tercakup</h1>
+          <p class="page-subheader-desc">
+            <template v-if="showSkeleton">Memuat...</template>
+            <template v-else>
+              {{ filtered.length }} dari {{ data?.data?.length ?? 0 }} wilayah · cakupan layanan aktif
+            </template>
           </p>
         </div>
         <UiButton @click="showCreate = true">
@@ -148,46 +163,52 @@ async function executeDelete() {
 
     <!-- Table card -->
     <div class="p-4 sm:p-6">
-      <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden shadow-sm">
-
-        <!-- Toolbar inside card -->
-        <div class="px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3 border-b border-neutral-200">
-          <div class="relative flex-1 min-w-[160px] max-w-sm">
-            <Icon icon="lucide:search" class="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 text-sm pointer-events-none" />
-            <UiInput v-model="search" placeholder="Cari nama, kabupaten, provinsi..." class="pl-9" />
+      <UiTableCard>
+        <template #toolbar>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <UiSearchInput
+              v-model="search"
+              placeholder="Cari nama, kabupaten, provinsi..."
+              class="flex-1 min-w-[160px] max-w-sm"
+            />
+            <UiSelect v-model="pageSize" class="!w-auto" @change="page = 1">
+              <option :value="10">10 / halaman</option>
+              <option :value="25">25 / halaman</option>
+              <option :value="50">50 / halaman</option>
+            </UiSelect>
           </div>
-          <UiSelect v-model="pageSize" class="!w-auto" @change="page = 1">
-            <option :value="10">10 / halaman</option>
-            <option :value="25">25 / halaman</option>
-            <option :value="50">50 / halaman</option>
-          </UiSelect>
-        </div>
+        </template>
 
         <!-- Table -->
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
+        <UiTable>
             <thead>
-              <tr class="bg-neutral-50 border-b border-neutral-200 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
-                <th class="px-6 py-4 text-left">Nama Wilayah</th>
-                <th class="px-6 py-4 text-left hidden md:table-cell">Kabupaten/Kota</th>
-                <th class="px-6 py-4 text-left hidden lg:table-cell">Provinsi</th>
-                <th class="px-6 py-4 text-left hidden sm:table-cell">ID BPS</th>
-                <th class="px-6 py-4 text-right">Aksi</th>
+              <tr>
+                <th>Nama Wilayah</th>
+                <th>Kabupaten/Kota & Provinsi</th>
+                <th class="hidden sm:table-cell">Koordinat</th>
+                <th class="ui-th-right"><span class="sr-only">Aksi</span></th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-neutral-100">
+            <tbody>
               <!-- Skeleton -->
-              <tr v-if="pending" v-for="i in 5" :key="`skel-${i}`" class="animate-pulse">
-                <td class="px-6 py-4"><div class="h-4 bg-neutral-200 rounded w-40" /></td>
-                <td class="px-6 py-4 hidden md:table-cell"><div class="h-4 bg-neutral-100 rounded w-28" /></td>
-                <td class="px-6 py-4 hidden lg:table-cell"><div class="h-4 bg-neutral-100 rounded w-24" /></td>
-                <td class="px-6 py-4 hidden sm:table-cell"><div class="h-5 bg-neutral-100 rounded w-16" /></td>
-                <td class="px-6 py-4"><div class="h-9 bg-neutral-100 rounded-lg w-24 ml-auto" /></td>
+              <tr v-if="showSkeleton" v-for="i in 5" :key="`skel-${i}`">
+                <td>
+                  <div class="flex items-center gap-3">
+                    <div class="soft-skel w-8 h-8 rounded-lg shrink-0" />
+                    <div class="soft-skel h-4 w-36" />
+                  </div>
+                </td>
+                <td>
+                  <div class="soft-skel h-4 w-32 mb-1.5" />
+                  <div class="soft-skel h-3 w-24" />
+                </td>
+                <td class="hidden sm:table-cell"><div class="soft-skel h-4 w-28" /></td>
+                <td class="ui-td-right"><div class="soft-skel h-8 rounded-lg w-8 ml-auto" /></td>
               </tr>
 
               <!-- Empty -->
               <tr v-else-if="!paginated.length">
-                <td colspan="5">
+                <td colspan="4">
                   <UiEmptyState title="Belum ada wilayah" description="Tambah wilayah untuk mengaktifkan layanan darurat di area tersebut.">
                     <template #icon>
                       <Icon icon="lucide:map-pin-off" class="text-neutral-400 text-2xl" />
@@ -201,51 +222,48 @@ async function executeDelete() {
               </tr>
 
               <!-- Data rows -->
-              <tr v-else v-for="region in paginated" :key="region.id" class="hover:bg-neutral-50 transition-colors">
-                <td class="px-6 py-4">
+              <tr v-else v-for="region in paginated" :key="region.id">
+                <td>
                   <div class="flex items-center gap-3">
                     <div class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
                       <Icon icon="lucide:map-pin" class="text-emerald-600 text-sm" />
                     </div>
-                    <span class="font-semibold text-neutral-900">{{ region.name }}</span>
+                    <span class="ui-cell-title">{{ region.name }}</span>
                   </div>
                 </td>
-                <td class="px-6 py-4 hidden md:table-cell">
-                  <span class="text-sm text-neutral-700">{{ region.regency || '—' }}</span>
+                <td>
+                  <p class="ui-cell-title">{{ region.regency || '—' }}</p>
+                  <p class="ui-cell-desc">{{ region.province || '' }}</p>
                 </td>
-                <td class="px-6 py-4 hidden lg:table-cell">
-                  <span class="text-sm text-neutral-500">{{ region.province || '—' }}</span>
+                <td class="hidden sm:table-cell">
+                  <span v-if="region.latitude && region.longitude" class="ui-cell-mono text-xs">
+                    {{ Number(region.latitude).toFixed(4) }}, {{ Number(region.longitude).toFixed(4) }}
+                  </span>
+                  <span v-else class="text-sm text-neutral-300">—</span>
                 </td>
-                <td class="px-6 py-4 hidden sm:table-cell">
-                  <code class="text-xs bg-neutral-100 px-2 py-1 rounded font-mono text-neutral-700">
-                    {{ region.regency_id || '—' }}
-                  </code>
-                </td>
-                <td class="px-6 py-4 text-right">
+                <td class="ui-td-right">
                   <button
                     type="button"
-                    class="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-neutral-900 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 focus:outline-none focus:ring-4 focus:ring-neutral-100 transition-colors"
+                    class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-neutral-700 bg-white rounded-lg shadow-sm ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50 transition-colors"
                     @click.stop="toggleDropdown(region, $event)"
                   >
                     Aksi
-                    <Icon icon="lucide:chevron-down" class="text-xs text-neutral-500" />
+                    <Icon icon="lucide:chevron-down" class="text-sm text-neutral-500" />
                   </button>
                 </td>
               </tr>
             </tbody>
-          </table>
-        </div>
+        </UiTable>
 
-        <!-- Pagination -->
-        <div v-if="!pending && filtered.length" class="px-6 py-4 border-t border-neutral-200">
+        <template v-if="filtered.length" #footer>
           <UiPagination
             v-model:page="page"
             :total-pages="totalPages"
             :total="filtered.length"
             :page-size="pageSize"
           />
-        </div>
-      </div>
+        </template>
+      </UiTableCard>
     </div>
 
     <!-- Row dropdown (teleported) -->

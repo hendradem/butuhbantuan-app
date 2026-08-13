@@ -48,7 +48,18 @@ func (h *Hub) Subscribe(uuid string) (<-chan Event, func()) {
 }
 
 // Publish sends an event to all active subscribers for uuid. Never blocks.
+// Ops-relevant events also fan out to the admin broadcast channel.
 func (h *Hub) Publish(uuid string, event Event) {
+	h.publishTo(uuid, event)
+	if uuid != AdminChannel && (event.Type == "order_arrived" || event.Type == "new_order") {
+		h.publishTo(AdminChannel, event)
+	}
+}
+
+// AdminChannel receives fan-out ops events (e.g. order_arrived) for admin SSE.
+const AdminChannel = "__admin__"
+
+func (h *Hub) publishTo(uuid string, event Event) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for _, ch := range h.clients[uuid] {

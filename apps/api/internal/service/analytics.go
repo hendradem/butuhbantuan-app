@@ -38,6 +38,10 @@ func (s *NoopAnalyticsService) GetAnalytics(_ int) (domain.Analytics, error) {
 		ByHour:          []domain.HourStat{},
 		UnitPerformance: []domain.UnitPerformance{},
 		RegionStats:     []domain.RegionStat{},
+		DispatchFunnel:  []domain.FunnelStage{},
+		FunnelDrops:     []domain.FunnelDrop{},
+		ResponseSla:     []domain.SlaBucket{},
+		ArrivalSla:      []domain.SlaBucket{},
 	}, nil
 }
 

@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { toast } from "vue3-hot-toast";
 import { convertPhoneNumber } from "~/utils/convertPhoneNumber";
+import { appToast } from "~/utils/appToast";
+import { closeAllSheets } from "~/utils/closeAllSheets";
 
 const orderSheet = useOrderSheetStore();
 const userLocation = useUserLocationStore();
 const config = useRuntimeConfig();
+const toast = appToast();
+const { name, phone, load: loadProfile, save: saveProfile } = useRequesterProfile();
 
-const name = ref("");
-const phone = ref("");
 const location = ref("");
 const condition = ref("");
 const submitting = ref(false);
@@ -17,8 +18,7 @@ const { photoPreview, uploading: uploadingPhoto, uploadError, selectPhoto, uploa
 
 watch(() => orderSheet.isOpen, (v) => {
   if (v) {
-    name.value = "";
-    phone.value = "";
+    loadProfile();
     location.value = userLocation.fullAddress ?? "";
     condition.value = "";
     removePhoto();
@@ -28,7 +28,7 @@ watch(() => orderSheet.isOpen, (v) => {
 async function submit() {
   if (!name.value || !phone.value) return;
   submitting.value = true;
-  const toastId = toast.loading("Membuat laporan...");
+  toast.loading("Membuat laporan...");
   try {
     const photoUrl = await uploadPhoto(config.public.apiBaseUrl as string);
     const res = await $fetch<{ data: { ticket_number: string } }>(`${config.public.apiBaseUrl}/api/v1/order/`, {
@@ -45,20 +45,23 @@ async function submit() {
         requester_lng: userLocation.long,
       },
     });
-    toast.dismiss(toastId);
+    toast.dismiss();
+
+    saveProfile();
 
     const ticketNumber = res.data?.ticket_number ?? "";
     const callType = orderSheet.callType;
     const callNumber = orderSheet.callNumber;
 
-    orderSheet.onClose();
+    // Close every sheet before leaving so home is clean if user returns
+    closeAllSheets();
 
     const params = new URLSearchParams();
     if (callType) params.set("via", callType);
     if (callNumber) params.set("to", convertPhoneNumber(callNumber));
-    await navigateTo(`/ticket/${ticketNumber}?${params.toString()}`);
+    await navigateTo(`/ticket/${ticketNumber}?${params.toString()}`, { replace: true });
   } catch {
-    toast.error("Gagal membuat laporan", { id: toastId });
+    toast.error("Gagal membuat laporan");
   } finally {
     submitting.value = false;
   }

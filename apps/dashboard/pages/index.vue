@@ -1,9 +1,38 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import { Bar, Doughnut, Line } from "vue-chartjs";
+import type { HeatPoint } from "~/components/analytics/HeatmapViz.vue";
 
-definePageMeta({ title: "Overview" });
+definePageMeta({ title: "Overview", keepalive: true });
 
-const { get, authGet } = useApi();
+const { get, authGet, baseUrl } = useApi();
+const { token } = useAuth();
+
+const PERIOD_VALUES = ["7", "30", "90"] as const;
+const { tab: periodTab, setTab: setPeriodTab } = usePersistedTab("bb-overview-period", "30", PERIOD_VALUES, "period");
+const period = computed(() => Number(periodTab.value) || 30);
+function setPeriod(v: number) {
+  setPeriodTab(String(v) as "7" | "30" | "90");
+}
+const periodOptions = [
+  { label: "7 Hari", value: 7 },
+  { label: "30 Hari", value: 30 },
+  { label: "90 Hari", value: 90 },
+];
+
+const HM_VALUES = ["1", "7", "30", "180", "365"] as const;
+const { tab: hmPeriodTab, setTab: setHmPeriodTab } = usePersistedTab("bb-overview-hm-period", "30", HM_VALUES, "hm");
+const hmPeriod = computed(() => Number(hmPeriodTab.value) || 30);
+function setHmPeriod(v: number) {
+  setHmPeriodTab(String(v) as (typeof HM_VALUES)[number]);
+}
+const hmPeriodOptions = [
+  { label: "Hari Ini", value: 1 },
+  { label: "Minggu", value: 7 },
+  { label: "Bulan", value: 30 },
+  { label: "6 Bulan", value: 180 },
+  { label: "1 Tahun", value: 365 },
+];
 
 const { data: emergencies } = await useAsyncData("emergencies-all", () =>
   get<{ data: any[] }>("/api/v1/emergency/")
@@ -11,349 +40,796 @@ const { data: emergencies } = await useAsyncData("emergencies-all", () =>
 const { data: types } = await useAsyncData("types-all", () =>
   get<{ data: any[] }>("/api/v1/emergency/type")
 );
-const { data: regions } = await useAsyncData("regions-all", () =>
-  get<{ data: any[] }>("/api/v1/service/available-region")
-);
-const { data: feedbackStats } = await useAsyncData("feedback-stats", () =>
-  get<{ data: { total: number; unit_helpful_rate: number; app_helpful_rate: number } }>("/api/v1/feedback/stats")
-);
-const { data: feedbackList } = await useAsyncData("feedback-list", () =>
-  authGet<{ data: any[] }>("/api/v1/feedback/")
-);
-const { data: ordersData } = await useAsyncData("overview-orders", () =>
-  authGet<{ data: any[] }>("/api/v1/admin/orders"),
+const { data: ordersData } = await useAsyncData(
+  "overview-orders",
+  () => authGet<{ data: any[] }>("/api/v1/admin/orders"),
   { server: false }
 );
+
+const { data: analyticsRaw, pending: analyticsPending } = await useAsyncData(
+  computed(() => `overview-analytics-${period.value}`),
+  () => $fetch<{ data: any }>(`${baseUrl}/api/v1/admin/analytics?period=${period.value}`, {
+    headers: token.value ? { "X-Admin-Key": token.value } : {},
+  }).then(r => r.data),
+  {
+    server: false,
+    watch: [period],
+    getCachedData: () => undefined,
+  },
+);
+
+const { data: hmRaw, pending: hmPending, refresh: refreshHeatmapRaw } = await useAsyncData(
+  computed(() => `overview-heatmap-${hmPeriod.value}`),
+  () =>
+    $fetch<{ data: HeatPoint[] }>(
+      `${baseUrl}/api/v1/admin/analytics/heatmap?period=${hmPeriod.value}`,
+      { headers: token.value ? { "X-Admin-Key": token.value } : {} },
+    ).then((r) => r.data ?? []),
+  {
+    server: false,
+    watch: [hmPeriod],
+    // Nuxt 3.21 granular cache can reuse stale payload on watch — always refetch by period.
+    getCachedData: () => undefined,
+  },
+);
+
+const refreshHeatmap = useSoftRefresh(refreshHeatmapRaw);
+
+watch(hmPeriod, () => {
+  refreshHeatmap();
+});
+
 const orders = computed(() => ordersData.value?.data ?? []);
 
-const emergencyMap = computed(() => {
-  const m: Record<string, any> = {};
-  for (const e of (emergencies.value?.data ?? [])) m[e.id] = e;
-  return m;
-});
+/** Keep last good analytics so period/refresh never blitzes the overview. */
+const lastAnalytics = shallowRef<any>(null);
+watch(
+  analyticsRaw,
+  (v) => {
+    if (v != null) lastAnalytics.value = v;
+  },
+  { immediate: true },
+);
+const analytics = computed(() => analyticsRaw.value ?? lastAnalytics.value);
+const showAnalyticsSkeleton = computed(
+  () => analyticsPending.value && lastAnalytics.value == null,
+);
 
-const unitOrderCounts = computed(() => {
-  const counts: Record<string, { emergency: any; pending: number; active: number; total: number }> = {};
-  for (const o of orders.value) {
-    const em = emergencyMap.value[o.emergency_uuid];
-    if (!em) continue;
-    const coords = em.coordinates as [string, string];
-    const lat = parseFloat(coords[1]);
-    const lng = parseFloat(coords[0]);
-    if (!lat || !lng) continue;
-    if (!counts[o.emergency_uuid]) counts[o.emergency_uuid] = { emergency: em, pending: 0, active: 0, total: 0 };
-    counts[o.emergency_uuid].total++;
-    if (o.status === "pending") counts[o.emergency_uuid].pending++;
-    if (o.status === "accepted" || o.status === "in_progress") counts[o.emergency_uuid].active++;
-  }
-  return Object.values(counts);
-});
+const lastHeatmap = shallowRef<HeatPoint[]>([]);
+watch(
+  hmRaw,
+  (v) => {
+    if (v != null) lastHeatmap.value = v;
+  },
+  { immediate: true },
+);
 
-// ── Map ───────────────────────────────────────────────────────────────────────
-const mapEl = ref<HTMLDivElement | null>(null);
-let mapInstance: any = null;
-let markerLayer: any = null;
+const summary = computed(() => analytics.value?.summary ?? {});
+const heatmapPoints = computed(() => hmRaw.value ?? lastHeatmap.value);
 
-function markerColor(entry: { pending: number; active: number }) {
-  if (entry.pending > 0) return "#ef4444";
-  if (entry.active > 0) return "#f97316";
-  return "#22c55e";
-}
-
-async function initMap() {
-  if (!mapEl.value || mapInstance) return;
-  const L = (await import("leaflet")).default;
-  await import("leaflet/dist/leaflet.css");
-  mapInstance = L.map(mapEl.value, { zoomControl: true, attributionControl: false }).setView([-7.6, 110.1], 7);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(mapInstance);
-  markerLayer = L.layerGroup().addTo(mapInstance);
-  updateMarkers(L);
-}
-
-function updateMarkers(L: any) {
-  if (!markerLayer) return;
-  markerLayer.clearLayers();
-  for (const entry of unitOrderCounts.value) {
-    const coords = entry.emergency.coordinates as [string, string];
-    const lat = parseFloat(coords[1]);
-    const lng = parseFloat(coords[0]);
-    if (!lat || !lng) continue;
-    const color = markerColor(entry);
-    const size = Math.min(20 + entry.total * 4, 44);
-    const pulseHtml = entry.pending > 0 || entry.active > 0
-      ? `<span class="pulse-ring" style="background:${color}20;animation:pulse-ring 1.6s ease-out infinite;"></span>`
-      : "";
-    const icon = L.divIcon({
-      className: "",
-      html: `<div style="position:relative;display:flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;">${pulseHtml}<div style="width:${Math.round(size*0.55)}px;height:${Math.round(size*0.55)}px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 2px 6px ${color}80;position:relative;z-index:1;display:flex;align-items:center;justify-content:center;color:white;font-size:9px;font-weight:700;">${entry.total}</div></div>`,
-      iconSize: [size, size], iconAnchor: [size / 2, size / 2],
-    });
-    const marker = L.marker([lat, lng], { icon });
-    marker.bindTooltip(
-      `<div style="font-size:12px;line-height:1.5;"><strong>${entry.emergency.name}</strong><br>${entry.total} pesanan · ${entry.pending} pending · ${entry.active} diproses</div>`,
-      { direction: "top", offset: [0, -size / 2] }
-    );
-    markerLayer.addLayer(marker);
-  }
-}
-
-watch(mapEl, (el) => { if (el && !mapInstance) initMap(); });
-watch(unitOrderCounts, async () => {
-  if (mapInstance) { const L = (await import("leaflet")).default; updateMarkers(L); }
-});
-onBeforeUnmount(() => { if (mapInstance) { mapInstance.remove(); mapInstance = null; } });
-
-const stats = computed(() => [
+const inventoryStats = computed(() => [
   {
-    label: "Total Layanan",
+    label: "Layanan",
     value: emergencies.value?.data?.length ?? 0,
-    sub: "layanan terdaftar",
     icon: "lucide:shield-check",
     color: "text-primary-600 bg-primary-50",
-    trend: null,
   },
   {
-    label: "Jenis Layanan",
+    label: "Jenis",
     value: types.value?.data?.length ?? 0,
-    sub: "kategori aktif",
     icon: "lucide:tag",
     color: "text-violet-600 bg-violet-50",
-    trend: null,
-  },
-  {
-    label: "Wilayah Tercakup",
-    value: regions.value?.data?.length ?? 0,
-    sub: "kota/kabupaten",
-    icon: "lucide:map-pin",
-    color: "text-emerald-600 bg-emerald-50",
-    trend: null,
   },
   {
     label: "Dispatcher",
     value: emergencies.value?.data?.filter((e: any) => e.is_dispatcher).length ?? 0,
-    sub: "pusat panggilan",
     icon: "lucide:phone-call",
     color: "text-orange-600 bg-orange-50",
-    trend: null,
   },
   {
-    label: "Total Panggilan",
-    value: feedbackStats.value?.data?.total ?? 0,
-    sub: "dari pengguna",
-    icon: "lucide:star",
-    color: "text-yellow-600 bg-yellow-50",
-    trend: null,
+    label: "Pending",
+    value: orders.value.filter((o: any) => o.status === "pending").length,
+    icon: "lucide:clock",
+    color: "text-emergency-600 bg-emergency-50",
   },
 ]);
 
-const recentEmergencies = computed(() => (emergencies.value?.data ?? []).slice(0, 8));
+const topUnits = computed(() => (analytics.value?.unit_performance ?? []).slice(0, 5));
+const regionStats = computed(() => (analytics.value?.region_stats ?? []).slice(0, 5));
 
-const typeBreakdown = computed(() =>
-  (types.value?.data ?? []).map((t: any) => ({
-    ...t,
-    count: (emergencies.value?.data ?? []).filter((e: any) => e.emergency_type?.name === t.name).length,
-  }))
-);
+/** Slowest accept units (avg created→accepted) — ops heatmap-style insight without new API. */
+const slowAcceptUnits = computed(() => {
+  const list: any[] = analytics.value?.unit_performance ?? [];
+  return [...list]
+    .filter((u) => (u.total_orders ?? 0) >= 1 && (u.avg_response_sec ?? 0) > 0)
+    .sort((a, b) => (b.avg_response_sec ?? 0) - (a.avg_response_sec ?? 0))
+    .slice(0, 6);
+});
 
-function typeBadgeColor(name: string) {
-  const m: Record<string, string> = {
-    Ambulance:    "bg-red-100 text-red-800",
-    Damkar:       "bg-orange-100 text-orange-800",
-    "Rumah Sakit":"bg-blue-100 text-blue-800",
-    SAR:          "bg-green-100 text-green-800",
-  };
-  return m[name] ?? "bg-neutral-100 text-neutral-700";
+const slowAcceptByType = computed(() => {
+  const list: any[] = analytics.value?.unit_performance ?? [];
+  const byType = new Map<string, { type: string; avg: number; n: number; worst: string }>();
+  for (const u of list) {
+    const type = String(u.emergency_type || "Lainnya").trim() || "Lainnya";
+    const sec = Number(u.avg_response_sec) || 0;
+    if (sec <= 0) continue;
+    const cur = byType.get(type);
+    if (!cur) {
+      byType.set(type, { type, avg: sec, n: 1, worst: u.unit_name || "—" });
+    } else {
+      const nextN = cur.n + 1;
+      const nextAvg = (cur.avg * cur.n + sec) / nextN;
+      byType.set(type, {
+        type,
+        avg: nextAvg,
+        n: nextN,
+        worst: sec > cur.avg ? (u.unit_name || cur.worst) : cur.worst,
+      });
+    }
+  }
+  return [...byType.values()].sort((a, b) => b.avg - a.avg).slice(0, 5);
+});
+
+const peakHour = computed(() => {
+  const hours: any[] = analytics.value?.by_hour ?? [];
+  if (!hours.length) return null;
+  let best = hours[0];
+  for (const h of hours) {
+    if ((h.count ?? 0) > (best.count ?? 0)) best = h;
+  }
+  if (!best || !best.count) return null;
+  return best;
+});
+
+const busiestType = computed(() => {
+  const list: any[] = analytics.value?.by_type ?? [];
+  if (!list.length) return null;
+  return [...list].sort((a, b) => (b.count ?? 0) - (a.count ?? 0))[0] ?? null;
+});
+
+function fmtSec(sec: number): string {
+  if (!sec || sec <= 0) return "—";
+  if (sec < 60) return `${Math.round(sec)}d`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m`;
+  return `${(sec / 3600).toFixed(1)}j`;
 }
+
+function fmtPct(v: number): string {
+  return v > 0 ? `${v.toFixed(1)}%` : "—";
+}
+
+function fmtHour(h: number): string {
+  return `${String(h).padStart(2, "0")}:00`;
+}
+
+function statusLabel(s: string): string {
+  const m: Record<string, string> = {
+    pending: "Menunggu", accepted: "Diterima", in_progress: "Diproses",
+    completed: "Selesai", cancelled: "Dibatal",
+  };
+  return m[s] ?? s;
+}
+
+function statusColor(s: string): string {
+  const m: Record<string, string> = {
+    pending: "#f59e0b", accepted: "#3b82f6", in_progress: "#f97316",
+    completed: "#22c55e", cancelled: "#9ca3af",
+  };
+  return m[s] ?? "#e5e7eb";
+}
+
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+};
+
+const trendData = computed(() => {
+  const trend: any[] = analytics.value?.daily_trend ?? [];
+  return {
+    labels: trend.map((d: any) => {
+      const dt = new Date(d.date);
+      return dt.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+    }),
+    datasets: [{
+      label: "Pesanan",
+      data: trend.map((d: any) => d.count),
+      borderColor: "#dc2626",
+      backgroundColor: "rgba(220,38,38,0.08)",
+      borderWidth: 2,
+      pointRadius: 2,
+      pointBackgroundColor: "#dc2626",
+      tension: 0.35,
+      fill: true,
+    }],
+  };
+});
+
+const trendOptions = computed(() => ({
+  ...chartDefaults,
+  plugins: {
+    ...chartDefaults.plugins,
+    tooltip: { callbacks: { label: (ctx: any) => ` ${ctx.parsed.y} pesanan` } },
+  },
+  scales: {
+    x: { grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 8 } },
+    y: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } },
+  },
+}));
+
+const statusData = computed(() => {
+  const breakdown: any[] = analytics.value?.status_breakdown ?? [];
+  return {
+    labels: breakdown.map((s: any) => statusLabel(s.status)),
+    datasets: [{
+      data: breakdown.map((s: any) => s.count),
+      backgroundColor: breakdown.map((s: any) => statusColor(s.status)),
+      borderWidth: 2,
+      borderColor: "#fff",
+    }],
+  };
+});
+
+const doughnutOptions = {
+  ...chartDefaults,
+  plugins: {
+    legend: {
+      display: true,
+      position: "bottom" as const,
+      labels: { font: { size: 11 }, boxWidth: 10 },
+    },
+  },
+  cutout: "68%",
+};
+
+const typeData = computed(() => {
+  const list: any[] = analytics.value?.by_type ?? [];
+  return {
+    labels: list.map((t: any) => t.type),
+    datasets: [{
+      label: "Pesanan",
+      data: list.map((t: any) => t.count),
+      backgroundColor: "#dc2626",
+      borderRadius: 4,
+    }],
+  };
+});
+
+const typeOptions = computed(() => ({
+  ...chartDefaults,
+  indexAxis: "y" as const,
+  scales: {
+    x: { beginAtZero: true, ticks: { precision: 0, font: { size: 11 } } },
+    y: { ticks: { font: { size: 11 } } },
+  },
+}));
+
+const hourData = computed(() => {
+  const hours: any[] = analytics.value?.by_hour ?? [];
+  const counts = Array(24).fill(0);
+  hours.forEach((h: any) => { counts[h.hour] = h.count; });
+  const maxVal = Math.max(...counts, 0);
+  return {
+    labels: Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}`),
+    datasets: [{
+      label: "Pesanan",
+      data: counts,
+      backgroundColor: counts.map(c => (c === maxVal && maxVal > 0 ? "#dc2626" : "#fca5a5")),
+      borderRadius: 3,
+    }],
+  };
+});
+
+const hourOptions = computed(() => ({
+  ...chartDefaults,
+  scales: {
+    x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 0 } },
+    y: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } },
+  },
+}));
+
+const funnelStages = computed(() => analytics.value?.dispatch_funnel ?? []);
+const funnelDrops = computed(() => analytics.value?.funnel_drops ?? []);
+const funnelMax = computed(() => Math.max(1, ...funnelStages.value.map((s: any) => s.count ?? 0)));
+
+function funnelPct(count: number, prev?: number): string {
+  if (prev == null || prev <= 0) return count > 0 ? "100%" : "—";
+  return `${Math.round((count / prev) * 100)}%`;
+}
+
+const FUNNEL_COLORS = ["#fecaca", "#fca5a5", "#f87171", "#ef4444", "#dc2626"];
+
+const slaData = computed(() => {
+  const response: any[] = analytics.value?.response_sla ?? [];
+  const arrival: any[] = analytics.value?.arrival_sla ?? [];
+  const labels = response.length
+    ? response.map((b: any) => b.label)
+    : arrival.map((b: any) => b.label);
+  return {
+    labels,
+    datasets: [
+      {
+        label: "Respons (masuk→terima)",
+        data: response.map((b: any) => b.count),
+        backgroundColor: "#3b82f6",
+        borderRadius: 4,
+      },
+      {
+        label: "Tiba (terima→lokasi)",
+        data: arrival.map((b: any) => b.count),
+        backgroundColor: "#f97316",
+        borderRadius: 4,
+      },
+    ],
+  };
+});
+
+const slaOptions = computed(() => ({
+  ...chartDefaults,
+  plugins: {
+    legend: {
+      display: true,
+      position: "bottom" as const,
+      labels: { font: { size: 11 }, boxWidth: 10 },
+    },
+    tooltip: {
+      callbacks: {
+        label: (ctx: any) => ` ${ctx.dataset.label}: ${ctx.parsed.y}`,
+      },
+    },
+  },
+  scales: {
+    x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+    y: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } },
+  },
+}));
 </script>
 
 <template>
   <div>
-    <!-- Page header -->
-    <div class="border-b border-neutral-200 bg-white px-6 py-4">
-      <div class="flex items-center justify-between">
+    <div class="page-subheader">
+      <div class="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 class="text-xl font-semibold text-neutral-900">Overview</h1>
-          <p class="text-sm text-neutral-500 mt-0.5">Ringkasan data sistem ButuhBantuan</p>
+          <h1 class="page-subheader-title">Overview</h1>
+          <p class="page-subheader-desc">Ringkasan operasional & sebaran pesanan</p>
         </div>
-        <UiBadge variant="success" dot>Sistem Aktif</UiBadge>
+        <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1 bg-neutral-100 rounded-xl p-1">
+            <button
+              v-for="opt in periodOptions"
+              :key="opt.value"
+              type="button"
+              :class="[
+                'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
+                period === opt.value ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700',
+              ]"
+              @click="setPeriod(opt.value)"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+          <UiBadge variant="success" dot>Sistem Aktif</UiBadge>
+        </div>
       </div>
     </div>
 
-    <!-- Content -->
-    <div class="p-6 space-y-6">
-      <!-- Stats cards -->
-      <div class="grid grid-cols-2 xl:grid-cols-5 gap-4">
-        <div v-for="stat in stats" :key="stat.label" class="bg-white rounded-xl border border-neutral-200 p-5">
-          <div class="flex items-center justify-between mb-3">
-            <p class="text-xs font-medium text-neutral-500 uppercase tracking-wide">{{ stat.label }}</p>
-            <div :class="['w-8 h-8 rounded-lg flex items-center justify-center', stat.color]">
-              <Icon :icon="stat.icon" class="text-base" />
-            </div>
+    <!-- Skeleton (initial load only) -->
+    <div v-if="showAnalyticsSkeleton" class="p-4 sm:p-6 space-y-6">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div v-for="i in 4" :key="`inv-${i}`" class="soft-skel rounded-xl h-[68px]" />
+      </div>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div v-for="i in 4" :key="`kpi-${i}`" class="bg-white rounded-xl border border-neutral-200 p-5 space-y-3">
+          <div class="soft-skel h-3 w-24" />
+          <div class="soft-skel h-8 w-16" />
+          <div class="soft-skel h-3 w-20" />
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div v-for="i in 3" :key="`ins-${i}`" class="soft-skel rounded-xl h-28" />
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2 soft-skel rounded-xl h-[260px]" />
+        <div class="soft-skel rounded-xl h-[260px]" />
+      </div>
+      <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+        <div class="soft-skel h-12 rounded-none" />
+        <div class="soft-skel h-[580px] rounded-none" />
+      </div>
+    </div>
+
+    <div v-else class="p-4 sm:p-6 space-y-6">
+      <!-- Attention inbox -->
+      <OpsAttentionInbox :orders="orders" />
+
+      <!-- Inventory strip -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div
+          v-for="stat in inventoryStats"
+          :key="stat.label"
+          class="bg-white rounded-xl border border-neutral-200 px-4 py-3 flex items-center gap-3"
+        >
+          <div :class="['w-9 h-9 rounded-lg flex items-center justify-center shrink-0', stat.color]">
+            <Icon :icon="stat.icon" class="text-base" />
           </div>
-          <p class="text-3xl font-bold text-neutral-900">{{ stat.value }}</p>
-          <p class="text-xs text-neutral-400 mt-1">{{ stat.sub }}</p>
+          <div class="min-w-0">
+            <p class="text-xs text-neutral-500">{{ stat.label }}</p>
+            <p class="text-xl font-bold text-neutral-900 tabular-nums leading-tight">{{ stat.value }}</p>
+          </div>
         </div>
       </div>
 
-      <!-- Map -->
-      <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-        <div class="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <Icon icon="lucide:map" class="text-neutral-400 text-sm" />
-            <p class="text-sm font-semibold text-neutral-900">Peta Sebaran Panggilan</p>
+      <!-- Ops KPI -->
+      <div
+        class="grid grid-cols-2 lg:grid-cols-4 gap-4"
+        :class="{ 'opacity-60 pointer-events-none': analyticsPending && analytics }"
+      >
+        <template v-if="analytics">
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Total Pesanan</p>
+          <p class="text-3xl font-bold text-neutral-900 mt-2 tabular-nums">{{ summary.total_orders?.toLocaleString() ?? 0 }}</p>
+          <p class="text-sm text-neutral-500 mt-1">{{ summary.total_this_month ?? 0 }} bulan ini</p>
+        </div>
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Completion</p>
+          <p
+            class="text-3xl font-bold mt-2 tabular-nums"
+            :class="summary.completion_rate >= 70 ? 'text-green-600' : 'text-emergency-600'"
+          >
+            {{ fmtPct(summary.completion_rate) }}
+          </p>
+          <p class="text-sm text-neutral-500 mt-1">Selesai vs dibatalkan</p>
+        </div>
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Avg Response</p>
+          <p class="text-3xl font-bold text-neutral-900 mt-2 tabular-nums">{{ fmtSec(summary.avg_response_sec) }}</p>
+          <p class="text-sm text-neutral-500 mt-1">Masuk → diterima</p>
+        </div>
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Avg Tiba</p>
+          <p class="text-3xl font-bold text-neutral-900 mt-2 tabular-nums">{{ fmtSec(summary.avg_arrival_sec) }}</p>
+          <p class="text-sm text-neutral-500 mt-1">Diterima → sampai lokasi</p>
+        </div>
+        </template>
+      </div>
+
+      <!-- Insight highlights -->
+      <div v-if="analytics" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+              <Icon icon="lucide:clock-3" />
+            </div>
+            <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Jam tersibuk</p>
           </div>
-          <div class="flex items-center gap-3 text-xs text-neutral-500">
-            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> Pending</span>
-            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block" /> Diproses</span>
-            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" /> Selesai</span>
+          <p class="text-2xl font-bold text-neutral-900 tabular-nums">
+            {{ peakHour ? fmtHour(peakHour.hour) : "—" }}
+          </p>
+          <p class="text-sm text-neutral-500 mt-1">
+            {{ peakHour ? `${peakHour.count} pesanan di jam itu` : "Belum ada data" }}
+          </p>
+        </div>
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center">
+              <Icon icon="lucide:siren" />
+            </div>
+            <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Jenis tersibuk</p>
+          </div>
+          <p class="text-2xl font-bold text-neutral-900 truncate">
+            {{ busiestType?.type || "—" }}
+          </p>
+          <p class="text-sm text-neutral-500 mt-1">
+            {{ busiestType ? `${busiestType.count} pesanan` : "Belum ada data" }}
+          </p>
+        </div>
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-8 h-8 rounded-lg bg-neutral-100 text-neutral-600 flex items-center justify-center">
+              <Icon icon="lucide:x-circle" />
+            </div>
+            <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Cancellation</p>
+          </div>
+          <p
+            class="text-2xl font-bold tabular-nums"
+            :class="summary.cancellation_rate > 20 ? 'text-emergency-600' : 'text-neutral-900'"
+          >
+            {{ fmtPct(summary.cancellation_rate) }}
+          </p>
+          <p class="text-sm text-neutral-500 mt-1">
+            Helpful {{ fmtPct(summary.helpful_rate) }} · Handling {{ fmtSec(summary.avg_handling_sec) }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div v-if="analytics" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2 bg-white rounded-xl border border-neutral-200 p-5">
+          <p class="text-sm font-semibold text-neutral-900 mb-4">Tren Pesanan — {{ period }} hari</p>
+          <ClientOnly>
+            <div style="height: 200px">
+              <Line :data="trendData" :options="trendOptions" />
+            </div>
+            <template #fallback>
+              <div class="soft-skel h-[200px] rounded-lg" />
+            </template>
+          </ClientOnly>
+        </div>
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <p class="text-sm font-semibold text-neutral-900 mb-4">Status Pesanan</p>
+          <ClientOnly>
+            <div style="height: 200px">
+              <Doughnut :data="statusData" :options="doughnutOptions" />
+            </div>
+            <template #fallback>
+              <div class="soft-skel h-[200px] rounded-lg" />
+            </template>
+          </ClientOnly>
+        </div>
+      </div>
+
+      <div v-if="analytics" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <p class="text-sm font-semibold text-neutral-900 mb-4">Pesanan per Jenis</p>
+          <ClientOnly>
+            <div :style="{ height: Math.max(140, (analytics?.by_type?.length ?? 1) * 36) + 'px' }">
+              <Bar :data="typeData" :options="typeOptions" />
+            </div>
+            <template #fallback>
+              <div class="soft-skel h-40 rounded-lg" />
+            </template>
+          </ClientOnly>
+        </div>
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <p class="text-sm font-semibold text-neutral-900 mb-1">Peak Hours</p>
+          <p class="text-xs text-neutral-400 mb-4">Distribusi 00:00–23:00</p>
+          <ClientOnly>
+            <div style="height: 180px">
+              <Bar :data="hourData" :options="hourOptions" />
+            </div>
+            <template #fallback>
+              <div class="soft-skel h-[180px] rounded-lg" />
+            </template>
+          </ClientOnly>
+        </div>
+      </div>
+
+      <!-- Funnel + SLA -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <p class="text-sm font-semibold text-neutral-900 mb-1">Funnel Dispatch</p>
+          <p class="text-xs text-neutral-400 mb-4">{{ period }} hari · masuk → selesai</p>
+          <div v-if="!funnelStages.length" class="h-40 flex items-center justify-center text-sm text-neutral-400">
+            Belum ada data
+          </div>
+          <div v-else class="space-y-2.5">
+            <div
+              v-for="(stage, idx) in funnelStages"
+              :key="stage.stage"
+              class="flex items-center gap-3"
+            >
+              <div class="w-24 shrink-0">
+                <p class="text-xs font-medium text-neutral-700">{{ stage.label }}</p>
+                <p class="text-[10px] text-neutral-400 tabular-nums">
+                  <template v-if="idx === 0">total periode</template>
+                  <template v-else>{{ funnelPct(stage.count, funnelStages[idx - 1]?.count) }} lanjut</template>
+                </p>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="h-8 rounded-lg bg-neutral-50 overflow-hidden flex items-center">
+                  <div
+                    class="h-full rounded-lg flex items-center justify-end px-2 min-w-[2rem] transition-all"
+                    :style="{
+                      width: `${Math.max(8, Math.round((stage.count / funnelMax) * 100))}%`,
+                      background: FUNNEL_COLORS[idx] ?? '#dc2626',
+                    }"
+                  >
+                    <span class="text-xs font-bold text-white tabular-nums drop-shadow-sm">{{ stage.count }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-if="funnelDrops.length" class="mt-4 pt-3 border-t border-neutral-100 flex flex-wrap gap-2">
+            <div
+              v-for="drop in funnelDrops"
+              :key="drop.key"
+              class="px-2.5 py-1.5 rounded-lg bg-neutral-50 border border-neutral-100"
+            >
+              <p class="text-[10px] text-neutral-400 leading-none mb-0.5">{{ drop.label }}</p>
+              <p class="text-sm font-semibold text-neutral-800 tabular-nums">{{ drop.count }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <p class="text-sm font-semibold text-neutral-900 mb-1">SLA Distribution</p>
+          <p class="text-xs text-neutral-400 mb-4">{{ period }} hari · bucket waktu respons & tiba</p>
+          <ClientOnly>
+            <div style="height: 220px">
+              <Bar :data="slaData" :options="slaOptions" />
+            </div>
+            <template #fallback>
+              <div class="soft-skel h-[220px] rounded-lg" />
+            </template>
+          </ClientOnly>
+        </div>
+      </div>
+
+      <!-- Sebaran pesanan (HeatmapViz) — full width -->
+      <div>
+        <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <div>
+            <p class="text-sm font-semibold text-neutral-900">Sebaran Pesanan</p>
+            <p class="text-xs text-neutral-400 mt-0.5">
+              Lokasi pemohon + densitas — filter wilayah/jenis, klik marker atau card untuk detail
+            </p>
+          </div>
+          <div class="flex items-center gap-1 bg-neutral-100 rounded-xl p-1">
+            <button
+              v-for="opt in hmPeriodOptions"
+              :key="opt.value"
+              type="button"
+              :class="[
+                'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
+                hmPeriod === opt.value ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700',
+              ]"
+              @click="setHmPeriod(opt.value)"
+            >
+              {{ opt.label }}
+            </button>
           </div>
         </div>
         <ClientOnly>
-          <div ref="mapEl" class="w-full h-[300px] sm:h-[380px]" />
+          <HeatmapViz
+            :points="heatmapPoints"
+            :loading="hmPending && lastHeatmap.length === 0"
+          />
           <template #fallback>
-            <div class="w-full h-[300px] sm:h-[380px] bg-neutral-50 flex items-center justify-center text-neutral-400 text-sm gap-2">
-              <UiSpinner size="sm" />
-              Memuat peta...
+            <div class="rounded-xl border border-neutral-200 overflow-hidden">
+              <div class="soft-skel h-12 rounded-none" />
+              <div class="soft-skel h-[580px] rounded-none" />
             </div>
           </template>
         </ClientOnly>
       </div>
 
-      <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <!-- Recent table -->
-        <div class="xl:col-span-2 bg-white rounded-xl border border-neutral-200 overflow-hidden">
-          <div class="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
-            <div>
-              <h2 class="text-sm font-semibold text-neutral-900">Layanan Terdaftar</h2>
-              <p class="text-xs text-neutral-400 mt-0.5">8 layanan pertama</p>
-            </div>
-            <NuxtLink to="/emergencies" class="text-xs font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1">
-              Lihat semua
-              <Icon icon="lucide:arrow-right" class="text-xs" />
-            </NuxtLink>
+      <!-- Slow accept insight -->
+      <div
+        v-if="slowAcceptUnits.length || slowAcceptByType.length"
+        class="grid grid-cols-1 xl:grid-cols-2 gap-4"
+      >
+        <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+          <div class="px-5 py-3.5 border-b border-neutral-100">
+            <p class="text-sm font-semibold text-neutral-900">Unit lambat accept</p>
+            <p class="text-xs text-neutral-400 mt-0.5">
+              {{ period }} hari · rata-rata masuk → diterima (tertinggi dulu)
+            </p>
           </div>
-          <div class="divide-y divide-neutral-100">
+          <div class="divide-y divide-neutral-50">
             <div
-              v-for="item in recentEmergencies"
-              :key="item.id"
-              class="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors"
+              v-if="!slowAcceptUnits.length"
+              class="px-5 py-8 text-center text-sm text-neutral-400"
             >
-              <img
-                v-if="item.organization_logo"
-                :src="item.organization_logo"
-                :alt="item.name"
-                class="w-8 h-8 rounded-lg object-contain bg-neutral-100 p-1 shrink-0"
-              />
-              <div v-else class="w-8 h-8 rounded-lg bg-neutral-100 shrink-0 flex items-center justify-center">
-                <Icon icon="lucide:shield" class="text-neutral-400 text-sm" />
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-neutral-900 truncate">{{ item.name }}</p>
-                <p class="text-xs text-neutral-400 truncate">{{ item.address?.regency }}</p>
-              </div>
-              <span :class="['text-xs font-medium px-2.5 py-0.5 rounded', typeBadgeColor(item.emergency_type?.name)]">
-                {{ item.emergency_type?.name ?? '-' }}
-              </span>
+              Belum ada data respons
             </div>
-            <div v-if="!recentEmergencies.length" class="px-5 py-8 text-center text-sm text-neutral-400">
-              Belum ada data
+            <div
+              v-for="(unit, idx) in slowAcceptUnits"
+              :key="unit.emergency_uuid"
+              class="px-5 py-3 flex items-center gap-3"
+            >
+              <span
+                class="w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center shrink-0"
+                :class="idx < 3 ? 'bg-amber-100 text-amber-800' : 'bg-neutral-100 text-neutral-500'"
+              >
+                {{ idx + 1 }}
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium text-neutral-900 truncate">{{ unit.unit_name || "—" }}</p>
+                <p class="text-xs text-neutral-400 truncate">
+                  {{ unit.emergency_type || "—" }} · {{ unit.regency || "—" }}
+                </p>
+              </div>
+              <div class="text-right shrink-0">
+                <p
+                  class="text-sm font-semibold tabular-nums"
+                  :class="unit.avg_response_sec >= 900 ? 'text-emergency-600' : 'text-neutral-900'"
+                >
+                  {{ fmtSec(unit.avg_response_sec) }}
+                </p>
+                <p class="text-[11px] text-neutral-400 tabular-nums">{{ unit.total_orders }} tiket</p>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Type breakdown -->
         <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-          <div class="px-5 py-4 border-b border-neutral-100">
-            <h2 class="text-sm font-semibold text-neutral-900">Breakdown per Jenis</h2>
-            <p class="text-xs text-neutral-400 mt-0.5">Distribusi layanan aktif</p>
+          <div class="px-5 py-3.5 border-b border-neutral-100">
+            <p class="text-sm font-semibold text-neutral-900">Accept lambat per jenis</p>
+            <p class="text-xs text-neutral-400 mt-0.5">Agregat rata-rata respons antar unit sejenis</p>
           </div>
-          <div class="p-5 space-y-4">
-            <div v-for="type in typeBreakdown" :key="type.id">
-              <div class="flex items-center justify-between mb-1.5">
-                <span class="text-sm font-medium text-neutral-700">{{ type.name }}</span>
-                <span class="text-sm font-semibold text-neutral-900">{{ type.count }}</span>
-              </div>
-              <div class="h-1.5 rounded-full bg-neutral-100 overflow-hidden">
-                <div
-                  class="h-full rounded-full bg-primary-500 transition-all duration-500"
-                  :style="{ width: `${Math.min(100, (type.count / Math.max(1, emergencies?.data?.length ?? 1)) * 100)}%` }"
-                />
-              </div>
-            </div>
-            <div v-if="!typeBreakdown.length" class="text-center text-sm text-neutral-400 py-4">
+          <div class="divide-y divide-neutral-50">
+            <div
+              v-if="!slowAcceptByType.length"
+              class="px-5 py-8 text-center text-sm text-neutral-400"
+            >
               Belum ada data
+            </div>
+            <div
+              v-for="row in slowAcceptByType"
+              :key="row.type"
+              class="px-5 py-3 flex items-center gap-3"
+            >
+              <div class="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
+                <Icon icon="lucide:timer" class="text-sm" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium text-neutral-900 truncate">{{ row.type }}</p>
+                <p class="text-xs text-neutral-400 truncate">
+                  {{ row.n }} unit · paling lambat: {{ row.worst }}
+                </p>
+              </div>
+              <p class="text-sm font-semibold text-neutral-900 tabular-nums shrink-0">
+                {{ fmtSec(row.avg) }}
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Feedback section -->
-      <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <!-- Rating summary -->
+      <!-- Top units + regions -->
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-          <div class="px-5 py-4 border-b border-neutral-100">
-            <h2 class="text-sm font-semibold text-neutral-900">Statistik Penilaian</h2>
-            <p class="text-xs text-neutral-400 mt-0.5">Feedback dari pengguna aplikasi</p>
+          <div class="px-5 py-3.5 border-b border-neutral-100">
+            <p class="text-sm font-semibold text-neutral-900">Top unit</p>
+            <p class="text-xs text-neutral-400 mt-0.5">{{ period }} hari · by volume</p>
           </div>
-          <div class="p-5 space-y-4">
-            <div v-if="!feedbackStats?.data?.total" class="text-center text-sm text-neutral-400 py-6">
-              Belum ada penilaian
+          <div class="divide-y divide-neutral-50" :class="{ 'opacity-60': analyticsPending && analytics }">
+            <div v-if="!topUnits.length" class="px-5 py-8 text-center text-sm text-neutral-400">Belum ada data</div>
+            <div
+              v-for="(unit, idx) in topUnits"
+              :key="unit.emergency_uuid"
+              class="px-5 py-3 flex items-center gap-3"
+            >
+              <span class="w-6 h-6 rounded-full bg-neutral-100 text-xs font-bold text-neutral-500 flex items-center justify-center shrink-0">
+                {{ idx + 1 }}
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium text-neutral-900 truncate">{{ unit.unit_name || "—" }}</p>
+                <p class="text-xs text-neutral-400 truncate">{{ unit.regency || "—" }}</p>
+              </div>
+              <div class="text-right shrink-0">
+                <p class="text-sm font-semibold text-neutral-900 tabular-nums">{{ unit.total_orders }}</p>
+                <p class="text-[11px] text-neutral-400 tabular-nums">
+                  {{ fmtPct(unit.completion_rate) }} · tiba {{ fmtSec(unit.avg_arrival_sec) }}
+                </p>
+              </div>
             </div>
-            <template v-else>
-              <div>
-                <div class="flex items-center justify-between mb-1.5">
-                  <span class="text-sm text-neutral-600">Unit membantu</span>
-                  <span class="text-sm font-bold text-neutral-900">{{ Math.round(feedbackStats.data.unit_helpful_rate) }}%</span>
-                </div>
-                <div class="h-2 rounded-full bg-neutral-100 overflow-hidden">
-                  <div
-                    class="h-full rounded-full bg-green-500 transition-all duration-500"
-                    :style="{ width: `${feedbackStats.data.unit_helpful_rate}%` }"
-                  />
-                </div>
-              </div>
-              <div>
-                <div class="flex items-center justify-between mb-1.5">
-                  <span class="text-sm text-neutral-600">Aplikasi berguna</span>
-                  <span class="text-sm font-bold text-neutral-900">{{ Math.round(feedbackStats.data.app_helpful_rate) }}%</span>
-                </div>
-                <div class="h-2 rounded-full bg-neutral-100 overflow-hidden">
-                  <div
-                    class="h-full rounded-full bg-primary-500 transition-all duration-500"
-                    :style="{ width: `${feedbackStats.data.app_helpful_rate}%` }"
-                  />
-                </div>
-              </div>
-              <p class="text-xs text-neutral-400 pt-1">Dari {{ feedbackStats.data.total }} penilaian</p>
-            </template>
           </div>
         </div>
 
-        <!-- Recent feedback -->
-        <div class="xl:col-span-2 bg-white rounded-xl border border-neutral-200 overflow-hidden">
-          <div class="px-5 py-4 border-b border-neutral-100">
-            <h2 class="text-sm font-semibold text-neutral-900">Penilaian Terbaru</h2>
-            <p class="text-xs text-neutral-400 mt-0.5">100 entri terbaru</p>
+        <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+          <div class="px-5 py-3.5 border-b border-neutral-100">
+            <p class="text-sm font-semibold text-neutral-900">Wilayah aktif</p>
+            <p class="text-xs text-neutral-400 mt-0.5">Volume pesanan tertinggi</p>
           </div>
-          <div class="divide-y divide-neutral-100">
-            <div v-if="!(feedbackList?.data?.length)" class="px-5 py-8 text-center text-sm text-neutral-400">
-              Belum ada penilaian
-            </div>
+          <div class="divide-y divide-neutral-50" :class="{ 'opacity-60': analyticsPending && analytics }">
+            <div v-if="!regionStats.length" class="px-5 py-8 text-center text-sm text-neutral-400">Belum ada data</div>
             <div
-              v-for="fb in (feedbackList?.data ?? []).slice(0, 8)"
-              :key="fb.id"
-              class="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors"
+              v-for="(region, idx) in regionStats"
+              :key="idx"
+              class="px-5 py-3"
             >
-              <div :class="['w-8 h-8 rounded-full flex items-center justify-center shrink-0', fb.unit_helpful ? 'bg-green-50' : 'bg-red-50']">
-                <Icon :icon="fb.unit_helpful ? 'lucide:thumbs-up' : 'lucide:thumbs-down'" :class="['text-sm', fb.unit_helpful ? 'text-green-600' : 'text-red-500']" />
+              <div class="flex items-center justify-between gap-2 mb-1.5">
+                <p class="text-sm font-medium text-neutral-900 truncate">{{ region.regency || "Tidak diketahui" }}</p>
+                <span class="text-sm font-semibold text-neutral-700 tabular-nums shrink-0">{{ region.count }}</span>
               </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-neutral-900 truncate">{{ fb.unit_name || '—' }}</p>
-                <p class="text-xs text-neutral-400">via {{ fb.call_type === 'whatsapp' ? 'WhatsApp' : 'Telepon' }}</p>
+              <div class="w-full bg-neutral-100 rounded-full h-1.5">
+                <div
+                  class="h-1.5 rounded-full bg-emergency-500"
+                  :style="{ width: `${Math.round(region.count / (regionStats[0]?.count || 1) * 100)}%` }"
+                />
               </div>
-              <span :class="['text-xs font-medium px-2.5 py-0.5 rounded', fb.app_helpful === true ? 'bg-primary-100 text-primary-800' : fb.app_helpful === false ? 'bg-red-100 text-red-800' : 'bg-neutral-100 text-neutral-600']">
-                App: {{ fb.app_helpful === true ? 'Berguna' : fb.app_helpful === false ? 'Tidak' : 'Biasa' }}
-              </span>
             </div>
           </div>
         </div>
@@ -361,15 +837,3 @@ function typeBadgeColor(name: string) {
     </div>
   </div>
 </template>
-
-<style>
-@keyframes pulse-ring {
-  0%   { transform: scale(1); opacity: 0.6; }
-  100% { transform: scale(2.2); opacity: 0; }
-}
-.pulse-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-}
-</style>

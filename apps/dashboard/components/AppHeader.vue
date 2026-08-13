@@ -65,18 +65,8 @@ onUnmounted(() => document.removeEventListener("mousedown", onClickOutside));
 
     <!-- Right side -->
     <div class="flex items-center gap-2 shrink-0">
-      <!-- Search (hidden on xs) -->
-      <button class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-neutral-400 bg-neutral-50 border border-neutral-200 hover:border-neutral-300 transition-colors">
-        <Icon icon="lucide:search" class="text-[14px]" />
-        <span class="hidden lg:block">Cari...</span>
-        <kbd class="hidden lg:block ml-1 px-1.5 py-0.5 text-[10px] font-medium bg-neutral-100 border border-neutral-200 rounded">⌘K</kbd>
-      </button>
-
       <!-- Notifications -->
-      <button class="relative w-8 h-8 flex items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100 transition-colors">
-        <Icon icon="lucide:bell" class="text-[18px]" />
-        <span class="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emergency-500" />
-      </button>
+      <NotificationCenter />
 
       <div class="w-px h-5 bg-neutral-200" />
 

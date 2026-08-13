@@ -1,14 +1,23 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import { appToast } from "~/utils/appToast";
+import { closeAllSheets } from "~/utils/closeAllSheets";
 
 const sosStore = useSosStore();
 const location = useUserLocationStore();
+const emergencyStore = useEmergencyStore();
 const { submitSOS } = useSosApi();
 const { fetchEmergencyTypes } = useEmergencyApi();
 const config = useRuntimeConfig();
+const toast = appToast();
+const { name, phone, load: loadProfile, save: saveProfile } = useRequesterProfile();
+const { hotlines } = useOfflineCache();
 
-const name = ref("");
-const phone = ref("");
+const uncovered = computed(
+  () => emergencyStore.coverageChecked && !emergencyStore.isCovered,
+);
+const hl = computed(() => hotlines());
+
 const condition = ref("");
 const selectedTypeId = ref<number | undefined>();
 
@@ -17,11 +26,10 @@ const emergencyTypes = computed(() => typesData.value?.data ?? []);
 
 const { photoPreview, uploading: uploadingPhoto, uploadError, selectPhoto, uploadPhoto, removePhoto } = usePhotoUpload();
 
-// Reset form whenever sheet opens
+// Prefill saved name/phone whenever sheet opens; reset one-shot fields only.
 watch(() => sosStore.isOpen, (v) => {
   if (v) {
-    name.value = "";
-    phone.value = "";
+    loadProfile();
     condition.value = "";
     selectedTypeId.value = undefined;
     removePhoto();
@@ -29,8 +37,9 @@ watch(() => sosStore.isOpen, (v) => {
 });
 
 async function submit() {
-  if (!name.value || !phone.value) return;
+  if (!name.value || !phone.value || !selectedTypeId.value) return;
   sosStore.setSubmitting(true);
+  toast.loading("Mengirim SOS...");
   try {
     const photoUrl = await uploadPhoto(config.public.apiBaseUrl as string);
     const result = await submitSOS({
@@ -46,13 +55,21 @@ async function submit() {
       province_id: location.currentRegion.province.id,
     });
 
-    sosStore.close();
+    saveProfile();
+    closeAllSheets();
+    toast.dismiss();
 
     if (result?.ticket_number) {
-      await navigateTo(`/ticket/${result.ticket_number}`);
+      if (result.reused) {
+        toast.success("Tiket aktif ditemukan — membuka e-tiket");
+      }
+      await navigateTo(`/ticket/${result.ticket_number}`, { replace: true });
     }
   } catch {
+    toast.error("Gagal mengirim permintaan darurat");
     sosStore.setError("Gagal mengirim permintaan darurat. Coba hubungi layanan langsung.");
+  } finally {
+    sosStore.setSubmitting(false);
   }
 }
 </script>
@@ -83,6 +100,30 @@ async function submit() {
     </template>
 
     <div class="px-4 py-4 space-y-4">
+      <!-- Out of coverage warning -->
+      <div
+        v-if="uncovered"
+        class="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2"
+      >
+        <div class="flex items-start gap-2 text-sm text-amber-950">
+          <Icon icon="lucide:triangle-alert" class="text-amber-600 mt-0.5 shrink-0" />
+          <div>
+            <p class="font-semibold text-xs">Di luar wilayah layanan</p>
+            <p class="text-xs mt-0.5 text-amber-800/90 leading-snug">
+              SOS tetap bisa dikirim, tapi unit lokal mungkin tidak tersedia.
+              Utamakan hotline nasional.
+            </p>
+          </div>
+        </div>
+        <a
+          :href="`tel:${hl.psc}`"
+          class="inline-flex items-center gap-1.5 text-xs font-semibold text-emergency-700"
+        >
+          <Icon icon="lucide:phone" class="text-sm" />
+          {{ hl.label }} sekarang
+        </a>
+      </div>
+
       <!-- Location indicator -->
       <div class="flex items-start gap-2 bg-blue-50 rounded-xl p-3 text-sm text-blue-800">
         <Icon icon="lucide:map-pin" class="text-blue-500 mt-0.5 shrink-0 text-base" />
@@ -97,7 +138,7 @@ async function submit() {
       <!-- Emergency type -->
       <div>
         <label class="block text-sm font-semibold text-neutral-800 mb-2">
-          Jenis Darurat
+          Jenis Darurat <span class="text-emergency-600">*</span>
         </label>
         <div class="flex flex-wrap gap-2">
           <button
@@ -110,12 +151,15 @@ async function submit() {
                 ? 'bg-emergency-600 border-emergency-600 text-white'
                 : 'border-neutral-200 text-neutral-600 bg-neutral-50 active:bg-neutral-100',
             ]"
-            @click="selectedTypeId = selectedTypeId === t.id ? undefined : t.id"
+            @click="selectedTypeId = t.id"
           >
             <Icon v-if="t.icon" :icon="t.icon" class="text-base shrink-0" />
             {{ t.name }}
           </button>
         </div>
+        <p v-if="!selectedTypeId" class="text-[11px] text-neutral-400 mt-1.5">
+          Pilih jenis darurat agar kami menghubungkan ke unit yang tepat.
+        </p>
       </div>
 
       <!-- Name -->
@@ -189,7 +233,7 @@ async function submit() {
 
       <!-- Submit -->
       <button
-        :disabled="!name || !phone || sosStore.isSubmitting || uploadingPhoto"
+        :disabled="!name || !phone || !selectedTypeId || sosStore.isSubmitting || uploadingPhoto"
         class="w-full py-3 rounded-xl bg-emergency-600 text-white font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-opacity active:bg-emergency-700"
         @click="submit"
       >

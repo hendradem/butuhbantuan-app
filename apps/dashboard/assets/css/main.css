@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Untitled UI–style data table tokens.
+ * Use: <table class="ui-table"> … </table>
+ *
+ * Typography:
+ * - th: 12px / medium / neutral-500 (no uppercase)
+ * - td primary: 14px / medium / neutral-900
+ * - td secondary: 14px / regular / neutral-500
+ */
+@layer components {
+  .ui-table {
+    @apply w-full border-collapse text-left;
+  }
+
+  .ui-table thead tr {
+    @apply border-b border-neutral-200;
+  }
+
+  .ui-table th {
+    @apply px-6 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap;
+  }
+
+  .ui-table th.ui-th-right,
+  .ui-table td.ui-td-right {
+    @apply text-right;
+  }
+
+  .ui-table th.ui-th-sortable {
+    @apply cursor-pointer select-none transition-colors;
+  }
+
+  .ui-table th.ui-th-sortable:hover {
+    @apply bg-neutral-50;
+  }
+
+  .ui-table tbody tr {
+    @apply border-b border-neutral-200 transition-colors;
+  }
+
+  .ui-table tbody tr:nth-child(even) {
+    @apply bg-neutral-50/90;
+  }
+
+  .ui-table tbody tr:last-child {
+    @apply border-b-0;
+  }
+
+  .ui-table tbody tr:hover {
+    @apply bg-neutral-100;
+  }
+
+  .ui-table td {
+    @apply px-6 py-4 text-sm text-neutral-600 align-middle;
+  }
+
+  .ui-cell-title {
+    @apply text-sm font-medium text-neutral-900;
+  }
+
+  .ui-cell-desc {
+    @apply text-sm text-neutral-500 mt-0.5;
+  }
+
+  .ui-cell-mono {
+    @apply font-mono text-sm font-medium text-neutral-900;
+  }
+
+  .ui-th-label {
+    @apply inline-flex items-center gap-1;
+  }
+
+  /* Soft skeleton — gentle shimmer, avoids harsh pulse flash */
+  .soft-skel {
+    @apply rounded-md bg-neutral-100/80;
+    background-image: linear-gradient(
+      90deg,
+      rgba(245, 245, 245, 0.55) 0%,
+      rgba(229, 229, 229, 0.9) 45%,
+      rgba(245, 245, 245, 0.55) 100%
+    );
+    background-size: 200% 100%;
+    animation: soft-skel-shimmer 1.6s ease-in-out infinite;
+  }
+
+  /* Compact page sub-header (matches order-detail sticky height) */
+  .page-subheader {
+    @apply sticky top-0 z-30 border-b border-neutral-200 bg-white/95 backdrop-blur
+      supports-[backdrop-filter]:bg-white/80 px-4 sm:px-6 py-3
+      flex flex-col justify-center w-full;
+    /* Two-line title+desc (+ optional back btn) — keep stable during skeleton */
+    min-height: 4.25rem; /* 68px */
+  }
+  .page-subheader-title {
+    @apply text-base sm:text-lg font-semibold text-neutral-900 tracking-tight leading-6;
+  }
+  .page-subheader-desc {
+    @apply text-xs text-neutral-400 mt-0.5 leading-4 min-h-4;
+  }
+  .page-subheader-meta {
+    @apply min-w-0 flex-1;
+  }
+  .page-subheader-row {
+    @apply flex items-center gap-2 flex-wrap min-h-6;
+  }
+
+  /* Hide scrollbars on horizontal chip/tab rows */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Keep Leaflet panes below sticky page chrome */
+  .leaflet-container {
+    z-index: 0;
+  }
+}
+
+@keyframes soft-skel-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}

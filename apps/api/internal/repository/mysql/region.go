@@ -126,17 +126,56 @@ func (r *RegionRepo) FindRegenciesByProvince(provinceID string) ([]domain.Regenc
 	return out, nil
 }
 
+// FindCoveredProvinces returns provinces that have at least one Wilayah Tercakup entry.
+func (r *RegionRepo) FindCoveredProvinces() ([]domain.Province, error) {
+	var rows []Province
+	err := r.db.Model(&Province{}).
+		Joins("JOIN regency ON regency.province_id = province.id").
+		Joins("JOIN available_service_city_entity ON available_service_city_entity.regency_id = regency.id").
+		Group("province.id, province.name").
+		Order("province.name").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.Province, len(rows))
+	for i, row := range rows {
+		out[i] = domain.Province{ID: row.ID, Name: row.Name}
+	}
+	return out, nil
+}
+
+// FindCoveredRegenciesByProvince returns only kab/kota in the coverage allowlist for a province.
+func (r *RegionRepo) FindCoveredRegenciesByProvince(provinceID string) ([]domain.Regency, error) {
+	var rows []Regency
+	q := r.db.Model(&Regency{}).
+		Joins("JOIN available_service_city_entity ON available_service_city_entity.regency_id = regency.id").
+		Order("regency.name")
+	if provinceID != "" {
+		q = q.Where("regency.province_id = ?", provinceID)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]domain.Regency, len(rows))
+	for i, row := range rows {
+		out[i] = domain.Regency{ID: row.ID, ProvinceID: row.ProvinceID, Name: row.Name}
+	}
+	return out, nil
+}
+
 // ---------- Mappers ----------
 
 func mapRegion(r AvailableServiceCityEntity) domain.AvailableRegion {
 	return domain.AvailableRegion{
-		ID:        fmt.Sprintf("%d", r.ID),
-		Name:      r.Name,
-		RegencyID: r.RegencyID,
-		Regency:   r.Regency.Name,
-		Province:  r.Regency.Province.Name,
-		Latitude:  r.Latitude,
-		Longitude: r.Longitude,
+		ID:         fmt.Sprintf("%d", r.ID),
+		Name:       r.Name,
+		RegencyID:  r.RegencyID,
+		Regency:    r.Regency.Name,
+		ProvinceID: r.Regency.ProvinceID,
+		Province:   r.Regency.Province.Name,
+		Latitude:   r.Latitude,
+		Longitude:  r.Longitude,
 	}
 }
 
