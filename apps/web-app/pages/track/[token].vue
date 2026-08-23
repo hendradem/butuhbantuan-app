@@ -41,6 +41,9 @@ const accuracy = ref<number | null>(null);
 const lightboxPhoto = ref<string | null>(null);
 const markingArrive = ref(false);
 const arriveError = ref("");
+const markingComplete = ref(false);
+const completeError = ref("");
+const showCompleteModal = ref(false);
 const showDetails = ref(false);
 
 let watchId: number | null = null;
@@ -58,19 +61,26 @@ const canShare = computed(() => {
   return session.value.status === "accepted" || session.value.status === "in_progress";
 });
 
+const isCompleted = computed(() => session.value?.status === "completed");
 const hasArrived = computed(() => !!session.value?.arrived_at);
 
 const phaseLabel = computed(() => {
-  if (hasArrived.value) return "Tiba di lokasi";
-  if (sharing.value) return "Membagikan lokasi";
+  if (isCompleted.value) return "Selesai";
+  if (hasArrived.value) return "Penanganan berlangsung";
+  if (sharing.value) return "Menuju lokasi";
   if (canShare.value) return "Siap berbagi";
-  return "Selesai";
+  return "Tidak aktif";
 });
 
 const phaseHint = computed(() => {
-  if (hasArrived.value) return "Status dikirim ke e-tiket";
+  if (isCompleted.value) return "Tiket ditutup · live lokasi dihentikan";
+  if (hasArrived.value) {
+    return sharing.value
+      ? "GPS tetap live — posko memantau hingga selesai"
+      : "Bagikan GPS selama penanganan, lalu tekan Selesai";
+  }
   if (sharing.value) return "GPS dikirim ke e-tiket pelapor";
-  if (canShare.value) return "Izinkan GPS, lalu tandai tiba";
+  if (canShare.value) return "Izinkan GPS, lalu tandai Sudah sampai";
   return "Sesi berbagi tidak aktif";
 });
 
@@ -84,13 +94,18 @@ const travelBadge = computed(() => {
 const showSkeleton = computed(() => pending.value && !session.value);
 
 const phaseColor = computed(() => {
-  if (hasArrived.value) return "bg-emerald-50 text-emerald-800 border-emerald-200";
+  if (isCompleted.value) return "bg-neutral-50 text-neutral-700 border-neutral-200";
+  if (hasArrived.value) return "bg-violet-50 text-violet-800 border-violet-200";
   if (sharing.value) return "bg-blue-50 text-blue-800 border-blue-200";
   if (canShare.value) return "bg-amber-50 text-amber-800 border-amber-200";
   return "bg-neutral-50 text-neutral-700 border-neutral-200";
 });
 
 const urgencyBanner = computed(() => {
+  if (isCompleted.value) return { text: "Tiket selesai", tone: "bg-neutral-700" };
+  if (hasArrived.value && sharing.value) {
+    return { text: "Penanganan · GPS live", tone: "bg-violet-600" };
+  }
   if (hasArrived.value) return null;
   if (!canShare.value) return { text: "Sesi berbagi tidak aktif", tone: "bg-neutral-700" };
   return null;
@@ -98,6 +113,11 @@ const urgencyBanner = computed(() => {
 
 const cardTitle = computed(() => session.value?.unit_name || "Petugas lapangan");
 const cardSubtitle = computed(() => phaseHint.value);
+
+/** En-route share card (before on-scene). */
+const showEnrouteShare = computed(() => canShare.value && !hasArrived.value && !isCompleted.value);
+/** On-scene handling card (GPS continues until Selesai). */
+const showHandling = computed(() => canShare.value && hasArrived.value && !isCompleted.value);
 
 function formatTravel(sec: number | undefined | null): string {
   const s = Math.max(0, Math.round(Number(sec) || 0));
@@ -210,11 +230,46 @@ async function markArrived() {
       session.value.travel_sec = res.data?.travel_sec ?? session.value.travel_sec;
       if (res.data?.status) session.value.status = res.data.status;
     }
-    stopSharing();
+    // Keep GPS live after on-scene so posko can monitor referral / return to base.
   } catch (e: any) {
     arriveError.value = e?.data?.message || "Gagal mencatat kedatangan";
   } finally {
     markingArrive.value = false;
+  }
+}
+
+function openCompleteModal() {
+  if (!token.value || markingComplete.value || isCompleted.value) return;
+  completeError.value = "";
+  showCompleteModal.value = true;
+}
+
+function closeCompleteModal() {
+  if (markingComplete.value) return;
+  showCompleteModal.value = false;
+}
+
+async function confirmComplete() {
+  if (!token.value || markingComplete.value || isCompleted.value) return;
+  markingComplete.value = true;
+  completeError.value = "";
+  try {
+    const res = await $fetch<{
+      data: { status?: string; completed_at?: string; can_share?: boolean };
+    }>(`${apiBase}/api/v1/track/${token.value}/complete`, {
+      method: "POST",
+      body: { handler_name: "petugas lapangan", notes: "" },
+    });
+    stopSharing();
+    showCompleteModal.value = false;
+    if (session.value) {
+      session.value.status = res.data?.status || "completed";
+      session.value.can_share = false;
+    }
+  } catch (e: any) {
+    completeError.value = e?.data?.message || "Gagal menyelesaikan tiket";
+  } finally {
+    markingComplete.value = false;
   }
 }
 
@@ -231,10 +286,13 @@ const waPelaporUrl = computed(() => {
   const digits = convertPhoneNumber(phone);
   if (!digits) return "";
   const maps = mapsUrl.value;
+  const heading = hasArrived.value
+    ? `Terkait tiket ${s?.ticket_number || ""} — kami sudah di lokasi / sedang menangani.`
+    : `Terkait tiket ${s?.ticket_number || ""} — kami sedang menuju lokasi Anda.`;
   const text = encodeURIComponent(
     [
       `Halo ${s?.requester_name || "Pelapor"}, kami dari ${s?.unit_name || "unit darurat"}.`,
-      `Terkait tiket ${s?.ticket_number || ""} — kami sedang menuju lokasi Anda.`,
+      heading,
       maps ? `Konfirmasi titik: ${maps}` : null,
       `Mohon tetap di tempat yang aman.`,
     ]
@@ -262,14 +320,19 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-white">
-    <div class="sticky top-0 z-10 bg-white border-b border-neutral-200 px-4 py-3.5 flex items-center gap-3">
-      <div class="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center shrink-0">
-        <Icon icon="lucide:navigation" class="text-red-600 text-base" />
+  <div class="ui-page min-h-screen">
+    <div class="ui-topbar">
+      <div class="w-9 h-9 shrink-0 ui-icon-well--danger flex items-center justify-center" style="border-radius: var(--bb-radius-pill)">
+        <Icon
+          :icon="isCompleted ? 'lucide:check' : hasArrived ? 'lucide:activity' : 'lucide:navigation'"
+          class="text-base"
+        />
       </div>
       <div class="min-w-0">
-        <p class="text-base font-semibold text-neutral-900 leading-tight">Bagikan lokasi</p>
-        <p class="text-sm text-neutral-500">ButuhBantuan · Petugas lapangan</p>
+        <p class="text-base font-semibold ui-text-primary leading-tight">
+          {{ isCompleted ? "Tiket selesai" : hasArrived ? "Penanganan" : "Bagikan lokasi" }}
+        </p>
+        <p class="text-sm ui-text-secondary">ButuhBantuan · Petugas lapangan</p>
       </div>
     </div>
 
@@ -277,7 +340,7 @@ onUnmounted(() => {
       <div class="w-full max-w-sm space-y-3">
         <!-- Soft skeleton — mirrors card anatomy -->
         <div v-if="showSkeleton" class="space-y-3">
-          <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+          <div class="ui-card overflow-hidden">
             <div class="px-4 pt-4 pb-3 bg-neutral-50 border-b border-neutral-100">
               <div class="flex items-start justify-between gap-3">
                 <div class="flex-1 space-y-2 pt-0.5">
@@ -304,7 +367,7 @@ onUnmounted(() => {
               <div class="soft-skel h-3 w-4/5" />
             </div>
           </div>
-          <div class="bg-white rounded-xl border border-neutral-200 p-4 space-y-3">
+          <div class="ui-card p-4 space-y-3">
             <div class="flex items-start gap-3">
               <div class="soft-skel w-10 h-10 rounded-full shrink-0" />
               <div class="flex-1 space-y-2 pt-1">
@@ -317,7 +380,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div v-else-if="loadError" class="bg-white rounded-xl border border-neutral-200 p-8 text-center">
+        <div v-else-if="loadError" class="ui-card p-8 text-center">
           <Icon icon="lucide:link-2-off" class="text-neutral-300 text-4xl mx-auto mb-3" />
           <p class="font-semibold text-neutral-900">{{ loadError }}</p>
           <button type="button" class="mt-4 text-sm text-primary-600 font-medium" @click="loadSession">
@@ -327,7 +390,7 @@ onUnmounted(() => {
 
         <template v-else-if="session">
           <!-- Main card — order-card anatomy (match e-ticket) -->
-          <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+          <div class="ui-card overflow-hidden">
             <div
               v-if="urgencyBanner"
               class="px-4 py-2 text-center text-sm font-medium text-white"
@@ -339,74 +402,82 @@ onUnmounted(() => {
             <div class="px-4 pt-4 pb-3 bg-neutral-50 border-b border-neutral-100">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0 flex-1">
-                  <h1 class="text-base font-semibold text-neutral-900 leading-snug truncate">
+                  <h1 class="text-sm font-semibold text-neutral-900 leading-snug truncate">
                     {{ cardTitle }}
                   </h1>
-                  <p class="mt-0.5 text-sm text-neutral-500 leading-snug line-clamp-2">
+                  <p class="mt-0.5 text-xs text-neutral-500 leading-snug line-clamp-2">
                     {{ cardSubtitle }}
                   </p>
                 </div>
                 <div class="shrink-0 text-right">
-                  <p class="text-sm font-semibold text-neutral-900 font-mono tracking-wide">
+                  <p class="text-xs font-medium text-neutral-600 font-mono tracking-wide">
                     {{ session.ticket_number }}
                   </p>
                   <button
                     type="button"
-                    class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-neutral-400 hover:text-neutral-700"
+                    class="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-neutral-400 hover:text-neutral-700"
                     @click="loadSession"
                   >
-                    <Icon icon="lucide:refresh-cw" class="text-xs" />
+                    <Icon icon="lucide:refresh-cw" class="text-[11px]" />
                     Refresh
                   </button>
                 </div>
               </div>
 
-              <div class="mt-3 rounded-lg bg-white px-3 py-2.5 ring-1 ring-inset ring-neutral-200/80">
-                <div class="flex flex-wrap items-center gap-1.5">
-                  <span
-                    class="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full border"
-                    :class="phaseColor"
-                  >
-                    {{ phaseLabel }}
-                  </span>
+              <div class="mt-3 rounded-lg bg-white px-3 py-2.5 ring-1 ring-inset ring-neutral-200/80 space-y-2">
+                <span
+                  class="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full border"
+                  :class="phaseColor"
+                >
+                  {{ phaseLabel }}
+                </span>
+                <div
+                  v-if="travelBadge || session.requester_name"
+                  class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-600"
+                >
                   <span
                     v-if="travelBadge"
-                    class="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full border bg-emerald-50 text-emerald-800 border-emerald-200"
+                    class="inline-flex items-center gap-1.5"
                   >
-                    <Icon icon="lucide:timer" class="text-sm" />
-                    {{ travelBadge }}
+                    <Icon icon="lucide:timer" class="text-sm text-neutral-400 shrink-0" />
+                    <span class="font-medium text-neutral-700">{{ travelBadge }}</span>
                   </span>
-                </div>
-                <div class="mt-2 flex items-center gap-3 text-xs text-neutral-500">
-                  <span class="inline-flex items-center gap-1.5 min-w-0">
-                    <Icon icon="lucide:user" class="text-sm shrink-0 text-neutral-400" />
-                    <span class="truncate">{{ session.requester_name || "Pelapor" }}</span>
+                  <span
+                    v-if="session.requester_name"
+                    class="inline-flex items-center gap-1.5 min-w-0"
+                  >
+                    <Icon icon="lucide:user" class="text-sm text-neutral-400 shrink-0" />
+                    <span class="truncate font-medium text-neutral-700">{{ session.requester_name }}</span>
                   </span>
                 </div>
               </div>
             </div>
 
             <!-- Primary CTAs -->
-            <div class="px-4 py-3 border-t border-dashed border-neutral-200 space-y-2">
+            <div
+              v-if="waPelaporUrl || mapsUrl"
+              class="px-4 py-3 border-t border-dashed border-neutral-200"
+              :class="waPelaporUrl && mapsUrl ? 'grid grid-cols-2 gap-2' : 'space-y-2'"
+            >
               <a
                 v-if="waPelaporUrl"
                 :href="waPelaporUrl"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="flex items-center justify-center gap-2 w-full py-3 rounded-lg bg-green-600 text-white font-semibold text-sm active:scale-[0.98] transition-all"
+                class="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg bg-green-600 text-white font-semibold text-sm active:scale-[0.98] transition-all"
               >
                 <Icon icon="mdi:whatsapp" class="text-lg" />
-                WhatsApp pelapor
+                WhatsApp
               </a>
               <a
                 v-if="mapsUrl"
                 :href="mapsUrl"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="flex items-center justify-center gap-2 w-full py-3 rounded-lg bg-neutral-900 text-white font-semibold text-sm active:scale-[0.98] transition-all"
+                class="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg bg-neutral-900 text-white font-semibold text-sm active:scale-[0.98] transition-all"
               >
                 <Icon icon="lucide:map-pin" class="text-base" />
-                Buka lokasi di Maps
+                Maps
               </a>
             </div>
 
@@ -469,10 +540,10 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Kartu aksi: bagikan → tandai tiba (hilang setelah tiba) -->
+          <!-- En-route: bagikan GPS → Sudah sampai (GPS tetap jalan setelah tiba) -->
           <div
-            v-if="canShare && !hasArrived"
-            class="bg-white rounded-xl border border-neutral-200 p-4 space-y-3"
+            v-if="showEnrouteShare"
+            class="ui-card p-4 space-y-3"
           >
             <div class="flex items-start gap-3">
               <div
@@ -490,7 +561,7 @@ onUnmounted(() => {
                 <p class="text-sm text-neutral-500 mt-1 leading-snug">
                   {{
                     sharing
-                      ? "Tekan Sudah sampai saat tiba di lokasi. Jaga layar tetap aktif bila memungkinkan."
+                      ? "Tekan Sudah sampai saat tiba. GPS tetap live selama penanganan."
                       : "Izinkan GPS dulu, lalu tandai Sudah sampai setelah tiba."
                   }}
                 </p>
@@ -544,6 +615,81 @@ onUnmounted(() => {
             </template>
           </div>
 
+          <!-- On-scene: GPS continues → Selesai -->
+          <div
+            v-else-if="showHandling"
+            class="ui-card p-4 space-y-3"
+          >
+            <div class="flex items-start gap-3">
+              <div
+                class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 ring-1 ring-inset"
+                :class="sharing
+                  ? 'bg-violet-50 text-violet-700 ring-violet-600/10'
+                  : 'bg-neutral-50 text-neutral-500 ring-neutral-500/10'"
+              >
+                <Icon :icon="sharing ? 'lucide:radio' : 'lucide:stethoscope'" class="text-lg" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-base font-semibold text-neutral-900">
+                  {{ sharing ? "Penanganan · GPS live" : "Penanganan di lokasi" }}
+                </p>
+                <p class="text-sm text-neutral-500 mt-1 leading-snug">
+                  Status tetap diproses. Bagikan GPS agar posko memantau (rujuk RS / kembali pos).
+                  Tekan Selesai jika penanganan tuntas.
+                </p>
+                <p v-if="lastPingLabel" class="text-sm text-emerald-700 mt-2 font-medium">
+                  Terkirim · {{ lastPingLabel }}
+                  <span v-if="accuracy != null"> · akurasi ±{{ Math.round(accuracy) }} m</span>
+                </p>
+                <p v-if="permissionDenied" class="text-sm text-amber-700 mt-2">
+                  Izin lokasi ditolak. Aktifkan lokasi di pengaturan browser, lalu coba lagi.
+                </p>
+                <p v-if="pingError" class="text-sm text-red-600 mt-2">{{ pingError }}</p>
+              </div>
+            </div>
+
+            <button
+              v-if="!sharing"
+              type="button"
+              class="w-full py-3 rounded-lg bg-neutral-900 text-white font-semibold text-sm active:scale-[0.98] transition-transform"
+              @click="startSharing"
+            >
+              Lanjutkan bagikan GPS
+            </button>
+            <button
+              v-else
+              type="button"
+              class="w-full text-center text-sm font-medium text-neutral-500 hover:text-neutral-800 py-1"
+              @click="stopSharing"
+            >
+              Pause berbagi lokasi
+            </button>
+
+            <button
+              type="button"
+              class="w-full py-2.5 rounded-lg bg-emerald-600 text-white font-semibold text-sm active:scale-[0.98] transition-transform disabled:opacity-50"
+              :disabled="markingComplete"
+              @click="openCompleteModal"
+            >
+              Selesai
+            </button>
+            <p v-if="completeError && !showCompleteModal" class="text-sm text-red-600">{{ completeError }}</p>
+          </div>
+
+          <!-- Done state -->
+          <div
+            v-else-if="isCompleted"
+            class="ui-card p-5 text-center space-y-2"
+          >
+            <div class="mx-auto w-11 h-11 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center ring-1 ring-inset ring-emerald-600/10">
+              <Icon icon="lucide:check" class="text-xl" />
+            </div>
+            <p class="text-base font-semibold text-neutral-900">Tiket selesai</p>
+            <p class="text-sm text-neutral-500 leading-snug">
+              Live lokasi dihentikan. Terima kasih — Anda boleh menutup halaman ini.
+            </p>
+          </div>
+
           <p class="text-center text-xs text-neutral-400">
             Link hanya untuk petugas yang ditugaskan · ButuhBantuan &copy; {{ new Date().getFullYear() }}
           </p>
@@ -552,12 +698,72 @@ onUnmounted(() => {
     </div>
 
     <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="showCompleteModal"
+          class="fixed inset-0 z-[9998] flex items-end sm:items-center justify-center p-4 bg-black/40"
+          @click="closeCompleteModal"
+        >
+          <div
+            class="ui-card w-full max-w-sm overflow-hidden"
+            style="box-shadow: var(--bb-shadow-soft)"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="complete-title"
+            @click.stop
+          >
+            <div class="px-5 pt-5 pb-4 text-center">
+              <div class="mx-auto w-11 h-11 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center ring-1 ring-inset ring-emerald-600/10">
+                <Icon icon="lucide:check-circle" class="text-xl" />
+              </div>
+              <h2 id="complete-title" class="mt-3 text-base font-semibold text-neutral-900">
+                Tandai tiket selesai?
+              </h2>
+              <p class="mt-1.5 text-sm text-neutral-500 leading-snug">
+                Live lokasi akan dihentikan. Pastikan penanganan sudah tuntas.
+              </p>
+              <p v-if="session?.ticket_number" class="mt-2 text-xs font-mono text-neutral-400">
+                {{ session.ticket_number }}
+              </p>
+              <p v-if="completeError" class="mt-3 text-sm text-red-600">{{ completeError }}</p>
+            </div>
+            <div class="px-4 pb-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                class="py-2.5 rounded-lg border border-neutral-200 bg-white text-sm font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+                :disabled="markingComplete"
+                @click="closeCompleteModal"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                class="py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 active:scale-[0.98] transition disabled:opacity-50"
+                :disabled="markingComplete"
+                @click="confirmComplete"
+              >
+                {{ markingComplete ? "Menyimpan…" : "Ya, selesai" }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <Teleport to="body">
       <div
         v-if="lightboxPhoto"
         class="fixed inset-0 z-[9999] bg-black/85 flex items-center justify-center p-4"
         @click="lightboxPhoto = null"
       >
-        <img :src="lightboxPhoto" class="max-w-full max-h-[85vh] rounded-xl object-contain" @click.stop />
+        <div class="max-w-full max-h-[85vh]" @click.stop>
+          <SkeletonImage
+            :src="lightboxPhoto"
+            alt="Foto"
+            wrapper-class="max-w-full max-h-[85vh] rounded-xl min-w-[200px] min-h-[160px]"
+            img-class="max-w-full max-h-[85vh] rounded-xl object-contain"
+          />
+        </div>
         <button
           type="button"
           class="absolute top-4 right-4 w-9 h-9 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center"
@@ -569,3 +775,14 @@ onUnmounted(() => {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

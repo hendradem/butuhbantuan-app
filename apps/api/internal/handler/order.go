@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/butuhbantuan/api/internal/domain"
 	"github.com/butuhbantuan/api/internal/repository"
@@ -14,10 +15,22 @@ import (
 type OrderHandler struct {
 	svc          service.OrderUseCase
 	emergencySvc service.EmergencyUseCase
+	dispatch     service.DispatchUseCase
+	wilayah      *service.WilayahResolver
 }
 
 func NewOrderHandler(svc service.OrderUseCase, emergencySvc service.EmergencyUseCase) *OrderHandler {
 	return &OrderHandler{svc: svc, emergencySvc: emergencySvc}
+}
+
+func (h *OrderHandler) WithDispatch(d service.DispatchUseCase) *OrderHandler {
+	h.dispatch = d
+	return h
+}
+
+func (h *OrderHandler) WithWilayah(w *service.WilayahResolver) *OrderHandler {
+	h.wilayah = w
+	return h
 }
 
 func (h *OrderHandler) Create(c *fiber.Ctx) error {
@@ -109,6 +122,8 @@ func (h *OrderHandler) CreateManual(c *fiber.Ctx) error {
 }
 
 func (h *OrderHandler) createEnriched(c *fiber.Ctx, order domain.OrderTicket) error {
+	preferredUUID := order.EmergencyUUID
+
 	// Enrich type/region from the chosen unit so later reassign/dispatch works
 	// even when the client only sends emergency_uuid.
 	if h.emergencySvc != nil {
@@ -128,6 +143,39 @@ func (h *OrderHandler) createEnriched(c *fiber.Ctx, order domain.OrderTicket) er
 			}
 		}
 	}
+	// Prefer GPS → covered region over client-supplied / unit HQ when coords exist.
+	if h.wilayah != nil {
+		order.RegencyID, order.ProvinceID = h.wilayah.Resolve(
+			order.RequesterLat, order.RequesterLng,
+			order.EmergencyUUID,
+			order.RegencyID, order.ProvinceID,
+		)
+	}
+
+	// Citizen call/list: same distance-first cascade as SOS (with soft prefer for tap).
+	if order.Source == "call" && h.dispatch != nil &&
+		order.TypeID != 0 && order.RequesterLat != 0 && order.RequesterLng != 0 {
+		result, err := h.dispatch.AssignIncident(service.IncidentAssignInput{
+			Source:        "call",
+			Name:          order.RequesterName,
+			Phone:         order.RequesterPhone,
+			Address:       order.Location,
+			Description:   order.Condition,
+			PhotoURL:      order.PhotoURL,
+			Lat:           order.RequesterLat,
+			Lng:           order.RequesterLng,
+			TypeID:        order.TypeID,
+			RegencyID:     order.RegencyID,
+			ProvinceID:    order.ProvinceID,
+			PreferredUUID: preferredUUID,
+		})
+		if err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "failed to create order")
+		}
+		if result != nil && result.Ticket != nil {
+			return response.OK(c, "order created", result.Ticket)
+		}
+	}
 
 	result, err := h.svc.Create(order)
 	if err != nil {
@@ -143,7 +191,14 @@ func (h *OrderHandler) GetByTicketNumber(c *fiber.Ctx) error {
 	}
 	h.enrichUnitContact(order)
 	order.CitizenPhase = domain.ResolveCitizenPhase(*order)
-	return response.OK(c, "success", order)
+
+	// Public surface: citizen-safe DTO. Full phone only when claim matches (e-ticket owner).
+	claim := strings.TrimSpace(c.Get("X-Requester-Phone"))
+	if claim == "" {
+		claim = strings.TrimSpace(c.Query("phone"))
+	}
+	verified := claim != "" && domain.PhoneMatches(order.RequesterPhone, claim)
+	return response.OK(c, "success", domain.ToPublicTicket(*order, verified))
 }
 
 // GetTrackSession is public — field petugas opens /track/:token without login.
@@ -239,6 +294,31 @@ func (h *OrderHandler) MarkArrived(c *fiber.Ctx) error {
 		"accepted_at": order.AcceptedAt,
 		"status":      order.Status,
 		"travel_sec":  travelSec,
+	})
+}
+
+// CompleteByToken marks the ticket completed from the field magic-link page.
+func (h *OrderHandler) CompleteByToken(c *fiber.Ctx) error {
+	var body struct {
+		HandlerName string `json:"handler_name"`
+		Notes       string `json:"notes"`
+	}
+	_ = c.BodyParser(&body)
+	order, err := h.svc.CompleteByToken(c.Params("token"), body.HandlerName, body.Notes)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "track link not found")
+		}
+		if errors.Is(err, repository.ErrConflict) {
+			return response.Error(c, fiber.StatusConflict, "cannot complete this order")
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "failed to complete order")
+	}
+	return response.OK(c, "completed", fiber.Map{
+		"status":        order.Status,
+		"ticket_number": order.TicketNumber,
+		"completed_at":  order.CompletedAt,
+		"can_share":     false,
 	})
 }
 

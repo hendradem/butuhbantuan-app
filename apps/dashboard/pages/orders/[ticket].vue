@@ -4,7 +4,8 @@ import { Icon } from "@iconify/vue";
 definePageMeta({ title: "Detail Pesanan" });
 
 const route = useRoute();
-const { get, authGet, baseUrl } = useApi();
+const { authGet, baseUrl } = useApi();
+const { goBack } = useSmartBack(adminOrderBackTo);
 
 const ticketNumber = computed(() => String(route.params.ticket));
 
@@ -16,7 +17,7 @@ function assetUrl(url: string): string {
 
 const { data, pending, error, refresh: refreshOrder } = await useAsyncData(
   `order-detail-${ticketNumber.value}`,
-  () => get<{ data: any }>(`/api/v1/order/ticket/${ticketNumber.value}`).then(r => r.data),
+  () => authGet<{ data: any }>(`/api/v1/admin/orders/by-ticket/${ticketNumber.value}`).then(r => r.data),
   { server: false }
 );
 
@@ -48,14 +49,18 @@ function formatDate(d: string | null | undefined): string {
   });
 }
 
-// Auto refresh while active
+// Auto refresh while active (faster when field GPS is live)
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 watch(
-  () => order.value?.status,
-  (status) => {
+  () => [order.value?.status, order.value?.responder_updated_at, order.value?.track_enabled_at],
+  () => {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    const status = order.value?.status;
     if (import.meta.client && status && !TERMINAL.has(status)) {
-      pollTimer = setInterval(() => refresh(), 15_000);
+      const hasGps =
+        !!(Number(order.value?.responder_lat) || Number(order.value?.responder_lng)) ||
+        !!order.value?.track_enabled_at;
+      pollTimer = setInterval(() => refresh(), hasGps ? 5_000 : 15_000);
     }
   },
   { immediate: true }
@@ -223,17 +228,48 @@ async function onNextStep(action: string) {
   <div>
     <!-- Sticky header -->
     <div class="page-subheader">
-      <div class="flex items-center gap-3">
-        <NuxtLink
-          to="/orders"
-          class="flex items-center justify-center w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 transition-colors shrink-0"
-        >
-          <Icon icon="lucide:arrow-left" class="text-neutral-700 text-sm" />
-        </NuxtLink>
-        <div class="page-subheader-meta">
-          <div class="page-subheader-row">
-            <h1 class="page-subheader-title font-mono">{{ ticketNumber }}</h1>
-            <UiStatusBadge v-if="order" :status="order.status" />
+      <div class="flex items-center justify-between gap-3 min-w-0">
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <button
+            type="button"
+            class="flex items-center justify-center w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 transition-colors shrink-0"
+            aria-label="Kembali"
+            @click="goBack"
+          >
+            <Icon icon="lucide:arrow-left" class="text-neutral-700 text-sm" />
+          </button>
+          <div class="page-subheader-meta min-w-0">
+            <h1 class="page-subheader-title font-mono truncate">{{ ticketNumber }}</h1>
+            <p class="page-subheader-desc">
+              <template v-if="order">{{ formatDate(order.created_at) }}</template>
+              <span
+                v-else-if="showSkeleton"
+                class="soft-skel inline-block h-3 w-28 align-middle"
+                aria-hidden="true"
+              />
+              <span v-else class="invisible">—</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="flex flex-col items-end gap-1 min-w-0 max-w-[9rem] sm:max-w-[14rem] md:max-w-[18rem] shrink-0">
+          <span
+            v-if="order?.unit_name"
+            class="text-sm font-medium text-neutral-600 truncate w-full text-right"
+          >{{ order.unit_name }}</span>
+          <span
+            v-else-if="showSkeleton"
+            class="soft-skel inline-block h-4 w-24 rounded"
+            aria-hidden="true"
+          />
+          <div class="flex items-center justify-end gap-1.5 flex-wrap">
+            <span
+              v-if="order?.partner_tier === 'psc' || order?.partner_tier === 'verified'"
+              class="hidden sm:inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-800 shrink-0"
+            >
+              {{ order.partner_tier === 'psc' ? 'PSC' : 'Terverifikasi' }}
+            </span>
+            <UiStatusBadge v-if="order" :status="order.status" class="shrink-0" />
             <span
               v-else-if="showSkeleton"
               class="soft-skel inline-block h-5 w-16 rounded-full shrink-0"
@@ -241,30 +277,13 @@ async function onNextStep(action: string) {
             />
             <span
               v-if="order?.source === 'sos'"
-              class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emergency-600 text-white uppercase animate-pulse"
+              class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emergency-600 text-white uppercase animate-pulse shrink-0"
             >
               <Icon icon="lucide:siren" class="text-[10px]" />
               SOS
             </span>
           </div>
-          <p class="page-subheader-desc">
-            <template v-if="order">{{ formatDate(order.created_at) }}</template>
-            <span
-              v-else-if="showSkeleton"
-              class="soft-skel inline-block h-3 w-28 align-middle"
-              aria-hidden="true"
-            />
-            <span v-else class="invisible">—</span>
-          </p>
         </div>
-        <button
-          type="button"
-          class="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-700 transition-colors ml-auto shrink-0"
-          @click="refresh()"
-        >
-          <Icon icon="lucide:refresh-cw" class="text-xs" :class="{ 'animate-spin': pending }" />
-          Refresh
-        </button>
       </div>
     </div>
 
@@ -277,10 +296,14 @@ async function onNextStep(action: string) {
         <Icon icon="lucide:file-x" class="text-neutral-300 text-4xl mx-auto mb-3" />
         <p class="font-semibold text-neutral-700">Pesanan tidak ditemukan</p>
         <p class="text-sm text-neutral-400 mt-1">Nomor tiket tidak valid atau sudah dihapus.</p>
-        <NuxtLink to="/orders" class="mt-4 inline-flex items-center gap-1.5 text-sm text-primary-600 font-medium">
+        <button
+          type="button"
+          class="mt-4 inline-flex items-center gap-1.5 text-sm text-primary-600 font-medium"
+          @click="goBack"
+        >
           <Icon icon="lucide:arrow-left" class="text-sm" />
-          Kembali ke Daftar Pesanan
-        </NuxtLink>
+          Kembali
+        </button>
       </div>
     </div>
 
@@ -364,32 +387,22 @@ async function onNextStep(action: string) {
               mobilePane === 'steps' ? 'hidden lg:block' : 'block',
             ]"
           >
-            <!-- Unit strip -->
+            <!-- Service/ETA meta only — unit name lives in header -->
             <div
-              v-if="order.unit_name"
-              class="bg-white rounded-xl border border-neutral-200 px-4 sm:px-5 py-3.5 flex items-center gap-3"
+              v-if="order.type_name || order.eta_minutes"
+              class="bg-white rounded-xl border border-neutral-200 px-4 sm:px-5 py-3 flex items-center gap-3"
             >
-              <div class="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
-                <Icon icon="mynaui:ambulance-solid" class="text-xl" />
+              <div class="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                <Icon icon="mynaui:ambulance-solid" class="text-base" />
               </div>
-              <div class="min-w-0 flex-1">
-                <p class="text-sm font-semibold text-neutral-900 truncate">{{ order.unit_name }}</p>
-                <p class="text-xs text-neutral-500 mt-0.5 truncate">
-                  <template v-if="order.type_name || order.eta_minutes">
-                    <span v-if="order.type_name">{{ order.type_name }}</span>
-                    <span v-if="order.type_name && order.eta_minutes"> · </span>
-                    <span v-if="order.eta_minutes">ETA ±{{ order.eta_minutes }} mnt</span>
-                  </template>
-                  <template v-else>Unit penanganan</template>
-                </p>
-              </div>
-              <span
-                v-if="order.partner_tier === 'psc' || order.partner_tier === 'verified'"
-                class="hidden sm:inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800"
-              >
-                {{ order.partner_tier === 'psc' ? 'PSC' : 'Terverifikasi' }}
-              </span>
+              <p class="text-sm text-neutral-600 truncate min-w-0 flex-1">
+                <span v-if="order.type_name">{{ order.type_name }}</span>
+                <span v-if="order.type_name && order.eta_minutes"> · </span>
+                <span v-if="order.eta_minutes">ETA ±{{ order.eta_minutes }} mnt</span>
+              </p>
             </div>
+
+            <OrderTimingStats :order="order" :history="historyItems" />
 
             <OrderIncidentDetailsCard
               :order="order"

@@ -34,7 +34,12 @@ const { tab: listView, setTab: setListView } = usePersistedTab(
 const { pendingSos } = useOpsAlerts();
 
 onActivated(() => {
+  rememberOrderDetailBack("/orders");
   refreshOrders();
+});
+
+onMounted(() => {
+  rememberOrderDetailBack("/orders");
 });
 
 const orders = computed(() => ordersData.value?.data ?? []);
@@ -128,7 +133,7 @@ useOrderNotification(
   30_000,
   { sound: "none" },
 );
-// Short alert sound is handled once in the admin layout.
+// Emergency MP3 only on unit layout; admin uses toast / notification center.
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
 type SortCol = 'ticket_number' | 'requester_name' | 'unit_name' | 'created_at' | 'status';
@@ -403,9 +408,8 @@ function toggleDropdown(order: any, event: MouseEvent) {
 
     <div v-else>
       <UnitOpsStats
-        title="Statistik operasional"
-        storage-key="bb-admin-ops-period"
         :orders="orders"
+        :period-orders="inPeriod"
         :loading="showOrdersSkeleton"
       />
 

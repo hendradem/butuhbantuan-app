@@ -24,9 +24,22 @@ func NewOrderRepo(db *gorm.DB) *OrderRepo { return &OrderRepo{db: db} }
 
 func (r *OrderRepo) generateTicketNumber() string {
 	today := time.Now().Format("20060102")
-	var count int64
-	r.db.Model(&OrderTicketEntity{}).Where("DATE(created_at) = CURDATE()").Count(&count)
-	return fmt.Sprintf("BB-%s-%04d", today, count+1)
+	prefix := fmt.Sprintf("BB-%s-", today)
+	var last string
+	_ = r.db.Model(&OrderTicketEntity{}).
+		Select("ticket_number").
+		Where("ticket_number LIKE ?", prefix+"%").
+		Order("ticket_number DESC").
+		Limit(1).
+		Scan(&last).Error
+	next := 1
+	if last != "" {
+		var n int
+		if _, err := fmt.Sscanf(last, prefix+"%d", &n); err == nil && n >= 0 {
+			next = n + 1
+		}
+	}
+	return fmt.Sprintf("%s%04d", prefix, next)
 }
 
 func (r *OrderRepo) Create(o domain.OrderTicket) (*domain.OrderTicket, error) {
@@ -34,30 +47,48 @@ func (r *OrderRepo) Create(o domain.OrderTicket) (*domain.OrderTicket, error) {
 	if src == "" {
 		src = "call"
 	}
-	row := OrderTicketEntity{
-		TicketNumber:   r.generateTicketNumber(),
-		EmergencyUUID:  o.EmergencyUUID,
-		UnitName:       o.UnitName,
-		RequesterName:  o.RequesterName,
-		RequesterPhone: o.RequesterPhone,
-		Location:       o.Location,
-		Condition:      o.Condition,
-		PhotoURL:       o.PhotoURL,
-		RequesterLat:   o.RequesterLat,
-		RequesterLng:   o.RequesterLng,
-		Status:         "pending",
-		Source:         src,
-		TypeID:         o.TypeID,
-		RegencyID:      o.RegencyID,
-		ProvinceID:     o.ProvinceID,
-		DispatchRound:  o.DispatchRound,
-		SlaDeadline:    o.SlaDeadline,
-		DispatchStatus: o.DispatchStatus,
+	const maxAttempts = 5
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		row := OrderTicketEntity{
+			TicketNumber:   r.generateTicketNumber(),
+			EmergencyUUID:  o.EmergencyUUID,
+			UnitName:       o.UnitName,
+			RequesterName:  o.RequesterName,
+			RequesterPhone: o.RequesterPhone,
+			Location:       o.Location,
+			Condition:      o.Condition,
+			PhotoURL:       o.PhotoURL,
+			RequesterLat:   o.RequesterLat,
+			RequesterLng:   o.RequesterLng,
+			Status:         "pending",
+			Source:         src,
+			TypeID:         o.TypeID,
+			RegencyID:      o.RegencyID,
+			ProvinceID:     o.ProvinceID,
+			DispatchRound:  o.DispatchRound,
+			SlaDeadline:    o.SlaDeadline,
+			DispatchStatus: o.DispatchStatus,
+		}
+		if err := r.db.Create(&row).Error; err != nil {
+			lastErr = err
+			// Race / gap after deletes: retry with a fresh max+1.
+			if isDuplicateTicketErr(err) {
+				continue
+			}
+			return nil, err
+		}
+		return mapOrder(row), nil
 	}
-	if err := r.db.Create(&row).Error; err != nil {
-		return nil, err
+	return nil, lastErr
+}
+
+func isDuplicateTicketErr(err error) bool {
+	if err == nil {
+		return false
 	}
-	return mapOrder(row), nil
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "duplicate") && strings.Contains(msg, "ticket_number")
 }
 
 func (r *OrderRepo) FindByID(id string) (*domain.OrderTicket, error) {
@@ -151,10 +182,14 @@ func (r *OrderRepo) UpdateStatus(id, status, handlerName, notes string) (*domain
 		updates["accepted_at"] = &now
 		updates["dispatch_status"] = "assigned"
 		updates["sla_deadline"] = nil
+	case "in_progress":
+		q = q.Where("status IN ?", []string{"accepted", "in_progress"})
 	case "completed":
+		q = q.Where("status IN ?", []string{"accepted", "in_progress"})
 		updates["completed_at"] = &now
 		updates["sla_deadline"] = nil
 	case "cancelled":
+		q = q.Where("status NOT IN ?", []string{"completed", "cancelled"})
 		updates["cancelled_at"] = &now
 		updates["sla_deadline"] = nil
 	}
@@ -162,8 +197,31 @@ func (r *OrderRepo) UpdateStatus(id, status, handlerName, notes string) (*domain
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	if status == "accepted" && result.RowsAffected == 0 {
-		return nil, repository.ErrConflict
+	if result.RowsAffected == 0 {
+		existing, err := r.FindByID(id)
+		if err != nil {
+			return nil, err
+		}
+		// Idempotent no-op (same status / unchanged columns) vs illegal transition.
+		switch status {
+		case "accepted":
+			return nil, repository.ErrConflict
+		case "in_progress":
+			if existing.Status == "accepted" || existing.Status == "in_progress" {
+				return existing, nil
+			}
+			return nil, repository.ErrConflict
+		case "completed":
+			if existing.Status == "completed" {
+				return existing, nil
+			}
+			return nil, repository.ErrConflict
+		case "cancelled":
+			if existing.Status == "cancelled" {
+				return existing, nil
+			}
+			return nil, repository.ErrConflict
+		}
 	}
 	var row OrderTicketEntity
 	if err := r.db.Where("uuid = ?", id).First(&row).Error; err != nil {
@@ -338,8 +396,10 @@ func mapOrder(row OrderTicketEntity) *domain.OrderTicket {
 		RequesterLng:      row.RequesterLng,
 		Status:            row.Status,
 		Source:            src,
-		HandlerName:       row.HandlerName,
-		HandlingNotes:     row.HandlingNotes,
+		HandlerName:          row.HandlerName,
+		HandlingNotes:        row.HandlingNotes,
+		ReferralHospitalID:   row.ReferralHospitalID,
+		ReferralHospitalName: row.ReferralHospitalName,
 		TypeID:            row.TypeID,
 		RegencyID:         row.RegencyID,
 		ProvinceID:        row.ProvinceID,
@@ -390,6 +450,15 @@ func (r *OrderRepo) SaveIncidentReport(id, reportJSON string) (*domain.OrderTick
 		return nil, repository.ErrNotFound
 	}
 	return r.FindByID(id)
+}
+
+func (r *OrderRepo) SetReferralHospital(id, hospitalID, hospitalName string) error {
+	return r.db.Model(&OrderTicketEntity{}).
+		Where("uuid = ?", id).
+		Updates(map[string]any{
+			"referral_hospital_id":   hospitalID,
+			"referral_hospital_name": hospitalName,
+		}).Error
 }
 
 func (r *OrderRepo) EnableTrack(id, token string, expiresAt time.Time) (*domain.OrderTicket, error) {
@@ -510,6 +579,21 @@ func (r *OrderRepo) DisableTrack(id string) (*domain.OrderTicket, error) {
 			"responder_lat":        0,
 			"responder_lng":        0,
 			"responder_updated_at": nil,
+		})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return r.FindByID(id)
+}
+
+// ExpireTrack stops live GPS without wiping the magic-link token (field read-only).
+// Keep track_enabled_at so dashboard checklist still counts "link was created".
+func (r *OrderRepo) ExpireTrack(id string) (*domain.OrderTicket, error) {
+	now := time.Now()
+	result := r.db.Model(&OrderTicketEntity{}).
+		Where("uuid = ?", id).
+		Updates(map[string]any{
+			"track_expires_at": now,
 		})
 	if result.Error != nil {
 		return nil, result.Error

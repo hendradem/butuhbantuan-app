@@ -18,12 +18,17 @@ const visible = computed(() => !online.value || fromCache.value);
       class="absolute top-0 inset-x-0 z-[120] px-3 pt-3 pointer-events-none"
     >
       <div
-        class="pointer-events-auto rounded-xl border shadow-sm px-3.5 py-3 flex gap-3 items-start"
+        class="pointer-events-auto px-3.5 py-3 flex gap-3 items-start"
         :class="
           !online
-            ? 'bg-amber-50 border-amber-200 text-amber-950'
-            : 'bg-sky-50 border-sky-200 text-sky-950'
+            ? 'bg-amber-50 text-amber-950'
+            : 'bg-sky-50 text-sky-950'
         "
+        :style="{
+          borderRadius: 'var(--bb-radius-card)',
+          border: !online ? '1px solid #fde68a' : '1px solid #bae6fd',
+          boxShadow: 'var(--bb-shadow-soft)',
+        }"
       >
         <Icon
           :icon="!online ? 'lucide:wifi-off' : 'lucide:database'"

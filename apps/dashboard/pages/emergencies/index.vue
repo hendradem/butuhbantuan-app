@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { toast } from "vue3-hot-toast";
+import { toast } from "~/utils/appToast";
 import { placeAnchoredMenu } from "~/utils/placeAnchoredMenu";
 
 definePageMeta({ title: "Layanan Darurat", keepalive: true });

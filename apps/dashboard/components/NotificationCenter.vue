@@ -58,7 +58,7 @@ function onItemClick(id: string) {
     <Transition name="dropdown">
       <div
         v-if="open"
-        class="absolute right-0 top-full mt-1.5 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-xl border border-neutral-200 shadow-lg z-50 overflow-hidden"
+        class="absolute right-0 top-full mt-1.5 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-xl border border-neutral-200 shadow-lg z-[60] overflow-hidden"
       >
         <div class="px-3 py-2.5 border-b border-neutral-100 flex items-center justify-between gap-2">
           <div>

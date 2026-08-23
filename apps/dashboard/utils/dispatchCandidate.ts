@@ -21,6 +21,7 @@ export type RankedCandidateView = {
   fleet_ok?: boolean;
   is_province?: boolean;
   is_dispatcher?: boolean;
+  dispatch_tier?: string;
   score?: number;
 };
 
@@ -37,16 +38,22 @@ export function candidatePartnerTier(c: RankedCandidateView): string {
 }
 
 export function isPscCandidate(c: RankedCandidateView): boolean {
-  if (candidatePartnerTier(c) === "psc") return true;
+  if (candidatePartnerTier(c) === "psc") {
+    const typeName = String(
+      (c.emergency as any)?.emergency_type?.name || (c.emergency as any)?.type_of_service || "",
+    ).toLowerCase();
+    if (typeName.includes("damkar") || typeName.includes("fire") || typeName.includes("sar")) {
+      return false;
+    }
+    return true;
+  }
   const n = `${candidateName(c)} ${c.emergency?.organization_name ?? ""}`.toLowerCase();
+  // Medical PSC / 119 only — never Damkar / Basarnas.
   return (
     n.includes("psc") ||
     n.includes("119") ||
     n.includes("spgdt") ||
-    n.includes("dinkes") ||
-    n.includes("basarnas") ||
-    n.includes("damkar") ||
-    n.includes("pemadam")
+    n.includes("dinkes")
   );
 }
 
@@ -65,6 +72,7 @@ export function candidateReasons(c: RankedCandidateView): string[] {
   else if (tier === "verified") reasons.push("Terverifikasi");
   else if (tier === "community") reasons.push("Komunitas");
   if (c.emergency?.is_dispatcher || c.is_dispatcher) reasons.push("Dispatcher");
+  if (c.dispatch_tier === "nearby") reasons.push("Kota tetangga · ≤40 km");
   const r = c.emergency?.readiness;
   if (r?.trained_driver || r?.has_oxygen || r?.has_stretcher) {
     const bits: string[] = [];

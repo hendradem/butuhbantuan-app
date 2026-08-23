@@ -6,6 +6,8 @@ const props = defineProps<{
   isOverlay?: boolean;
   scrollable?: boolean;
   disableOverlayClick?: boolean;
+  /** Square top corners (no sheet border-radius). */
+  square?: boolean;
 }>();
 
 const emit = defineEmits<{ close: [] }>();
@@ -51,22 +53,25 @@ function handleOverlayClick() {
 <template>
   <Teleport to="body">
     <Transition name="overlay">
-      <div
-        v-if="isOpen && isOverlay"
-        class="fixed inset-0 bg-neutral-950/50"
-        :style="{ zIndex: overlayZ }"
-        @click="handleOverlayClick"
-      />
+        <div
+          v-if="isOpen && isOverlay"
+          class="fixed inset-0"
+          :style="{ zIndex: overlayZ, background: 'var(--bb-overlay)' }"
+          @click="handleOverlayClick"
+        />
     </Transition>
 
     <Transition name="sheet">
       <div
         v-if="isOpen"
-        class="fixed bottom-0 left-0 right-0 mx-auto max-w-md"
+        class="fixed bottom-0 left-0 right-0 mx-auto max-w-md bg-transparent"
         :style="{ height: sheetHeight, zIndex }"
       >
         <div
-          class="flex flex-col h-full bg-white rounded-t-xl border border-neutral-200 shadow-[0_-8px_30px_rgba(16,24,40,0.08)]"
+          :class="[
+            'ui-sheet-panel flex flex-col h-full',
+            square && 'ui-sheet-panel--square',
+          ]"
         >
           <div v-if="$slots.header" class="flex-shrink-0">
             <slot name="header" />

@@ -1,9 +1,11 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/butuhbantuan/api/internal/domain"
@@ -71,7 +73,18 @@ func (s *OrderService) Create(o domain.OrderTicket) (*domain.OrderTicket, error)
 		Actor:        "system",
 		ToUnit:       result.UnitName,
 	})
-	s.pub.Publish(result.EmergencyUUID, hub.Event{Type: "new_order", Payload: result})
+
+	// Unit walk-in e-tickets pass Status=accepted so we skip the pending offer ring
+	// (new_order) and land directly on accepted via AcceptPending's order_updated.
+	if o.Status == "accepted" && result.EmergencyUUID != "" {
+		accepted, aerr := s.AcceptPending(result.ID, result.EmergencyUUID)
+		if aerr == nil {
+			return accepted, nil
+		}
+		log.Printf("Create auto-accept failed (id=%s): %v", result.ID, aerr)
+	}
+
+	s.pub.PublishScoped(result.EmergencyUUID, result.RegencyID, result.ProvinceID, hub.Event{Type: "new_order", Payload: result})
 	return result, nil
 }
 
@@ -90,8 +103,6 @@ func (s *OrderService) GetByTicketNumber(number string) (*domain.OrderTicket, er
 		return nil, err
 	}
 	s.attachHistory(ticket)
-	// Never expose the magic-link token on the public ticket endpoint.
-	ticket.TrackToken = ""
 	return ticket, nil
 }
 
@@ -123,6 +134,20 @@ func (s *OrderService) UpdateStatus(id, status, handlerName, notes string) (*dom
 			result.TrackExpiresAt = nil
 		}
 	}
+	if status == "completed" {
+		// Soft-close: stop live GPS & hide “track active” in dashboard, but keep
+		// the magic-link token so field petugas can still open a read-only session.
+		if closed, err := s.repo.ExpireTrack(id); err == nil {
+			result = closed
+			_ = s.RecordEvent(domain.OrderEvent{
+				OrderID:      result.ID,
+				TicketNumber: result.TicketNumber,
+				Type:         domain.OrderEventTrackDisabled,
+				Message:      "Live lokasi dihentikan (tiket selesai)",
+				Actor:        handlerName,
+			})
+		}
+	}
 	s.recordStatusEvent(before, result, status, handlerName, notes)
 
 	if status == "accepted" {
@@ -137,6 +162,9 @@ func (s *OrderService) UpdateStatus(id, status, handlerName, notes string) (*dom
 			s.pushSvc.Notify(result.TicketNumber, "Update Tiket "+result.TicketNumber, "Status: "+label)
 		}
 	}
+	if s.pub != nil {
+		s.pub.PublishScoped(result.EmergencyUUID, result.RegencyID, result.ProvinceID, hub.Event{Type: "order_updated", Payload: result})
+	}
 	return result, nil
 }
 
@@ -150,6 +178,9 @@ func (s *OrderService) AcceptPending(id, expectedUUID string) (*domain.OrderTick
 		_ = s.attemptRepo.MarkAccepted(result.ID, result.EmergencyUUID)
 	}
 	s.recordStatusEvent(before, result, "accepted", "", "")
+	if s.pub != nil {
+		s.pub.PublishScoped(result.EmergencyUUID, result.RegencyID, result.ProvinceID, hub.Event{Type: "order_updated", Payload: result})
+	}
 	return result, nil
 }
 
@@ -383,7 +414,7 @@ func (s *OrderService) EnableTrack(id, actor string) (*domain.OrderTicket, error
 		Message:      "Link bagikan lokasi petugas diaktifkan",
 		Actor:        actor,
 	})
-	s.pub.Publish(updated.EmergencyUUID, hub.Event{Type: "order_updated", Payload: updated})
+	s.pub.PublishScoped(updated.EmergencyUUID, updated.RegencyID, updated.ProvinceID, hub.Event{Type: "order_updated", Payload: updated})
 	return updated, nil
 }
 
@@ -399,22 +430,24 @@ func (s *OrderService) DisableTrack(id, actor string) (*domain.OrderTicket, erro
 		Message:      "Link bagikan lokasi petugas dinonaktifkan",
 		Actor:        actor,
 	})
-	s.pub.Publish(updated.EmergencyUUID, hub.Event{Type: "order_updated", Payload: updated})
+	s.pub.PublishScoped(updated.EmergencyUUID, updated.RegencyID, updated.ProvinceID, hub.Event{Type: "order_updated", Payload: updated})
 	return updated, nil
 }
 
 // GetByTrackToken returns a session for the field tracking page.
-// Allows completed tickets so petugas still sees pelapor contact / photo after arrival.
+// Allows completed tickets so petugas still sees pelapor contact / photo after finish.
 func (s *OrderService) GetByTrackToken(token string) (*domain.OrderTicket, error) {
 	ticket, err := s.repo.FindByTrackToken(token)
 	if err != nil {
 		return nil, err
 	}
-	if ticket.TrackExpiresAt != nil && time.Now().After(*ticket.TrackExpiresAt) {
-		return nil, repository.ErrConflict
-	}
 	switch ticket.Status {
-	case "accepted", "in_progress", "completed":
+	case "completed":
+		return ticket, nil
+	case "accepted", "in_progress":
+		if ticket.TrackExpiresAt != nil && time.Now().After(*ticket.TrackExpiresAt) {
+			return nil, repository.ErrConflict
+		}
 		return ticket, nil
 	default:
 		return nil, repository.ErrConflict
@@ -433,8 +466,8 @@ func (s *OrderService) PingTrackLocation(token string, lat, lng float64) (*domai
 	if err != nil {
 		return nil, err
 	}
-	// Citizens poll ticket; also nudge unit stream for posko dashboards.
-	s.pub.Publish(updated.EmergencyUUID, hub.Event{Type: "responder_location", Payload: updated})
+	// Citizens poll ticket; nudge unit + wilayah dispatcher streams for ops maps.
+	s.pub.PublishScoped(updated.EmergencyUUID, updated.RegencyID, updated.ProvinceID, hub.Event{Type: "responder_location", Payload: updated})
 	return updated, nil
 }
 
@@ -458,10 +491,44 @@ func (s *OrderService) MarkArrived(id string) (*domain.OrderTicket, error) {
 	return updated, nil
 }
 
+// CompleteByToken marks the ticket completed from the field magic-link page.
+// Live tracking stays active until this call; track link is then disabled.
+func (s *OrderService) CompleteByToken(token, handlerName, notes string) (*domain.OrderTicket, error) {
+	ticket, err := s.repo.FindByTrackToken(token)
+	if err != nil {
+		return nil, err
+	}
+	if ticket.TrackExpiresAt != nil && time.Now().After(*ticket.TrackExpiresAt) {
+		return nil, repository.ErrConflict
+	}
+	switch ticket.Status {
+	case "accepted", "in_progress":
+		// ok — field may complete after on-scene / referral / return to base
+	default:
+		return nil, repository.ErrConflict
+	}
+	return s.UpdateStatus(ticket.ID, "completed", strings.TrimSpace(handlerName), strings.TrimSpace(notes))
+}
+
+func (s *OrderService) SetReferralHospital(id, hospitalID, hospitalName string) error {
+	return s.repo.SetReferralHospital(id, hospitalID, hospitalName)
+}
+
 func (s *OrderService) SaveIncidentReport(id, reportJSON string) (*domain.OrderTicket, error) {
 	updated, err := s.repo.SaveIncidentReport(id, reportJSON)
 	if err != nil {
 		return nil, err
+	}
+	// Sync referral hospital fields from the report JSON onto the ticket row so
+	// analytics queries can aggregate by referral_hospital_name without parsing JSON.
+	var report struct {
+		ReferralHospitalID   string `json:"referralHospitalId"`
+		ReferralHospitalName string `json:"referralHospitalName"`
+	}
+	if jsonErr := json.Unmarshal([]byte(reportJSON), &report); jsonErr == nil {
+		if report.ReferralHospitalName != "" || updated.ReferralHospitalName == "" {
+			_ = s.repo.SetReferralHospital(id, report.ReferralHospitalID, report.ReferralHospitalName)
+		}
 	}
 	_ = s.RecordEvent(domain.OrderEvent{
 		OrderID:      updated.ID,
@@ -503,7 +570,7 @@ func (s *OrderService) emitArrived(before, updated *domain.OrderTicket) {
 			"Tim darurat sudah tiba di lokasi Anda.",
 		)
 	}
-	s.pub.Publish(updated.EmergencyUUID, hub.Event{Type: "order_arrived", Payload: updated})
+	s.pub.PublishScoped(updated.EmergencyUUID, updated.RegencyID, updated.ProvinceID, hub.Event{Type: "order_arrived", Payload: updated})
 }
 
 // ── NoopOrderService ──────────────────────────────────────────────────────────
@@ -561,8 +628,14 @@ func (s *NoopOrderService) MarkArrivedByToken(_ string) (*domain.OrderTicket, er
 func (s *NoopOrderService) MarkArrived(_ string) (*domain.OrderTicket, error) {
 	return nil, errOrderNotSupported
 }
+func (s *NoopOrderService) CompleteByToken(_, _, _ string) (*domain.OrderTicket, error) {
+	return nil, errOrderNotSupported
+}
 func (s *NoopOrderService) SaveIncidentReport(_, _ string) (*domain.OrderTicket, error) {
 	return nil, errOrderNotSupported
+}
+func (s *NoopOrderService) SetReferralHospital(_, _, _ string) error {
+	return errOrderNotSupported
 }
 
 // ── NoopUnitAuthService ───────────────────────────────────────────────────────

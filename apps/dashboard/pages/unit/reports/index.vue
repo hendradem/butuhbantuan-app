@@ -50,7 +50,7 @@ const { data: ticketFallback } = await useAsyncData(
     if (fromList?.id) return fromList;
     try {
       const res = await $fetch<{ data: any }>(
-        `${baseUrl}/api/v1/order/ticket/${ticketNumber.value}`,
+        `${baseUrl}/api/v1/unit/orders/by-ticket/${ticketNumber.value}`,
         { headers: unitHeaders() },
       );
       return res?.data ?? null;

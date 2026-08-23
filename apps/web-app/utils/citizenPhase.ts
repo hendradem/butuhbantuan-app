@@ -7,7 +7,7 @@ export const CITIZEN_PHASE_LABEL: Record<string, string> = {
   escalated_psc: "Dieskalasi ke pusat darurat",
   accepted: "Unit menerima",
   in_progress: "Unit menuju lokasi",
-  on_scene: "Petugas di lokasi",
+  on_scene: "Penanganan di lokasi",
   completed: "Selesai",
   cancelled: "Dibatalkan",
 };
@@ -20,32 +20,54 @@ export const CITIZEN_PHASE_HINT: Record<string, string> = {
   escalated_psc: "Tim ops mengarahkan Anda ke pusat darurat (PSC).",
   accepted: "Unit sudah menerima tiket Anda.",
   in_progress: "Petugas sedang dalam perjalanan.",
-  on_scene: "Petugas sudah sampai di lokasi Anda.",
+  on_scene: "Petugas di lokasi. Posisi live tetap diperbarui hingga penanganan selesai.",
   completed: "Penanganan selesai.",
   cancelled: "Tiket dibatalkan.",
 };
 
-export function resolveCitizenPhase(ticket: {
+export type CitizenPhaseTicket = {
   status?: string;
   dispatch_status?: string;
   dispatch_round?: number;
   unit_name?: string;
   citizen_phase?: string;
   arrived_at?: string | null;
-} | null | undefined): string {
-  if (!ticket) return "searching";
-  if (ticket.citizen_phase) return ticket.citizen_phase;
+  track_enabled_at?: string | null;
+  responder_lat?: number | null;
+  responder_lng?: number | null;
+};
+
+function hasLiveResponderCoords(ticket: CitizenPhaseTicket): boolean {
+  return !!(ticket.responder_lat || ticket.responder_lng);
+}
+
+/** Derive OTW / on-scene from live fields (status may stay accepted until Sampai Lokasi). */
+function resolveEnRoutePhase(ticket: CitizenPhaseTicket): string {
+  if (ticket.arrived_at) return "on_scene";
   if (
-    (ticket.status === "accepted" || ticket.status === "in_progress") &&
-    ticket.arrived_at
+    ticket.status === "in_progress" ||
+    ticket.track_enabled_at ||
+    hasLiveResponderCoords(ticket)
   ) {
-    return "on_scene";
+    return "in_progress";
   }
+  return "accepted";
+}
+
+export function resolveCitizenPhase(
+  ticket: CitizenPhaseTicket | null | undefined,
+): string {
+  if (!ticket) return "searching";
+
+  // Always re-derive for accepted/in_progress — API may still send stale citizen_phase
+  // while petugas already shares live loc (status stays accepted until Sampai Lokasi).
+  if (ticket.status === "accepted" || ticket.status === "in_progress") {
+    return resolveEnRoutePhase(ticket);
+  }
+
+  if (ticket.citizen_phase) return ticket.citizen_phase;
+
   switch (ticket.status) {
-    case "accepted":
-      return "accepted";
-    case "in_progress":
-      return "in_progress";
     case "completed":
       return "completed";
     case "cancelled":

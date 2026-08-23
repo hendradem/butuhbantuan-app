@@ -15,7 +15,16 @@ const (
 const DefaultDispatchSLA = 90 * time.Second
 
 // MaxDispatchRounds caps how many times a pending SOS ticket may be reassigned.
-const MaxDispatchRounds = 5
+const MaxDispatchRounds = 8
+
+// NearbyDispatchRadiusKm is how far cross-regency field units may compete by
+// distance with home-kab field units (border cases: Sleman↔Bantul, etc.).
+const NearbyDispatchRadiusKm = 40.0
+
+// PreferSelectedSlackKm: on call/list orders the citizen-picked unit is kept
+// only if it is within this many km of the distance-best candidate. Farther
+// picks (e.g. MPD Peduli 7km while PMI Sleman is 1km) are overridden.
+const PreferSelectedSlackKm = 2.5
 
 // RankedCandidate is a scored emergency unit considered for assignment.
 type RankedCandidate struct {
@@ -26,7 +35,7 @@ type RankedCandidate struct {
 	FleetOK    bool      `json:"fleet_ok"`
 	OpenNow    bool      `json:"open_now"`
 	IsProvince bool      `json:"is_province"`
-	Tier       string    `json:"dispatch_tier,omitempty"` // local | kab_dispatcher | province
+	Tier       string    `json:"dispatch_tier,omitempty"` // local | nearby | kab_dispatcher | province
 }
 
 // DispatchAttempt is an audit row for each unit that was offered a ticket.

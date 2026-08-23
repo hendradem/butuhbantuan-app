@@ -18,6 +18,9 @@ func TestResolveCitizenPhase(t *testing.T) {
 		{"exhausted", OrderTicket{Status: "pending", DispatchStatus: "exhausted"}, CitizenPhaseExhausted},
 		{"escalated", OrderTicket{Status: "pending", DispatchStatus: "escalated"}, CitizenPhaseEscalated},
 		{"accepted", OrderTicket{Status: "accepted"}, CitizenPhaseAccepted},
+		{"accepted + track enabled → OTW", OrderTicket{Status: "accepted", TrackEnabledAt: &now}, CitizenPhaseInProgress},
+		{"accepted + responder lat → OTW", OrderTicket{Status: "accepted", ResponderLat: -7.79}, CitizenPhaseInProgress},
+		{"accepted + arrived → on scene", OrderTicket{Status: "accepted", ArrivedAt: &now}, CitizenPhaseOnScene},
 		{"on scene", OrderTicket{Status: "in_progress", ArrivedAt: &now}, CitizenPhaseOnScene},
 	}
 	for _, tc := range cases {

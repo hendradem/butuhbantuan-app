@@ -23,18 +23,36 @@ export default defineNuxtConfig({
     public: {
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || "http://localhost:8080",
       geoapifyApiKey: process.env.NUXT_PUBLIC_GEOAPIFY_API_KEY || "",
+      /** UI theme: soft | legacy. See utils/uiTheme.ts for rollback. */
+      uiTheme: process.env.NUXT_PUBLIC_UI_THEME || "soft",
+      /** Color mode: light | dark. See utils/colorMode.ts. */
+      colorMode: process.env.NUXT_PUBLIC_COLOR_MODE || "light",
+      /** Map tiles: classic (osm) | voyager. See utils/mapAppearance.ts. */
+      mapTiles: process.env.NUXT_PUBLIC_MAP_TILES || "classic",
+      /** Markers: pin | classic. */
+      mapMarkers: process.env.NUXT_PUBLIC_MAP_MARKERS || "pin",
     },
   },
 
   app: {
     head: {
+      htmlAttrs: {
+        "data-ui-theme": process.env.NUXT_PUBLIC_UI_THEME || "soft",
+        "data-color-mode": process.env.NUXT_PUBLIC_COLOR_MODE || "light",
+      },
       title: "ButuhBantuan",
       meta: [
         { name: "description", content: "an emergency assistant for you" },
-        { name: "theme-color", content: "#0f172a" },
+        { name: "theme-color", content: "#1A1C2E" },
         { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1" },
       ],
       link: [
+        { rel: "preconnect", href: "https://fonts.googleapis.com" },
+        { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "" },
+        {
+          rel: "stylesheet",
+          href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap",
+        },
         { rel: "manifest", href: "/manifest.json" },
         { rel: "apple-touch-icon", href: "/ambulance-logo.jpg" },
       ],

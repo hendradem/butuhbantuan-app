@@ -8,11 +8,17 @@ import (
 )
 
 type SOSHandler struct {
-	sosSvc service.SOSUseCase
+	sosSvc  service.SOSUseCase
+	wilayah *service.WilayahResolver
 }
 
 func NewSOSHandler(sosSvc service.SOSUseCase) *SOSHandler {
 	return &SOSHandler{sosSvc: sosSvc}
+}
+
+func (h *SOSHandler) WithWilayah(w *service.WilayahResolver) *SOSHandler {
+	h.wilayah = w
+	return h
 }
 
 func (h *SOSHandler) Submit(c *fiber.Ctx) error {
@@ -38,6 +44,11 @@ func (h *SOSHandler) Submit(c *fiber.Ctx) error {
 		return response.Error(c, fiber.StatusBadRequest, "type_id is required so we can route to the correct emergency unit")
 	}
 
+	regencyID, provinceID := body.RegencyID, body.ProvinceID
+	if h.wilayah != nil {
+		regencyID, provinceID = h.wilayah.Resolve(body.Lat, body.Lng, "", body.RegencyID, body.ProvinceID)
+	}
+
 	alert, err := h.sosSvc.Submit(domain.SOSAlert{
 		Name:        body.Name,
 		Phone:       body.Phone,
@@ -47,8 +58,8 @@ func (h *SOSHandler) Submit(c *fiber.Ctx) error {
 		Description: body.Description,
 		PhotoURL:    body.PhotoURL,
 		TypeID:      body.TypeID,
-		RegencyID:   body.RegencyID,
-		ProvinceID:  body.ProvinceID,
+		RegencyID:   regencyID,
+		ProvinceID:  provinceID,
 	})
 	if err != nil {
 		return response.Error(c, fiber.StatusInternalServerError, "failed to submit SOS alert")

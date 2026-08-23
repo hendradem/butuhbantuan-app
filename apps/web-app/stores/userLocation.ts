@@ -9,6 +9,7 @@ export const useUserLocationStore = defineStore("userLocation", {
     long: 0,
     gpsLat: 0,   // last GPS fix from watchPosition — never overwritten by manual clicks
     gpsLong: 0,
+    gpsAccuracyM: 0,
     fullAddress: "",
     isRefetchMatrix: false,
     isGetCurrentLocation: false,
@@ -24,11 +25,14 @@ export const useUserLocationStore = defineStore("userLocation", {
       this.lat = lat;
       this.long = long;
     },
-    // Called exclusively by watchPosition — always records the live GPS fix
-    // regardless of manual mode, so the location button can always snap back.
-    updateGPSCoordinate(lat: number, long: number) {
+    // Called by GPS / locate — always records the live fix.
+    // accuracyM optional: used to refine pin + accuracy circle.
+    updateGPSCoordinate(lat: number, long: number, accuracyM?: number) {
       this.gpsLat = lat;
       this.gpsLong = long;
+      if (accuracyM != null && Number.isFinite(accuracyM)) {
+        this.gpsAccuracyM = accuracyM;
+      }
       if (!this.isManualLocation) {
         this.lat = lat;
         this.long = long;

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/butuhbantuan/api/internal/domain"
@@ -16,9 +17,25 @@ var (
 	ErrDispatchConflict  = errors.New("order is not in a state that allows this action")
 )
 
-// DispatchUseCase ranks units, assigns SOS tickets, and supports manual accept/reject/reassign.
+// IncidentAssignInput is the shared create+offer payload for SOS and call/list.
+type IncidentAssignInput struct {
+	Source        string // sos | call
+	Name          string
+	Phone         string
+	Address       string
+	Description   string
+	PhotoURL      string
+	Lat, Lng      float64
+	TypeID        uint
+	RegencyID     string
+	ProvinceID    string
+	PreferredUUID string // list tap; kept only if near distance-best
+}
+
+// DispatchUseCase ranks units, assigns SOS/call tickets, and supports manual accept/reject/reassign.
 type DispatchUseCase interface {
 	AssignSOS(alert domain.SOSAlert) (*domain.DispatchResult, error)
+	AssignIncident(in IncidentAssignInput) (*domain.DispatchResult, error)
 	EscalateOverdue() (int, error)
 	Accept(orderID, actorUUID string, admin bool) (*domain.OrderTicket, error)
 	Reject(orderID, actorUUID string, admin bool, reason, note string) (*domain.OrderTicket, error)
@@ -75,33 +92,58 @@ func (s *DispatchService) WithTypeRepo(typeRepo repository.EmergencyTypeReposito
 
 var _ DispatchUseCase = (*DispatchService)(nil)
 
-// AssignSOS picks the best dispatcher and creates a ticket with an SLA deadline.
+// AssignSOS is the SOS entry point into the shared incident assigner.
 func (s *DispatchService) AssignSOS(alert domain.SOSAlert) (*domain.DispatchResult, error) {
-	candidate, err := s.pickCandidate(alert.Lat, alert.Lng, alert.TypeID, alert.RegencyID, alert.ProvinceID, nil)
+	return s.AssignIncident(IncidentAssignInput{
+		Source:      "sos",
+		Name:        alert.Name,
+		Phone:       alert.Phone,
+		Address:     alert.Address,
+		Description: alert.Description,
+		PhotoURL:    alert.PhotoURL,
+		Lat:         alert.Lat,
+		Lng:         alert.Lng,
+		TypeID:      alert.TypeID,
+		RegencyID:   alert.RegencyID,
+		ProvinceID:  alert.ProvinceID,
+	})
+}
+
+// AssignIncident picks the best unit (distance-first cascade) and creates a
+// searching ticket with SLA — used by both SOS and citizen call/list orders.
+func (s *DispatchService) AssignIncident(in IncidentAssignInput) (*domain.DispatchResult, error) {
+	source := strings.TrimSpace(in.Source)
+	if source == "" {
+		source = "sos"
+	}
+
+	candidate, err := s.pickCandidatePreferred(
+		in.Lat, in.Lng, in.TypeID, in.RegencyID, in.ProvinceID, in.PreferredUUID, nil,
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	deadline := time.Now().Add(s.sla)
 	ticketInput := domain.OrderTicket{
-		RequesterName:  alert.Name,
-		RequesterPhone: alert.Phone,
-		Location:       alert.Address,
-		Condition:      alert.Description,
-		PhotoURL:       alert.PhotoURL,
-		RequesterLat:   alert.Lat,
-		RequesterLng:   alert.Lng,
-		Source:         "sos",
-		TypeID:         alert.TypeID,
-		RegencyID:      alert.RegencyID,
-		ProvinceID:     alert.ProvinceID,
+		RequesterName:  in.Name,
+		RequesterPhone: in.Phone,
+		Location:       in.Address,
+		Condition:      in.Description,
+		PhotoURL:       in.PhotoURL,
+		RequesterLat:   in.Lat,
+		RequesterLng:   in.Lng,
+		Source:         source,
+		TypeID:         in.TypeID,
+		RegencyID:      in.RegencyID,
+		ProvinceID:     in.ProvinceID,
 		DispatchRound:  1,
 		DispatchStatus: "searching",
 		SlaDeadline:    &deadline,
 	}
 
 	if candidate == nil {
-		// No unit available — still create a searchable ticket shell without assignee.
+		// No unit available — create ticket then auto-escalate to PSC/komando.
 		ticketInput.DispatchStatus = "exhausted"
 		ticketInput.SlaDeadline = nil
 		ticketInput.DispatchRound = 0
@@ -116,6 +158,12 @@ func (s *DispatchService) AssignSOS(alert domain.SOSAlert) (*domain.DispatchResu
 			Message:      "Tidak ada unit yang cocok di wilayah ini",
 			Actor:        "system",
 		})
+		if escalated, escErr := s.EscalateToPSC(ticket.ID, "system", true); escErr != nil {
+			log.Printf("dispatch: auto-PSC on empty pool %s: %v", ticket.TicketNumber, escErr)
+			return &domain.DispatchResult{Ticket: ticket}, nil
+		} else if escalated != nil {
+			ticket = escalated
+		}
 		return &domain.DispatchResult{Ticket: ticket}, nil
 	}
 
@@ -131,11 +179,15 @@ func (s *DispatchService) AssignSOS(alert domain.SOSAlert) (*domain.DispatchResu
 	if err != nil {
 		log.Printf("dispatch: failed to record attempt for %s: %v", ticket.TicketNumber, err)
 	}
+	offerMsg := "Ditawarkan ke " + candidate.Emergency.Name
+	if in.PreferredUUID != "" && in.PreferredUUID != candidate.Emergency.ID {
+		offerMsg = "Unit terdekat: " + candidate.Emergency.Name + " (pilihan daftar diganti)"
+	}
 	_ = s.orderSvc.RecordEvent(domain.OrderEvent{
 		OrderID:      ticket.ID,
 		TicketNumber: ticket.TicketNumber,
 		Type:         domain.OrderEventOffered,
-		Message:      "Ditawarkan ke " + candidate.Emergency.Name,
+		Message:      offerMsg,
 		Actor:        "system",
 		ToUnit:       candidate.Emergency.Name,
 		Tier:         domain.DispatchTierOf(candidate.Emergency),
@@ -177,14 +229,15 @@ func (s *DispatchService) Accept(orderID, actorUUID string, admin bool) (*domain
 	if err != nil {
 		return nil, err
 	}
-	if err := s.authorizeActor(ticket, actorUUID, admin); err != nil {
+	if err := s.authorizeAccept(ticket, actorUUID, admin); err != nil {
 		return nil, err
 	}
 	if ticket.Status != "pending" {
 		return nil, ErrDispatchConflict
 	}
-	// Ops dispatcher / admin may accept on behalf of the current assignee.
-	ops := !admin && actorUUID != "" && ticket.EmergencyUUID != actorUUID && s.canOpsAct(ticket, actorUUID)
+	// PSC / province command may accept on behalf of the current assignee.
+	// Plain kab is_dispatcher (e.g. PMI) may NOT — only the offered unit can Terima.
+	ops := !admin && actorUUID != "" && ticket.EmergencyUUID != actorUUID && s.canAcceptOnBehalf(ticket, actorUUID)
 	expected := ""
 	if !admin && !ops {
 		expected = ticket.EmergencyUUID
@@ -348,6 +401,7 @@ func (s *DispatchService) ReassignBest(orderID, actorUUID string, admin bool) (*
 
 // EscalateToPSC marks an exhausted/pending ticket as escalated to PSC hotline.
 // Ticket stays alive (pending) with a tap-to-call number for ops + citizen.
+// Medical tickets escalate to medical PSC / 119 only — never Damkar / SAR.
 func (s *DispatchService) EscalateToPSC(orderID, actorUUID string, admin bool) (*domain.OrderTicket, error) {
 	ticket, err := s.orderRepo.FindByID(orderID)
 	if err != nil {
@@ -360,63 +414,36 @@ func (s *DispatchService) EscalateToPSC(orderID, actorUUID string, admin bool) (
 		return nil, ErrDispatchConflict
 	}
 
-	hotline := ""
-	label := "Pusat darurat wilayah"
-	emergencyUUID := ""
-	unitName := ""
-
 	rt := s.routingFor(ticket)
 	typeName := s.resolveTypeName(rt.typeID)
 	reqFam := typeFamily(typeName)
-	if reqFam == "medical" || reqFam == "" {
-		hotline = "119"
-		label = "PSC / SPGDT 119"
+	if reqFam == "" {
+		reqFam = "medical"
 	}
 
-	// Prefer a PSC-like unit in the same province / regency, matching type family.
-	if all, err := s.emergencyRepo.FindAll(); err == nil {
-		var best *domain.Emergency
-		bestScore := 1e9
-		for i := range all {
-			e := &all[i]
-			if !isPSCPartner(*e) && !e.IsProvinceDispatcher && !e.IsDispatcher {
-				continue
-			}
-			// Prefer PSC branding; allow province dispatcher as fallback.
-			familyOK := matchesRequestedType(*e, rt.typeID, reqFam) || (reqFam == "medical" && isPSCPartner(*e))
-			if reqFam != "" && !familyOK {
-				continue
-			}
-			if rt.provinceID != "" && e.Address.ProvinceID != "" && e.Address.ProvinceID != rt.provinceID {
-				continue
-			}
-			score := 20.0
-			if isPSCPartner(*e) {
-				score -= 10
-			}
-			if rt.regencyID != "" && e.Address.RegencyID == rt.regencyID {
-				score -= 5
-			}
-			if e.IsProvinceDispatcher {
-				score -= 2
-			}
-			if score < bestScore {
-				bestScore = score
-				best = e
-			}
-		}
-		if best != nil {
-			emergencyUUID = best.ID
-			unitName = best.Name
-			label = best.Name
-			if best.Contact.Phone != "" {
-				hotline = best.Contact.Phone
-			} else if best.Contact.Whatsapp != "" {
-				hotline = best.Contact.Whatsapp
-			}
+	hotline := "119"
+	label := "PSC / SPGDT 119"
+	emergencyUUID := ""
+	unitName := ""
+	if reqFam == "fire" {
+		hotline = ""
+		label = "Pusat Damkar wilayah"
+	} else if reqFam == "sar" {
+		hotline = ""
+		label = "Pusat SAR wilayah"
+	}
+
+	if best := s.pickEscalationTarget(rt, reqFam); best != nil {
+		emergencyUUID = best.ID
+		unitName = best.Name
+		label = best.Name
+		if best.Contact.Phone != "" {
+			hotline = best.Contact.Phone
+		} else if best.Contact.Whatsapp != "" {
+			hotline = best.Contact.Whatsapp
 		}
 	}
-	if hotline == "" {
+	if hotline == "" && reqFam == "medical" {
 		hotline = "119"
 	}
 
@@ -428,24 +455,35 @@ func (s *DispatchService) EscalateToPSC(orderID, actorUUID string, admin bool) (
 		return nil, err
 	}
 
+	actor := "admin"
+	if !admin {
+		actor = "unit"
+	}
+	if actorUUID == "system" {
+		actor = "system"
+	}
 	_ = s.orderSvc.RecordEvent(domain.OrderEvent{
 		OrderID:      updated.ID,
 		TicketNumber: updated.TicketNumber,
 		Type:         domain.OrderEventEscalatedPSC,
 		Message:      "Dieskalasi ke " + label + " · " + hotline,
-		Actor:        "admin",
+		Actor:        actor,
 		ToUnit:       label,
 		Tier:         domain.DispatchTierProvince,
 	})
-	s.pushSvc.Notify(
-		updated.TicketNumber,
-		"Tim ops menghubungi pusat darurat",
-		"Tiket Anda dieskalasi ke "+label+". Hubungi "+hotline+" bila kondisi mendesak.",
-	)
+	pushTitle := "Tim ops menghubungi pusat darurat"
+	pushBody := "Tiket Anda dieskalasi ke " + label + ". Hubungi " + hotline + " bila kondisi mendesak."
+	if actorUUID == "system" {
+		pushTitle = "Dieskalasi ke pusat darurat"
+		pushBody = "Belum ada unit yang merespons. Hubungi " + label + " · " + hotline + " bila kondisi mendesak."
+	}
+	s.pushSvc.Notify(updated.TicketNumber, pushTitle, pushBody)
 	if s.pub != nil {
 		payload := updated
 		if emergencyUUID != "" {
-			s.pub.Publish(emergencyUUID, hub.Event{Type: "new_order", Payload: payload})
+			s.pub.PublishScoped(emergencyUUID, updated.RegencyID, updated.ProvinceID, hub.Event{Type: "new_order", Payload: payload})
+		} else {
+			s.pub.PublishScoped("", updated.RegencyID, updated.ProvinceID, hub.Event{Type: "order_dispatch_exhausted", Payload: updated})
 		}
 		if ticket.EmergencyUUID != "" && ticket.EmergencyUUID != emergencyUUID {
 			s.pub.Publish(ticket.EmergencyUUID, hub.Event{
@@ -457,8 +495,86 @@ func (s *DispatchService) EscalateToPSC(orderID, actorUUID string, admin bool) (
 	return updated, nil
 }
 
-// ListCandidates returns cascade-ordered candidates for reassignment UI:
-// 1) unit sekabupaten → 2) dispatcher kabupaten → 3) dispatcher provinsi.
+// pickEscalationTarget chooses a command-center unit for escalate-psc.
+// Medical priority: same-regency PSC → province PSC/dispatcher → other kab PSC in province.
+// Never returns Damkar/SAR for medical tickets.
+func (s *DispatchService) pickEscalationTarget(rt routingCtx, reqFam string) *domain.Emergency {
+	all, err := s.emergencyRepo.FindAll()
+	if err != nil || len(all) == 0 {
+		return nil
+	}
+
+	var best *domain.Emergency
+	bestScore := 1e9
+	for i := range all {
+		e := &all[i]
+		fam := candidateFamily(*e)
+
+		switch reqFam {
+		case "medical":
+			if fam == "fire" || fam == "sar" {
+				continue
+			}
+			medicalPSC := isMedicalPSCPartner(*e)
+			medicalProvCmd := e.IsProvinceDispatcher && (fam == "medical" || medicalPSC || fam == "")
+			if medicalProvCmd && fam == "" && !isMedicalPSCNameHeuristic(*e) &&
+				!strings.EqualFold(strings.TrimSpace(e.PartnerTier), domain.PartnerTierPSC) {
+				// Province dispatcher without medical/PSC signal — skip (e.g. generic ops).
+				medicalProvCmd = false
+			}
+			medicalKabPSC := e.IsDispatcher && medicalPSC
+			if !medicalPSC && !medicalProvCmd && !medicalKabPSC {
+				continue
+			}
+		case "fire":
+			if fam == "medical" || fam == "sar" {
+				continue
+			}
+			if fam != "fire" && !isFireCommandHeuristic(*e) {
+				continue
+			}
+		case "sar":
+			if fam != "sar" {
+				continue
+			}
+		default:
+			if !matchesRequestedType(*e, rt.typeID, reqFam) {
+				continue
+			}
+		}
+
+		if rt.provinceID != "" && e.Address.ProvinceID != "" && e.Address.ProvinceID != rt.provinceID {
+			continue
+		}
+
+		score := 50.0
+		if reqFam == "medical" {
+			if isMedicalPSCPartner(*e) {
+				score -= 25
+			}
+			if strings.EqualFold(strings.TrimSpace(e.PartnerTier), domain.PartnerTierPSC) {
+				score -= 10
+			}
+		}
+		// Prefer city PSC, then province command (DIY), then other kab PSC.
+		if rt.regencyID != "" && e.Address.RegencyID == rt.regencyID {
+			score -= 20
+		}
+		if e.IsProvinceDispatcher {
+			score -= 12
+		} else if e.IsDispatcher && isMedicalPSCPartner(*e) {
+			score -= 8
+		}
+		if score < bestScore {
+			bestScore = score
+			best = e
+		}
+	}
+	return best
+}
+
+// ListCandidates returns distance-ordered candidates for reassignment UI
+// (radius pool first, then farther same-province units).
 func (s *DispatchService) ListCandidates(orderID string) ([]domain.RankedCandidate, error) {
 	ticket, err := s.orderRepo.FindByID(orderID)
 	if err != nil {
@@ -538,6 +654,21 @@ func (s *DispatchService) authorizeActor(ticket *domain.OrderTicket, actorUUID s
 	return ErrDispatchForbidden
 }
 
+// authorizeAccept is stricter than authorizeActor: field kab dispatchers may
+// monitor/reassign, but only the offered unit (or PSC/province command) may Terima.
+func (s *DispatchService) authorizeAccept(ticket *domain.OrderTicket, actorUUID string, admin bool) error {
+	if admin {
+		return nil
+	}
+	if actorUUID != "" && ticket.EmergencyUUID != "" && ticket.EmergencyUUID == actorUUID {
+		return nil
+	}
+	if actorUUID != "" && s.canAcceptOnBehalf(ticket, actorUUID) {
+		return nil
+	}
+	return ErrDispatchForbidden
+}
+
 // AuthorizeOrder loads a ticket and checks actor access (assigned unit, wilayah dispatcher, or admin).
 func (s *DispatchService) AuthorizeOrder(orderID, actorUUID string, admin bool) error {
 	ticket, err := s.orderRepo.FindByID(orderID)
@@ -553,6 +684,22 @@ func (s *DispatchService) canOpsAct(ticket *domain.OrderTicket, actorUUID string
 		return false
 	}
 	scope, ok := domain.OpsScopeFromEmergency(units[0])
+	if !ok {
+		return false
+	}
+	return domain.TicketInScope(*ticket, scope)
+}
+
+func (s *DispatchService) canAcceptOnBehalf(ticket *domain.OrderTicket, actorUUID string) bool {
+	units, err := s.emergencyRepo.FindByIDs([]string{actorUUID})
+	if err != nil || len(units) == 0 {
+		return false
+	}
+	e := units[0]
+	if !domain.MayAcceptOnBehalf(e) {
+		return false
+	}
+	scope, ok := domain.OpsScopeFromEmergency(e)
 	if !ok {
 		return false
 	}
@@ -654,7 +801,7 @@ func (s *DispatchService) notifyReassigned(
 	pushBody string,
 ) {
 	if s.pub != nil {
-		s.pub.Publish(newUUID, hub.Event{Type: "new_order", Payload: updated})
+		s.pub.PublishScoped(newUUID, updated.RegencyID, updated.ProvinceID, hub.Event{Type: "new_order", Payload: updated})
 		if prevUUID != "" && prevUUID != newUUID {
 			s.pub.Publish(prevUUID, hub.Event{
 				Type: "order_reassigned",
@@ -685,16 +832,23 @@ func (s *DispatchService) markExhausted(ticket *domain.OrderTicket) error {
 		Actor:        "system",
 		FromUnit:     ticket.UnitName,
 	})
-	s.pushSvc.Notify(
-		updated.TicketNumber,
-		"Belum ada unit yang merespons",
-		"Unit dengan jenis darurat yang sama belum merespons. Follow-up via WhatsApp atau cari unit lain di aplikasi.",
-	)
-	if s.pub != nil && updated.EmergencyUUID != "" {
-		s.pub.Publish(updated.EmergencyUUID, hub.Event{
+	if s.pub != nil {
+		s.pub.PublishScoped(updated.EmergencyUUID, updated.RegencyID, updated.ProvinceID, hub.Event{
 			Type:    "order_dispatch_exhausted",
 			Payload: updated,
 		})
+	}
+
+	// Auto-escalate to PSC/komando so citizen is not left in exhausted limbo.
+	if _, escErr := s.EscalateToPSC(updated.ID, "system", true); escErr != nil {
+		log.Printf("dispatch: auto-PSC after exhausted %s: %v", updated.TicketNumber, escErr)
+		if s.pushSvc != nil {
+			s.pushSvc.Notify(
+				updated.TicketNumber,
+				"Belum ada unit yang merespons",
+				"Unit dengan jenis darurat yang sama belum merespons. Follow-up via WhatsApp atau hubungi pusat darurat.",
+			)
+		}
 	}
 	return nil
 }
@@ -729,6 +883,15 @@ func (s *DispatchService) pickCandidate(
 	regencyID, provinceID string,
 	exclude map[string]struct{},
 ) (*domain.RankedCandidate, error) {
+	return s.pickCandidatePreferred(lat, lng, typeID, regencyID, provinceID, "", exclude)
+}
+
+func (s *DispatchService) pickCandidatePreferred(
+	lat, lng float64,
+	typeID uint,
+	regencyID, provinceID, preferredUUID string,
+	exclude map[string]struct{},
+) (*domain.RankedCandidate, error) {
 	if exclude == nil {
 		exclude = map[string]struct{}{}
 	}
@@ -737,34 +900,98 @@ func (s *DispatchService) pickCandidate(
 	if err != nil {
 		return nil, err
 	}
-	if len(ranked) == 0 {
-		return nil, nil
-	}
-	best := ranked[0]
-	return &best, nil
+	return choosePreferredOrBest(ranked, preferredUUID), nil
 }
 
-// rankCascade walks dispatch tiers in order and ranks within each tier:
-//  1. unit emergency sekabupaten (bukan dispatcher)
-//  2. dispatcher kabupaten
-//  3. dispatcher provinsi
+// choosePreferredOrBest keeps the citizen-selected unit when it is nearly as
+// close as the distance winner; otherwise returns the closest ranked unit.
+func choosePreferredOrBest(ranked []domain.RankedCandidate, preferredUUID string) *domain.RankedCandidate {
+	if len(ranked) == 0 {
+		return nil
+	}
+	best := ranked[0]
+	pref := strings.TrimSpace(preferredUUID)
+	if pref == "" {
+		c := best
+		return &c
+	}
+	for i := range ranked {
+		if ranked[i].Emergency.ID != pref {
+			continue
+		}
+		if ranked[i].DistanceKm <= best.DistanceKm+domain.PreferSelectedSlackKm {
+			c := ranked[i]
+			return &c
+		}
+		break
+	}
+	c := best
+	return &c
+}
+
+// rankCascade walks dispatch tiers — distance first across the province.
+//  1. All matching responders within NearbyDispatchRadiusKm (field + PMI + PSC)
+//  2. Remaining matching responders farther away (incl. province command)
+//
+// is_dispatcher must NOT delay a closer ambulance (Jalan Turi: PMI Sleman 1km
+// must beat MPD Peduli 7km). Kab/province flags only label the tier for UI.
 func (s *DispatchService) rankCascade(
 	lat, lng float64,
 	typeID uint,
 	typeName, regencyID, provinceID string,
 	exclude map[string]struct{},
 ) ([]domain.RankedCandidate, error) {
-	tiers, err := s.loadCascadeTiers(typeID, typeName, regencyID, provinceID)
+	tiers, err := s.loadCascadeTiers(typeID, typeName, regencyID, provinceID, lat, lng)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]domain.RankedCandidate, 0, 32)
-	for _, tier := range [][]domain.Emergency{tiers.localUnits, tiers.regencyDispatchers, tiers.provinceDispatchers} {
-		ranked := RankCandidates(tier, lat, lng, typeID, typeName, exclude)
-		s.applyRejectPenalties(ranked)
-		out = append(out, ranked...)
+	strict := s.walkCascadeTiers(tiers, lat, lng, typeID, typeName, exclude, true)
+	if len(strict) > 0 {
+		return strict, nil
 	}
-	return out, nil
+	return s.walkCascadeTiers(tiers, lat, lng, typeID, typeName, exclude, false), nil
+}
+
+func (s *DispatchService) walkCascadeTiers(
+	tiers cascadeTiers,
+	lat, lng float64,
+	typeID uint,
+	typeName string,
+	exclude map[string]struct{},
+	strictCapacity bool,
+) []domain.RankedCandidate {
+	out := make([]domain.RankedCandidate, 0, 32)
+
+	labelTier := func(ranked []domain.RankedCandidate) {
+		for i := range ranked {
+			e := ranked[i].Emergency
+			switch {
+			case e.IsProvinceDispatcher:
+				ranked[i].Tier = domain.DispatchTierProvince
+			case tiers.homeRegencyID != "" && e.Address.RegencyID == tiers.homeRegencyID &&
+				(e.IsDispatcher || isMedicalPSCPartner(e)):
+				ranked[i].Tier = domain.DispatchTierKabDispatcher
+			case tiers.homeRegencyID != "" && e.Address.RegencyID == tiers.homeRegencyID:
+				ranked[i].Tier = domain.DispatchTierLocal
+			default:
+				ranked[i].Tier = domain.DispatchTierNearby
+			}
+		}
+	}
+
+	// 1) Everyone in radius — pure distance (PMI/PSC dispatcher included).
+	nearRanked := rankCandidates(tiers.radiusPool, lat, lng, typeID, typeName, exclude, strictCapacity)
+	labelTier(nearRanked)
+	s.applyRejectPenalties(nearRanked)
+	out = append(out, nearRanked...)
+
+	// 2) Farther same-province units.
+	farRanked := rankCandidates(tiers.farPool, lat, lng, typeID, typeName, exclude, strictCapacity)
+	labelTier(farRanked)
+	s.applyRejectPenalties(farRanked)
+	out = append(out, farRanked...)
+
+	return out
 }
 
 func (s *DispatchService) applyRejectPenalties(ranked []domain.RankedCandidate) {
@@ -789,16 +1016,27 @@ func (s *DispatchService) applyRejectPenalties(ranked []domain.RankedCandidate) 
 }
 
 type cascadeTiers struct {
-	localUnits           []domain.Emergency
-	regencyDispatchers   []domain.Emergency
-	provinceDispatchers  []domain.Emergency
+	homeRegencyID string
+	radiusPool    []domain.Emergency // all matching within NearbyDispatchRadiusKm
+	farPool       []domain.Emergency // matching beyond radius (same province)
+	// Legacy split fields kept for splitRegencyCascade helpers / tests.
+	localUnits          []domain.Emergency
+	nearbyField         []domain.Emergency
+	nearbyCommand       []domain.Emergency
+	regencyDispatchers  []domain.Emergency
+	provinceDispatchers []domain.Emergency
 }
 
-// loadCascadeTiers builds the 3-step SOS / reassignment pool.
+// loadCascadeTiers builds the SOS / reassignment pool.
 // Every tier is hard-filtered to the requested emergency type family
 // (Ambulance, Damkar, SAR stay on separate lanes).
-func (s *DispatchService) loadCascadeTiers(typeID uint, typeName, regencyID, provinceID string) (cascadeTiers, error) {
+func (s *DispatchService) loadCascadeTiers(
+	typeID uint,
+	typeName, regencyID, provinceID string,
+	lat, lng float64,
+) (cascadeTiers, error) {
 	var tiers cascadeTiers
+	tiers.homeRegencyID = regencyID
 
 	if regencyID != "" {
 		raw, err := s.emergencyRepo.FindByRegency(regencyID)
@@ -810,29 +1048,209 @@ func (s *DispatchService) loadCascadeTiers(typeID uint, typeName, regencyID, pro
 		tiers.regencyDispatchers = local.regencyDispatchers
 	}
 
-	if provinceID != "" {
-		byProv, err := s.emergencyRepo.FindByProvince(provinceID)
-		if err != nil {
-			return tiers, err
+	if provinceID == "" {
+		return tiers, nil
+	}
+	byProv, err := s.emergencyRepo.FindByProvince(provinceID)
+	if err != nil {
+		return tiers, err
+	}
+
+	reqFam := typeFamily(typeName)
+	seen := map[string]struct{}{}
+	hasGPS := lat != 0 || lng != 0
+	for _, e := range byProv {
+		if e.ID == "" {
+			continue
 		}
-		reqFam := typeFamily(typeName)
-		seen := map[string]struct{}{}
-		for _, e := range byProv {
-			if !e.IsProvinceDispatcher || !matchesRequestedType(e, typeID, reqFam) {
-				continue
-			}
-			if _, ok := seen[e.ID]; ok {
-				continue
-			}
-			seen[e.ID] = struct{}{}
+		if _, dup := seen[e.ID]; dup {
+			continue
+		}
+		if !matchesRequestedType(e, typeID, reqFam) {
+			continue
+		}
+		seen[e.ID] = struct{}{}
+		if e.IsProvinceDispatcher {
 			tiers.provinceDispatchers = append(tiers.provinceDispatchers, e)
 		}
+		if !hasGPS {
+			tiers.radiusPool = append(tiers.radiusPool, e)
+			continue
+		}
+		uLat, uLng := parseCoords(e.Coordinates)
+		dist := haversineKm(lat, lng, uLat, uLng)
+		if dist <= domain.NearbyDispatchRadiusKm {
+			tiers.radiusPool = append(tiers.radiusPool, e)
+		} else {
+			tiers.farPool = append(tiers.farPool, e)
+		}
+	}
+
+	// Populate legacy nearby slices for tests / debugging.
+	if hasGPS {
+		localIDs := map[string]struct{}{}
+		for _, e := range append(tiers.localUnits, tiers.regencyDispatchers...) {
+			localIDs[e.ID] = struct{}{}
+		}
+		tiers.nearbyField = filterNearbyField(
+			byProv, regencyID, typeID, typeName, lat, lng,
+			domain.NearbyDispatchRadiusKm, localIDs,
+		)
+		tiers.nearbyCommand = filterNearbyCommand(
+			byProv, regencyID, typeID, typeName, lat, lng,
+			domain.NearbyDispatchRadiusKm, localIDs,
+		)
 	}
 
 	return tiers, nil
 }
 
-// splitRegencyCascade separates same-kabupaten units vs kabupaten dispatchers.
+// filterNearbyField keeps other-regency FIELD units (not dispatcher / PSC command /
+// province) within radius — used for border distance-first offers.
+func filterNearbyField(
+	pool []domain.Emergency,
+	homeRegencyID string,
+	typeID uint,
+	typeName string,
+	lat, lng, radiusKm float64,
+	skipIDs map[string]struct{},
+) []domain.Emergency {
+	reqFam := typeFamily(typeName)
+	out := make([]domain.Emergency, 0, 8)
+	seen := map[string]struct{}{}
+	for _, e := range pool {
+		if e.ID == "" {
+			continue
+		}
+		if _, skip := skipIDs[e.ID]; skip {
+			continue
+		}
+		if _, dup := seen[e.ID]; dup {
+			continue
+		}
+		if e.IsProvinceDispatcher || e.IsDispatcher || isMedicalPSCPartner(e) {
+			continue
+		}
+		if homeRegencyID != "" && e.Address.RegencyID == homeRegencyID {
+			continue
+		}
+		if !matchesRequestedType(e, typeID, reqFam) {
+			continue
+		}
+		uLat, uLng := parseCoords(e.Coordinates)
+		dist := haversineKm(lat, lng, uLat, uLng)
+		if dist > radiusKm {
+			continue
+		}
+		seen[e.ID] = struct{}{}
+		out = append(out, e)
+	}
+	return out
+}
+
+// filterNearbyCommand keeps other-regency PSC / dispatcher command nodes within radius.
+func filterNearbyCommand(
+	pool []domain.Emergency,
+	homeRegencyID string,
+	typeID uint,
+	typeName string,
+	lat, lng, radiusKm float64,
+	skipIDs map[string]struct{},
+) []domain.Emergency {
+	reqFam := typeFamily(typeName)
+	out := make([]domain.Emergency, 0, 8)
+	seen := map[string]struct{}{}
+	for _, e := range pool {
+		if e.ID == "" {
+			continue
+		}
+		if _, skip := skipIDs[e.ID]; skip {
+			continue
+		}
+		if _, dup := seen[e.ID]; dup {
+			continue
+		}
+		if e.IsProvinceDispatcher {
+			continue
+		}
+		if homeRegencyID != "" && e.Address.RegencyID == homeRegencyID {
+			continue
+		}
+		if !(e.IsDispatcher || isMedicalPSCPartner(e)) {
+			continue
+		}
+		if !matchesRequestedType(e, typeID, reqFam) {
+			continue
+		}
+		uLat, uLng := parseCoords(e.Coordinates)
+		dist := haversineKm(lat, lng, uLat, uLng)
+		if dist > radiusKm {
+			continue
+		}
+		seen[e.ID] = struct{}{}
+		out = append(out, e)
+	}
+	return out
+}
+
+// filterNearbyTrusted is kept for tests / callers — other-kab PSC|verified within radius.
+func filterNearbyTrusted(
+	pool []domain.Emergency,
+	homeRegencyID string,
+	typeID uint,
+	typeName string,
+	lat, lng, radiusKm float64,
+	skipIDs map[string]struct{},
+) []domain.Emergency {
+	reqFam := typeFamily(typeName)
+	out := make([]domain.Emergency, 0, 8)
+	seen := map[string]struct{}{}
+	for _, e := range pool {
+		if e.ID == "" {
+			continue
+		}
+		if _, skip := skipIDs[e.ID]; skip {
+			continue
+		}
+		if _, dup := seen[e.ID]; dup {
+			continue
+		}
+		if e.IsProvinceDispatcher {
+			continue
+		}
+		if homeRegencyID != "" && e.Address.RegencyID == homeRegencyID {
+			continue
+		}
+		if !isTrustedNearbyPartner(e) {
+			continue
+		}
+		if !matchesRequestedType(e, typeID, reqFam) {
+			continue
+		}
+		uLat, uLng := parseCoords(e.Coordinates)
+		dist := haversineKm(lat, lng, uLat, uLng)
+		if dist > radiusKm {
+			continue
+		}
+		seen[e.ID] = struct{}{}
+		out = append(out, e)
+	}
+	return out
+}
+
+// isTrustedNearbyPartner gates legacy trusted-partner checks (PSC / verified).
+func isTrustedNearbyPartner(e domain.Emergency) bool {
+	switch strings.ToLower(strings.TrimSpace(e.PartnerTier)) {
+	case domain.PartnerTierPSC, domain.PartnerTierVerified:
+		return true
+	}
+	return isPSCPartner(e)
+}
+
+// splitRegencyCascade separates same-kabupaten field units vs kabupaten command.
+// Medical PSC / 119 / SPGDT always go to the dispatcher tier even when
+// is_dispatcher is unset in DB — otherwise they compete with nearer ambulances
+// in the local tier and leapfrog PMI/MPD.
 func splitRegencyCascade(raw []domain.Emergency, regencyID string, typeID uint, typeName string) cascadeTiers {
 	var tiers cascadeTiers
 	reqFam := typeFamily(typeName)
@@ -843,7 +1261,7 @@ func splitRegencyCascade(raw []domain.Emergency, regencyID string, typeID uint, 
 		if !matchesRequestedType(e, typeID, reqFam) {
 			continue
 		}
-		if e.IsDispatcher {
+		if e.IsDispatcher || isMedicalPSCPartner(e) {
 			tiers.regencyDispatchers = append(tiers.regencyDispatchers, e)
 		} else {
 			tiers.localUnits = append(tiers.localUnits, e)
@@ -887,6 +1305,9 @@ type NoopDispatchService struct{}
 func NewNoopDispatchService() *NoopDispatchService { return &NoopDispatchService{} }
 
 func (s *NoopDispatchService) AssignSOS(_ domain.SOSAlert) (*domain.DispatchResult, error) {
+	return nil, repository.ErrNotSupported
+}
+func (s *NoopDispatchService) AssignIncident(_ IncidentAssignInput) (*domain.DispatchResult, error) {
 	return nil, repository.ErrNotSupported
 }
 func (s *NoopDispatchService) EscalateOverdue() (int, error) { return 0, nil }

@@ -2,6 +2,7 @@ package mysqlrepo
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/butuhbantuan/api/internal/domain"
 	"gorm.io/gorm"
@@ -382,4 +383,139 @@ func (r *AnalyticsRepo) GetHeatmap(periodDays int) ([]domain.HeatmapPoint, error
 
 func round1(v float64) float64 {
 	return float64(int(v*10+0.5)) / 10
+}
+
+// GetUnitPeriodAggregates returns order/feedback math for one unit in a period.
+func (r *AnalyticsRepo) GetUnitPeriodAggregates(emergencyUUID string, periodDays int) (domain.UnitPeriodAggregates, error) {
+	if periodDays <= 0 || periodDays > 365 {
+		periodDays = 30
+	}
+	var out domain.UnitPeriodAggregates
+
+	type orderAgg struct {
+		Total          int64
+		Completed      int64
+		Cancelled      int64
+		Pending        int64
+		InProgress     int64
+		AvgResponseSec float64
+		AvgArrivalSec  float64
+	}
+	var oa orderAgg
+	if err := r.db.Raw(fmt.Sprintf(`
+		SELECT
+			COUNT(*) AS total,
+			COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) AS completed,
+			COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) AS cancelled,
+			COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) AS pending,
+			COALESCE(SUM(CASE WHEN status IN ('accepted','in_progress') THEN 1 ELSE 0 END), 0) AS in_progress,
+			COALESCE(ROUND(AVG(CASE WHEN accepted_at IS NOT NULL
+				THEN TIMESTAMPDIFF(SECOND, created_at, accepted_at) END), 0), 0) AS avg_response_sec,
+			COALESCE(ROUND(AVG(CASE WHEN arrived_at IS NOT NULL AND accepted_at IS NOT NULL
+				THEN TIMESTAMPDIFF(SECOND, accepted_at, arrived_at) END), 0), 0) AS avg_arrival_sec
+		FROM %s
+		WHERE emergency_uuid = ?
+		  AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+	`, tOrder), emergencyUUID, periodDays).Scan(&oa).Error; err != nil {
+		return out, err
+	}
+	out.TotalOrders = oa.Total
+	out.Completed = oa.Completed
+	out.Cancelled = oa.Cancelled
+	out.Pending = oa.Pending
+	out.InProgress = oa.InProgress
+	out.AvgResponseSec = oa.AvgResponseSec
+	out.AvgArrivalSec = oa.AvgArrivalSec
+
+	type feedAgg struct {
+		Total   int64
+		Helpful int64
+	}
+	var fa feedAgg
+	if err := r.db.Raw(fmt.Sprintf(`
+		SELECT
+			COUNT(*) AS total,
+			COALESCE(SUM(CASE WHEN unit_helpful = 1 THEN 1 ELSE 0 END), 0) AS helpful
+		FROM %s
+		WHERE emergency_uuid = ?
+		  AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+	`, tFeedback), emergencyUUID, periodDays).Scan(&fa).Error; err != nil {
+		return out, err
+	}
+	out.FeedbackTotal = fa.Total
+	out.FeedbackHelpful = fa.Helpful
+
+	var quotes []string
+	_ = r.db.Raw(fmt.Sprintf(`
+		SELECT comment FROM %s
+		WHERE emergency_uuid = ?
+		  AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+		  AND comment IS NOT NULL AND TRIM(comment) <> ''
+		ORDER BY created_at DESC
+		LIMIT 3
+	`, tFeedback), emergencyUUID, periodDays).Scan(&quotes).Error
+	if quotes == nil {
+		quotes = []string{}
+	}
+	trimmed := make([]string, 0, len(quotes))
+	for _, q := range quotes {
+		q = strings.TrimSpace(q)
+		if q == "" {
+			continue
+		}
+		runes := []rune(q)
+		if len(runes) > 140 {
+			q = string(runes[:137]) + "…"
+		}
+		trimmed = append(trimmed, q)
+	}
+	out.RecentQuotes = trimmed
+
+	var trend []domain.DailyStat
+	_ = r.db.Raw(fmt.Sprintf(`
+		SELECT DATE(created_at) AS date, COUNT(*) AS count
+		FROM %s
+		WHERE emergency_uuid = ?
+		  AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+		GROUP BY DATE(created_at)
+		ORDER BY date ASC
+	`, tOrder), emergencyUUID, periodDays).Scan(&trend).Error
+	if trend == nil {
+		trend = []domain.DailyStat{}
+	}
+	out.DailyTrend = trend
+
+	var hours []domain.HourStat
+	_ = r.db.Raw(fmt.Sprintf(`
+		SELECT HOUR(created_at) AS hour, COUNT(*) AS count
+		FROM %s
+		WHERE emergency_uuid = ?
+		  AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+		GROUP BY HOUR(created_at)
+		ORDER BY hour ASC
+	`, tOrder), emergencyUUID, periodDays).Scan(&hours).Error
+	if hours == nil {
+		hours = []domain.HourStat{}
+	}
+	out.ByHour = hours
+
+	var referrals []domain.ReferralStat
+	_ = r.db.Raw(fmt.Sprintf(`
+		SELECT referral_hospital_id AS hospital_id,
+		       referral_hospital_name AS hospital_name,
+		       COUNT(*) AS count
+		FROM %s
+		WHERE emergency_uuid = ?
+		  AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+		  AND referral_hospital_name <> ''
+		GROUP BY referral_hospital_id, referral_hospital_name
+		ORDER BY count DESC
+		LIMIT 10
+	`, tOrder), emergencyUUID, periodDays).Scan(&referrals).Error
+	if referrals == nil {
+		referrals = []domain.ReferralStat{}
+	}
+	out.Referrals = referrals
+
+	return out, nil
 }

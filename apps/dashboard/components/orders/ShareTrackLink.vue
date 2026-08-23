@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { toast } from "vue3-hot-toast";
+import { toast } from "~/utils/appToast";
 
 const props = defineProps<{
   order: any | null;
@@ -84,7 +84,8 @@ const trackUrl = computed(() => {
   return `${publicAppOrigin()}/track/${token}`;
 });
 
-const hasShareableLink = computed(() => !!trackUrl.value);
+/** True when we can show / copy the share URL (local, session, or server token). */
+const hasShareableLink = computed(() => !!effectiveToken.value);
 
 function authHeaders(): Record<string, string> {
   if (props.mode === "admin") {
@@ -103,8 +104,15 @@ function syncTokenFromOrder() {
     localToken.value = "";
     return;
   }
-  localToken.value =
-    props.order?.track_token || readStoredToken(id) || localToken.value || "";
+  const fromOrder = String(props.order?.track_token || "").trim();
+  const fromStore = readStoredToken(id);
+  // Prefer server → session → in-memory so a refresh without token in payload
+  // does not wipe a link we just created.
+  const next = fromOrder || fromStore || localToken.value || "";
+  localToken.value = next;
+  if (fromOrder && fromOrder !== fromStore) {
+    storeToken(id, fromOrder);
+  }
 }
 
 watch(
@@ -137,16 +145,23 @@ async function enableTrack() {
       `${baseUrl}${apiPrefix()}/${id}/track/enable`,
       { method: "POST", headers }
     );
-    const token = String(res?.data?.track_token || "");
+    const token = String(res?.data?.track_token || "").trim();
     if (!token) {
       toast.error("Link dibuat tapi token kosong — coba lagi");
       return;
     }
     localToken.value = token;
     storeToken(id, token);
-    toast.success("Link bagikan lokasi siap");
-    // Refresh after token is stored so public ticket strip tidak menghapus link di UI.
+    toast.success("Link lokasi petugas siap");
+    // Keep local token across parent refresh (order may omit track_token briefly).
+    await nextTick();
     emit("refreshed");
+    // Re-assert after refresh so Salin/WA stay visible even if payload strips token.
+    await nextTick();
+    if (!localToken.value) {
+      localToken.value = token;
+      storeToken(id, token);
+    }
   } catch (e: any) {
     const msg =
       e?.data?.message ||
@@ -257,6 +272,7 @@ async function shareWA() {
           {{ trackUrl }}
         </p>
       </div>
+
       <div class="grid grid-cols-2 gap-2">
         <button
           type="button"

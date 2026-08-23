@@ -15,6 +15,7 @@ func Migrate(db *gorm.DB) error {
 		&District{},
 		&EmergencyTypeEntity{},
 		&EmergencyEntity{},
+		&HospitalMasterEntity{},
 		&AvailableServiceCityEntity{},
 		&FeedbackEntity{},
 		&OrderTicketEntity{},

@@ -1,12 +1,12 @@
 /** Shared period ranges for order list filters (admin + unit). */
 
 export const ORDER_PERIOD_PRESETS = [
+  { id: "1", label: "Hari" },
+  { id: "week", label: "Minggu" },
+  { id: "month", label: "Bulan" },
+  { id: "180", label: "6 Bulan" },
+  { id: "365", label: "1 Tahun" },
   { id: "all", label: "Semua" },
-  { id: "1", label: "Hari ini" },
-  { id: "week", label: "Minggu ini" },
-  { id: "month", label: "Bulan ini" },
-  { id: "180", label: "6 bulan" },
-  { id: "365", label: "1 tahun" },
   { id: "custom", label: "Kustom" },
 ] as const;
 

@@ -14,12 +14,31 @@ import (
 // Lower score is better. excludeIDs skips units already offered.
 // When typeID > 0 or requestedTypeName is set, only compatible types are ranked
 // (ambulance never escalates to damkar, etc.).
+//
+// Capacity policy (strict=true, default path):
+//   - skip units that are closed / inactive (PSC partners always count as open)
+//   - skip units with known fleet Total>0 and Available==0
+// Unknown fleet (Total==0) stays eligible.
 func RankCandidates(
 	candidates []domain.Emergency,
 	lat, lng float64,
 	typeID uint,
 	requestedTypeName string,
 	excludeIDs map[string]struct{},
+) []domain.RankedCandidate {
+	return rankCandidates(candidates, lat, lng, typeID, requestedTypeName, excludeIDs, true)
+}
+
+// rankCandidates is the shared scorer. When strictCapacity is false, closed /
+// zero-fleet units are soft-penalized instead of skipped (fallback if the
+// whole cascade pool would otherwise be empty).
+func rankCandidates(
+	candidates []domain.Emergency,
+	lat, lng float64,
+	typeID uint,
+	requestedTypeName string,
+	excludeIDs map[string]struct{},
+	strictCapacity bool,
 ) []domain.RankedCandidate {
 	reqFamily := typeFamily(requestedTypeName)
 	ranked := make([]domain.RankedCandidate, 0, len(candidates))
@@ -33,22 +52,37 @@ func RankCandidates(
 
 		unitLat, unitLng := parseCoords(e.Coordinates)
 		dist := haversineKm(lat, lng, unitLat, unitLng)
-		fleetOK := e.Fleet.Available > 0 || e.Fleet.Total == 0
+		fleetKnownEmpty := e.Fleet.Total > 0 && e.Fleet.Available == 0
+		fleetOK := !fleetKnownEmpty
 		psc := isPSCPartner(e)
 		openNow := isOpenNow(e.Operational) || psc
-		isProvince := e.IsProvinceDispatcher
+
+		if strictCapacity {
+			if !openNow || fleetKnownEmpty {
+				continue
+			}
+		}
 
 		score := dist
+		// Soft nudges only — must never outweigh ~1 km of road distance.
+		// (Old fleet −5 + readiness −10 let MPD ~7km beat PSC SES ~2.5km.)
+		soft := partnerTierScoreDelta(e)
 		if fleetOK && e.Fleet.Available > 0 {
-			score -= 5
-		} else if e.Fleet.Total > 0 && e.Fleet.Available == 0 {
-			score += 15
+			soft -= 0.25
 		}
+		if soft < -0.75 {
+			soft = -0.75
+		}
+		if soft > 20 {
+			soft = 20
+		}
+		score += soft
 		if !openNow {
 			score += 80
 		}
-		score += partnerTierScoreDelta(e)
-		score += readinessScoreDelta(e.Readiness)
+		if fleetKnownEmpty {
+			score += 15
+		}
 
 		ranked = append(ranked, domain.RankedCandidate{
 			Emergency:  e,
@@ -57,7 +91,7 @@ func RankCandidates(
 			TypeMatch:  true,
 			FleetOK:    fleetOK,
 			OpenNow:    openNow,
-			IsProvince: isProvince,
+			IsProvince: e.IsProvinceDispatcher,
 			Tier:       domain.DispatchTierOf(e),
 		})
 	}
@@ -124,45 +158,60 @@ func matchesRequestedType(e domain.Emergency, typeID uint, reqFamily string) boo
 }
 
 func isPSCPartner(e domain.Emergency) bool {
+	return isMedicalPSCPartner(e)
+}
+
+// isMedicalPSCPartner is the medical command-center signal (PSC / 119 / SPGDT).
+// Fire (Damkar) and SAR must never count as medical PSC — that caused wrong
+// "Escalate to PSC" assignments.
+func isMedicalPSCPartner(e domain.Emergency) bool {
+	fam := candidateFamily(e)
+	if fam == "fire" || fam == "sar" {
+		return false
+	}
 	if strings.EqualFold(strings.TrimSpace(e.PartnerTier), domain.PartnerTierPSC) {
 		return true
 	}
-	// Legacy fallback until all rows have partner_tier populated.
-	return isPSCNameHeuristic(e)
+	return isMedicalPSCNameHeuristic(e)
 }
 
 func partnerTierScoreDelta(e domain.Emergency) float64 {
+	// Tiny trust nudge only — never outweigh ~1 km of distance.
 	switch strings.ToLower(strings.TrimSpace(e.PartnerTier)) {
 	case domain.PartnerTierPSC:
-		return -25
+		if candidateFamily(e) == "fire" || candidateFamily(e) == "sar" {
+			return 0
+		}
+		return -0.5
 	case domain.PartnerTierVerified:
-		return -12
+		return -0.25
 	case domain.PartnerTierCommunity:
 		return 0
 	default:
-		// Untagged legacy: keep name-heuristic PSC boost.
-		if isPSCNameHeuristic(e) {
-			return -25
+		if isMedicalPSCNameHeuristic(e) {
+			return -0.5
 		}
 		return 0
 	}
 }
 
+// readinessScoreDelta is kept for analytics / future UI — not applied to
+// dispatch distance ranking (equipment flags were drowning proximity).
 func readinessScoreDelta(r domain.Readiness) float64 {
 	delta := 0.0
 	if r.TrainedDriver {
-		delta -= 4
+		delta -= 0.1
 	}
 	if r.HasOxygen {
-		delta -= 3
+		delta -= 0.1
 	}
 	if r.HasStretcher {
-		delta -= 3
+		delta -= 0.1
 	}
 	return delta
 }
 
-func isPSCNameHeuristic(e domain.Emergency) bool {
+func isMedicalPSCNameHeuristic(e domain.Emergency) bool {
 	blob := strings.ToLower(strings.Join([]string{
 		e.Name,
 		e.OrganizationName,
@@ -170,7 +219,20 @@ func isPSCNameHeuristic(e domain.Emergency) bool {
 		e.TypeOfService,
 		e.Description,
 	}, " "))
-	return containsAny(blob, "psc", "119", "spgdt", "dinas kesehatan", "dinkes", "basarnas", "damkar", "pemadam", "pencarian dan pertolongan")
+	// Medical PSC / SPGDT / 119 only — never Damkar / Basarnas.
+	return containsAny(blob, "psc", "119", "spgdt", "dinas kesehatan", "dinkes")
+}
+
+// isFireCommandHeuristic detects damkar command centers (for fire-lane escalation).
+func isFireCommandHeuristic(e domain.Emergency) bool {
+	blob := strings.ToLower(strings.Join([]string{
+		e.Name,
+		e.OrganizationName,
+		e.OrganizationType,
+		e.TypeOfService,
+		e.Description,
+	}, " "))
+	return containsAny(blob, "damkar", "pemadam", "kebakaran", "fire")
 }
 
 func containsAny(s string, needles ...string) bool {

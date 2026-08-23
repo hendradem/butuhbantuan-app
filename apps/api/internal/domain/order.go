@@ -50,6 +50,9 @@ type OrderTicket struct {
 	AcceptedAt   *time.Time `json:"accepted_at,omitempty"`
 	CompletedAt  *time.Time `json:"completed_at"`
 	CreatedAt    time.Time  `json:"created_at"`
+	// Referral hospital — filled via the complete modal.
+	ReferralHospitalID   string `json:"referral_hospital_id,omitempty"`
+	ReferralHospitalName string `json:"referral_hospital_name,omitempty"`
 	// Incident report (ops) — shared between unit & admin dashboards.
 	HasIncidentReport bool            `json:"has_incident_report"`
 	IncidentReport    json.RawMessage `json:"incident_report,omitempty"`

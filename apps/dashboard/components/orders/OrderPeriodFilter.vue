@@ -34,7 +34,7 @@ function onPeriodSelect(raw: string) {
     <!-- Compact: UiSelect + optional dates — stacks on narrow screens -->
     <div
       v-if="compact"
-      class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 min-w-0 w-full"
+      class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 min-w-0 w-full sm:w-auto"
     >
       <UiSelect
         class="w-full sm:!w-auto sm:min-w-[8.5rem]"

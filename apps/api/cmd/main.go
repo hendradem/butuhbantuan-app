@@ -18,12 +18,14 @@ import (
 	"github.com/butuhbantuan/api/internal/repository"
 	"github.com/butuhbantuan/api/internal/router"
 	"github.com/butuhbantuan/api/internal/service"
+	"github.com/butuhbantuan/api/internal/service/hospitalprovider"
 	"github.com/butuhbantuan/api/pkg/config"
 	"github.com/butuhbantuan/api/pkg/database"
 	"github.com/butuhbantuan/api/pkg/hub"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -46,11 +48,13 @@ func main() {
 		attemptRepo   repository.DispatchAttemptRepository
 		eventRepo     repository.OrderEventRepository
 		tileRepo      repository.MapTileUsageRepository
+		db            *gorm.DB
 	)
 
 	switch cfg.Storage {
 	case "mysql":
-		db, err := database.Connect(cfg.DSN)
+		var err error
+		db, err = database.Connect(cfg.DSN)
 		if err != nil {
 			log.Fatalf("failed to connect to mysql: %v", err)
 		}
@@ -97,6 +101,17 @@ func main() {
 			return
 		}
 
+		// Auto-seed national wilayah on first run (idempotent — INSERT IGNORE).
+		var provinceCount int64
+		if db.Table("provinces").Count(&provinceCount).Error == nil && provinceCount == 0 {
+			log.Println("province table empty — auto-seeding national wilayah...")
+			if err := seedNationalWilayah(mysqlEmergency); err != nil {
+				log.Printf("auto-seed wilayah warning: %v", err)
+			} else {
+				log.Println("auto-seed wilayah done")
+			}
+		}
+
 	default: // "json"
 		if *seed {
 			log.Fatalln("--seed requires STORAGE=mysql")
@@ -120,7 +135,7 @@ func main() {
 	}
 	var analyticsSvc service.AnalyticsUseCase
 	if analyticsRepo != nil {
-		analyticsSvc = service.NewAnalyticsService(analyticsRepo)
+		analyticsSvc = service.NewAnalyticsService(analyticsRepo, emergencyRepo)
 	} else {
 		analyticsSvc = &service.NoopAnalyticsService{}
 	}
@@ -185,17 +200,39 @@ func main() {
 
 	mapTilesSvc := service.NewMapTilesService(tileRepo, true)
 
-	app := fiber.New()
+	var hospitalSvc service.HospitalUseCase
+	if db != nil {
+		hospitalMasterRepo := mysqlrepo.NewHospitalMasterRepo(db)
+		var hospitalProvider domain.HospitalProvider
+		if cfg.SatuSehatForceStub || cfg.SatuSehatClientID == "" || cfg.SatuSehatClientSecret == "" {
+			hospitalProvider = hospitalprovider.NewStubProvider("data/hospitals/stub_by_regency.json")
+			log.Println("hospital master: using stub provider (set SATUSEHAT_CLIENT_ID/SECRET for live MSI)")
+		} else {
+			hospitalProvider = hospitalprovider.NewSatuSehatProvider(cfg.SatuSehatBaseURL, cfg.SatuSehatClientID, cfg.SatuSehatClientSecret)
+			log.Println("hospital master: using SATUSEHAT MSI provider")
+		}
+		hospitalSvc = service.NewHospitalService(hospitalMasterRepo, regionRepo, emergencyRepo, typeRepo, hospitalProvider)
+	}
+
+	var wilayahResolver *service.WilayahResolver
+	if regionRepo != nil {
+		wilayahResolver = service.NewWilayahResolver(regionRepo, emergencyRepo)
+	}
+
+	app := fiber.New(fiber.Config{
+		// Multipart incident photos (client compresses; leave headroom for form overhead).
+		BodyLimit: 12 * 1024 * 1024,
+	})
 	app.Use(logger.New())
 	app.Static("/uploads", "./uploads")
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.AllowOrigins,
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Admin-Key, X-Unit-Token",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Admin-Key, X-Unit-Token, X-Requester-Phone",
 		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
 		AllowCredentials: true,
 	}))
 
-	router.Register(app, emergencySvc, emergencySvc, regionSvc, feedbackSvc, orderSvc, unitAuthSvc, sosSvc, pushSvc, analyticsSvc, dispatchSvc, unitCredRepo, mapTilesSvc, cfg, eventHub)
+	router.Register(app, emergencySvc, emergencySvc, regionSvc, feedbackSvc, orderSvc, unitAuthSvc, sosSvc, pushSvc, analyticsSvc, dispatchSvc, unitCredRepo, mapTilesSvc, wilayahResolver, hospitalSvc, cfg, eventHub, db)
 
 	// Graceful shutdown on SIGINT / SIGTERM
 	quit := make(chan os.Signal, 1)

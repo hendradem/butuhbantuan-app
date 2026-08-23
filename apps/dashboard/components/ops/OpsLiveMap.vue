@@ -36,13 +36,19 @@ const props = defineProps<{
   incidents: OpsIncident[];
   units: OpsUnit[];
   loading?: boolean;
+  /** Prefer this ticket for auto-focus / route (e.g. active unit offer). */
+  focusTicket?: string | null;
 }>();
+
+const config = useRuntimeConfig();
+const apiBase = config.public.apiBaseUrl as string;
 
 const mapEl = ref<HTMLDivElement | null>(null);
 const ready = ref(false);
 const selected = ref<string | null>(null);
 const showUnits = ref(true);
 const fStatus = ref("");
+let routeToken = 0;
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "#f59e0b",
@@ -114,11 +120,25 @@ function gpsFreshnessLabel(i: OpsIncident) {
 
 function divIcon(html: string, size: [number, number], anchor: [number, number]) {
   return L.divIcon({
-    className: "",
+    className: "ops-live-marker",
     html,
     iconSize: size,
     iconAnchor: anchor,
   });
+}
+
+function pinSvg(fill: string) {
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M12 22s7-7.2 7-12.2A7 7 0 0 0 5 9.8C5 14.8 12 22 12 22Z" fill="${fill}"/>
+    <circle cx="12" cy="9.5" r="2.6" fill="#fff"/>
+  </svg>`;
+}
+
+function unitSvg(fill: string) {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M3 13h13l3-4h2v9h-2M5 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" stroke="${fill}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M5 14V8h7v6" stroke="${fill}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
 }
 
 function drawIncidents() {
@@ -127,21 +147,34 @@ function drawIncidents() {
   for (const i of mappedIncidents.value) {
     const isSel = selected.value === i.ticket_number;
     const color = statusColor(i.status);
+    const size = isSel ? 44 : 38;
+    const label = String(i.ticket_number || "").replace(/</g, "&lt;");
+    const pulse =
+      i.status === "pending"
+        ? `<span style="position:absolute;inset:-6px;border-radius:9999px;border:2px solid ${color};opacity:.45;animation:ops-marker-pulse 1.6s ease-out infinite"></span>`
+        : "";
     const marker = L.marker([i.requester_lat, i.requester_lng], {
       icon: divIcon(
-        `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-          <div style="width:${isSel ? 16 : 12}px;height:${isSel ? 16 : 12}px;border-radius:9999px;background:${color};border:2px solid ${isSel ? "#111827" : "#fff"};box-shadow:0 1px 4px rgba(0,0,0,.35)"></div>
-          <span style="font-size:9px;font-weight:700;color:#1f2937;background:rgba(255,255,255,.92);padding:1px 4px;border-radius:4px;white-space:nowrap">${i.ticket_number}</span>
+        `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;transform:translateY(-4px)">
+          <div style="position:relative;width:${size}px;height:${size}px;border-radius:9999px;background:#fff;border:3px solid ${color};box-shadow:0 6px 16px rgba(15,23,42,.28),0 0 0 1px rgba(15,23,42,.06);display:flex;align-items:center;justify-center">
+            ${pulse}
+            ${pinSvg(color)}
+          </div>
+          <span style="font-size:11px;font-weight:700;letter-spacing:.01em;color:#0f172a;background:#fff;border:1px solid ${isSel ? color : "#e2e8f0"};padding:2px 8px;border-radius:9999px;white-space:nowrap;box-shadow:0 2px 8px rgba(15,23,42,.12);max-width:140px;overflow:hidden;text-overflow:ellipsis">${label}</span>
         </div>`,
-        [90, 32],
-        [45, 10],
+        [148, isSel ? 72 : 66],
+        [74, isSel ? 48 : 44],
       ),
-      zIndexOffset: isSel ? 600 : 400,
+      zIndexOffset: isSel ? 900 : 500,
     });
     marker.on("click", (e: any) => {
       L.DomEvent.stopPropagation(e);
       selected.value = i.ticket_number;
     });
+    marker.bindTooltip(
+      `<strong>${label}</strong><br/>${STATUS_LABEL[i.status] || i.status}${i.requester_name ? `<br/>${i.requester_name}` : ""}`,
+      { direction: "top", opacity: 0.96, offset: [0, -8] },
+    );
     marker.addTo(incidentLayer);
   }
   drawRoute();
@@ -154,28 +187,51 @@ function drawUnits() {
   for (const u of props.units) {
     if (!u.lat && !u.lng) continue;
     const avail = u.available ?? 0;
-    const color = !u.is_active ? "#9ca3af" : avail > 0 ? "#10b981" : "#ef4444";
+    const color = !u.is_active ? "#94a3b8" : avail > 0 ? "#059669" : "#e11d48";
+    const name = String(u.name || "Unit").replace(/</g, "&lt;");
+    const short =
+      name.length > 18 ? `${name.slice(0, 16)}…` : name;
     const marker = L.marker([u.lat, u.lng], {
       icon: divIcon(
-        `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;opacity:.92">
-          <div style="width:10px;height:10px;border-radius:2px;background:${color};border:1.5px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transform:rotate(45deg)"></div>
-          <span style="font-size:8px;font-weight:600;color:#374151;background:rgba(255,255,255,.9);padding:0 3px;border-radius:3px;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.name}</span>
+        `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;opacity:${u.is_active ? 1 : 0.75}">
+          <div style="width:34px;height:34px;border-radius:10px;background:#fff;border:2.5px solid ${color};box-shadow:0 4px 12px rgba(15,23,42,.22);display:flex;align-items:center;justify-content:center">
+            ${unitSvg(color)}
+          </div>
+          <span style="font-size:10px;font-weight:700;color:#1e293b;background:rgba(255,255,255,.96);border:1px solid #e2e8f0;padding:1px 6px;border-radius:6px;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-shadow:0 1px 4px rgba(15,23,42,.1)">${short}</span>
         </div>`,
-        [80, 28],
-        [40, 8],
+        [110, 56],
+        [55, 28],
       ),
-      zIndexOffset: 200,
-      opacity: 0.9,
+      zIndexOffset: 250,
     });
     marker.bindTooltip(
-      `${u.name}<br/>${avail}/${u.total ?? "?"} armada · ${u.type || "unit"}`,
-      { direction: "top", opacity: 0.95 },
+      `<strong>${name}</strong><br/>${avail}/${u.total ?? "?"} armada · ${u.type || "unit"}${u.is_active === false ? "<br/>Nonaktif" : ""}`,
+      { direction: "top", opacity: 0.96 },
     );
     marker.addTo(unitLayer);
   }
 }
 
-function drawRoute() {
+function pickAutoFocusTicket(): string | null {
+  if (props.focusTicket) {
+    const hit = filteredIncidents.value.find((i) => i.ticket_number === props.focusTicket);
+    if (hit) return hit.ticket_number;
+  }
+  const pending = filteredIncidents.value.filter(
+    (i) => i.status === "pending" && (i.requester_lat || i.requester_lng),
+  );
+  return pending[0]?.ticket_number ?? null;
+}
+
+function ensureSelection() {
+  if (selected.value && filteredIncidents.value.some((i) => i.ticket_number === selected.value)) {
+    return;
+  }
+  const auto = pickAutoFocusTicket();
+  if (auto) selected.value = auto;
+}
+
+async function drawRoute() {
   if (!map || !L || !routeLayer) return;
   routeLayer.clearLayers();
   const i = selectedIncident.value;
@@ -194,35 +250,69 @@ function drawRoute() {
 
   const stale = isGpsStale(i);
   const usingField = hasFieldGps(i);
+  const routeColor = usingField ? (stale ? "#f59e0b" : "#2563eb") : "#3b82f6";
+  const token = ++routeToken;
+  const fromPt = from;
 
-  L.polyline([from, to], {
-    color: usingField ? (stale ? "#f59e0b" : "#2563eb") : "#9ca3af",
-    weight: 3,
-    dashArray: usingField ? (stale ? "4, 6" : "6, 8") : "2, 10",
-    opacity: 0.85,
-  }).addTo(routeLayer);
+  const applyStraight = () => {
+    if (!map || !L || !routeLayer || token !== routeToken) return;
+    L.polyline([fromPt, to], {
+      color: routeColor,
+      weight: 4,
+      dashArray: usingField ? (stale ? "5, 7" : "7, 9") : "6, 10",
+      opacity: 0.9,
+    }).addTo(routeLayer);
+  };
 
-  if (usingField) {
-    L.circleMarker(from, {
-      radius: 7,
-      fillColor: stale ? "#f59e0b" : "#2563eb",
-      fillOpacity: 1,
-      color: "#fff",
-      weight: 2,
-    })
-      .bindTooltip(gpsFreshnessLabel(i), { direction: "top" })
-      .addTo(routeLayer);
-  } else {
-    L.circleMarker(from, {
-      radius: 5,
-      fillColor: "#6b7280",
-      fillOpacity: 0.9,
-      color: "#fff",
-      weight: 1.5,
-    })
-      .bindTooltip("HQ unit (belum ada GPS lapangan)", { direction: "top" })
-      .addTo(routeLayer);
+  try {
+    const origin = `${fromPt[1]},${fromPt[0]}`;
+    const destination = `${to[1]},${to[0]}`;
+    const res = await $fetch<{
+      data?: { coordinates?: [number, number][] };
+      coordinates?: [number, number][];
+    }>(
+      `${apiBase}/api/v1/directions/?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`,
+    );
+    if (token !== routeToken || !routeLayer) return;
+    const payload: any = res?.data ?? res;
+    const coords = payload?.coordinates as [number, number][] | undefined;
+    if (coords?.length && coords.length >= 2) {
+      routeLayer.clearLayers();
+      const latlngs = coords.map((c) => [Number(c[1]), Number(c[0])] as [number, number]);
+      L.polyline(latlngs, { color: "#1e3a8a", weight: 8, opacity: 0.28 }).addTo(routeLayer);
+      L.polyline(latlngs, {
+        color: routeColor,
+        weight: 5,
+        opacity: 0.95,
+        lineJoin: "round",
+        lineCap: "round",
+      }).addTo(routeLayer);
+    } else {
+      applyStraight();
+    }
+  } catch {
+    if (token !== routeToken) return;
+    applyStraight();
   }
+
+  if (token !== routeToken || !routeLayer) return;
+
+  const fieldColor = usingField ? (stale ? "#f59e0b" : "#2563eb") : "#64748b";
+  L.marker(fromPt, {
+    icon: divIcon(
+      `<div style="width:28px;height:28px;border-radius:9999px;background:${fieldColor};border:3px solid #fff;box-shadow:0 4px 12px rgba(15,23,42,.3);display:flex;align-items:center;justify-content:center">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </div>`,
+      [28, 28],
+      [14, 14],
+    ),
+    zIndexOffset: 800,
+  })
+    .bindTooltip(usingField ? gpsFreshnessLabel(i) : "Posko unit → pelapor", {
+      direction: "top",
+      opacity: 0.96,
+    })
+    .addTo(routeLayer);
 }
 
 function fitBounds() {
@@ -288,15 +378,17 @@ async function initMap() {
   });
 
   ready.value = true;
+  ensureSelection();
   drawUnits();
   drawIncidents();
   fitBounds();
 }
 
 watch(
-  () => [props.incidents, props.units, fStatus.value, showUnits.value] as const,
+  () => [props.incidents, props.units, props.focusTicket, fStatus.value, showUnits.value] as const,
   () => {
     if (!ready.value) return;
+    ensureSelection();
     drawUnits();
     drawIncidents();
   },
@@ -312,6 +404,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  routeToken++;
   if (map) {
     map.remove();
     map = null;
@@ -491,3 +584,15 @@ function etaLabel(i: OpsIncident) {
     </div>
   </div>
 </template>
+
+<style>
+@keyframes ops-marker-pulse {
+  0% { transform: scale(0.85); opacity: 0.55; }
+  70% { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+.ops-live-marker {
+  background: transparent !important;
+  border: none !important;
+}
+</style>

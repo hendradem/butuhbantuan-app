@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Dummy Karvak Merapi — SMC</name>
+    <Style id="a1"><PolyStyle><color>662563eb</color><outline>1</outline></PolyStyle><LineStyle><color>ff2563eb</color><width>2</width></LineStyle></Style>
+    <Style id="b1"><PolyStyle><color>66059669</color><outline>1</outline></PolyStyle><LineStyle><color>ff059669</color><width>2</width></LineStyle></Style>
+    <Style id="c1"><PolyStyle><color>66d97706</color><outline>1</outline></PolyStyle><LineStyle><color>ffd97706</color><width>2</width></LineStyle></Style>
+    <Style id="lp"><IconStyle><color>ff0000ff</color></IconStyle></Style>
+    <Style id="clue"><IconStyle><color>ff00d7ff</color></IconStyle></Style>
+
+    <Folder>
+      <name>Karvak</name>
+      <Placemark>
+        <name>A1 — Jalur Selo</name>
+        <styleUrl>#a1</styleUrl>
+        <Polygon><outerBoundaryIs><LinearRing>
+          <coordinates>
+            110.4400,-7.5360,0
+            110.4480,-7.5360,0
+            110.4480,-7.5420,0
+            110.4400,-7.5420,0
+            110.4400,-7.5360,0
+          </coordinates>
+        </LinearRing></outerBoundaryIs></Polygon>
+      </Placemark>
+      <Placemark>
+        <name>B1 — Rimba Timur</name>
+        <styleUrl>#b1</styleUrl>
+        <Polygon><outerBoundaryIs><LinearRing>
+          <coordinates>
+            110.4480,-7.5360,0
+            110.4560,-7.5360,0
+            110.4560,-7.5420,0
+            110.4480,-7.5420,0
+            110.4480,-7.5360,0
+          </coordinates>
+        </LinearRing></outerBoundaryIs></Polygon>
+      </Placemark>
+      <Placemark>
+        <name>C1 — Sungai / jurang</name>
+        <styleUrl>#c1</styleUrl>
+        <Polygon><outerBoundaryIs><LinearRing>
+          <coordinates>
+            110.4400,-7.5420,0
+            110.4480,-7.5420,0
+            110.4480,-7.5480,0
+            110.4400,-7.5480,0
+            110.4400,-7.5420,0
+          </coordinates>
+        </LinearRing></outerBoundaryIs></Polygon>
+      </Placemark>
+    </Folder>
+
+    <Folder>
+      <name>Markers</name>
+      <Placemark>
+        <name>LP Last Known (dummy)</name>
+        <description>Last Point / ICP dari KML</description>
+        <styleUrl>#lp</styleUrl>
+        <Point><coordinates>110.4455,-7.5410,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Clue: kain sobek</name>
+        <description>Temuan di rimba timur</description>
+        <styleUrl>#clue</styleUrl>
+        <Point><coordinates>110.4512,-7.5395,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>WP Pos radio HT</name>
+        <Point><coordinates>110.4430,-7.5448,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Hazard jurang C1</name>
+        <Point><coordinates>110.4460,-7.5462,0</coordinates></Point>
+      </Placemark>
+    </Folder>
+  </Document>
+</kml>

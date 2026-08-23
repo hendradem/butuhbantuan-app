@@ -1,5 +1,6 @@
 [
   {"id": 1, "name": "Ambulance", "icon": "mynaui:ambulance-solid"},
   {"id": 2, "name": "Damkar", "icon": "mdi:fire-truck"},
-  {"id": 3, "name": "SAR", "icon": "fa-solid:car-crash"}
+  {"id": 3, "name": "SAR", "icon": "fa-solid:car-crash"},
+  {"id": 4, "name": "Rumah Sakit", "icon": "mdi:hospital-building"}
 ]

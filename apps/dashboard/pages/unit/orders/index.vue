@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { toast } from "vue3-hot-toast";
+import { toast } from "~/utils/appToast";
 import { estimateEtaMinutes, formatEta } from "~/utils/eta";
 import { placeAnchoredMenu } from "~/utils/placeAnchoredMenu";
 import UnitOpsStats from "~/components/unit/UnitOpsStats.vue";
+import type { HeatPoint } from "~/components/analytics/HeatmapViz.vue";
 
 definePageMeta({ layout: "unit", title: "Pesanan Masuk", keepalive: true });
 
@@ -13,8 +14,41 @@ const baseUrl = config.public.apiBaseUrl as string;
 const webAppUrl = (config.public.webAppUrl as string) || "http://localhost:3000";
 const showCreateTicket = ref(false);
 
-const TAB_VALUES = ["pending", "in_progress", "completed"] as const;
-const { tab: activeTab, setTab } = usePersistedTab("bb-unit-orders-tab", "pending", TAB_VALUES);
+const STATUS_VALUES = ["all", "pending", "in_progress", "completed"] as const;
+const { tab: statusFilter, setTab: setStatusFilter } = usePersistedTab(
+  "bb-unit-orders-status",
+  "all",
+  STATUS_VALUES,
+  "status",
+);
+
+const VIEW_VALUES = ["map", "table"] as const;
+const { tab: viewMode, setTab: setViewMode } = usePersistedTab(
+  "bb-unit-orders-view",
+  "map",
+  VIEW_VALUES,
+  "view",
+);
+
+const OPS_STATS_KEY = "bb-unit-orders-show-stats";
+const showOpsStats = ref(true);
+onMounted(() => {
+  try {
+    const raw = sessionStorage.getItem(OPS_STATS_KEY);
+    if (raw === "0") showOpsStats.value = false;
+    if (raw === "1") showOpsStats.value = true;
+  } catch {
+    /* ignore */
+  }
+});
+function toggleOpsStats() {
+  showOpsStats.value = !showOpsStats.value;
+  try {
+    sessionStorage.setItem(OPS_STATS_KEY, showOpsStats.value ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
 
 const { data, pending, error, refresh: refreshOrders } = await useAsyncData(
   "unit-orders",
@@ -29,15 +63,25 @@ onActivated(() => {
   refreshOrders();
 });
 
-// Reuse layout-loaded profile for unit coordinates (ETA)
+// Reuse layout-loaded profile for unit coordinates (ETA + route)
 const { data: profile } = useNuxtData<any>("unit-profile");
 const unitCoords = computed(() => {
-  const coords = profile.value?.coordinates;
-  if (!coords) return null;
-  const lng = Number(coords[0]);
-  const lat = Number(coords[1]);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { lat, lng };
+  const p = profile.value;
+  if (!p) return null;
+  const coords = p.coordinates;
+  if (Array.isArray(coords) && coords.length >= 2) {
+    const lng = Number(coords[0]);
+    const lat = Number(coords[1]);
+    if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
+      return { lat, lng };
+    }
+  }
+  const lat = Number(p.latitude ?? p.lat ?? p.address?.latitude);
+  const lng = Number(p.longitude ?? p.lng ?? p.address?.longitude);
+  if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
+    return { lat, lng };
+  }
+  return null;
 });
 
 function orderEta(order: any): number | null {
@@ -62,6 +106,8 @@ const fetchError = computed(() => error.value && (error.value as any)?.status !=
 const orders = computed(() => data.value?.data ?? []);
 
 const search = usePersistedQueryParam("bb-unit-orders-q", "q", "", { syncQuery: false });
+const sourceFilter = usePersistedQueryParam("bb-unit-orders-src", "src", "", { syncQuery: false });
+const gpsOnly = usePersistedQueryParam("bb-unit-orders-gps", "gps", "", { syncQuery: false });
 
 const {
   period: datePeriod,
@@ -77,12 +123,22 @@ const inPeriod = computed(() => filterByPeriod(orders.value));
 
 const filtered = computed(() => {
   let base = inPeriod.value;
-  if (activeTab.value === "in_progress") {
-    base = base.filter((o: any) => o.status === "accepted" || o.status === "in_progress");
-  } else if (activeTab.value === "completed") {
-    base = base.filter((o: any) => o.status === "completed" || o.status === "cancelled");
-  } else {
+  if (statusFilter.value === "pending") {
     base = base.filter((o: any) => o.status === "pending");
+  } else if (statusFilter.value === "in_progress") {
+    base = base.filter((o: any) => o.status === "accepted" || o.status === "in_progress");
+  } else if (statusFilter.value === "completed") {
+    base = base.filter((o: any) => o.status === "completed" || o.status === "cancelled");
+  }
+  if (sourceFilter.value === "sos") {
+    base = base.filter((o: any) => o.source === "sos");
+  } else if (sourceFilter.value === "regular") {
+    base = base.filter((o: any) => o.source !== "sos");
+  }
+  if (gpsOnly.value === "1") {
+    base = base.filter(
+      (o: any) => Number(o.requester_lat) && Number(o.requester_lng),
+    );
   }
   const q = search.value.trim().toLowerCase();
   if (!q) return base;
@@ -117,18 +173,92 @@ const sortedFiltered = computed(() =>
 
 const page = ref(1);
 const pageSize = ref(20);
-watch([activeTab, search, datePeriod, customFrom, customTo], () => { page.value = 1; });
+watch([statusFilter, search, datePeriod, customFrom, customTo, sourceFilter, gpsOnly], () => {
+  page.value = 1;
+});
 const totalPages = computed(() => Math.max(1, Math.ceil(sortedFiltered.value.length / pageSize.value)));
 const paginated = computed(() => {
   const start = (page.value - 1) * pageSize.value;
   return sortedFiltered.value.slice(start, start + pageSize.value);
 });
 
-const counts = computed(() => ({
-  pending: inPeriod.value.filter((o: any) => o.status === "pending").length,
-  in_progress: inPeriod.value.filter((o: any) => o.status === "accepted" || o.status === "in_progress").length,
-  completed: inPeriod.value.filter((o: any) => o.status === "completed" || o.status === "cancelled").length,
-}));
+const showHeat = ref(true);
+const activeOffer = useState<any>("bb-unit-active-alert", () => null);
+
+const focusTicket = computed(() =>
+  viewMode.value === "map" ? (activeOffer.value?.ticket_number || null) : null,
+);
+
+watch(activeOffer, (o) => {
+  if (!o?.ticket_number || viewMode.value !== "map") return;
+  // Pastikan pin/kartu offer terlihat di sebaran
+  if (statusFilter.value === "completed") setStatusFilter("all");
+});
+
+const hasExtraFilters = computed(
+  () =>
+    statusFilter.value !== "all" ||
+    !!search.value.trim() ||
+    !!sourceFilter.value ||
+    gpsOnly.value === "1" ||
+    datePeriod.value !== "1",
+);
+
+/** Filters that live inside the overflow menu (not the primary row). */
+const moreFilterCount = computed(() => {
+  let n = 0;
+  if (sourceFilter.value) n += 1;
+  if (gpsOnly.value === "1") n += 1;
+  if (datePeriod.value === "custom") n += 1;
+  return n;
+});
+
+const filterMenuOpen = ref(false);
+const filterMenuRef = ref<HTMLElement | null>(null);
+
+function onFilterMenuOutside(e: MouseEvent) {
+  if (!filterMenuOpen.value || !filterMenuRef.value) return;
+  if (!filterMenuRef.value.contains(e.target as Node)) filterMenuOpen.value = false;
+}
+
+onMounted(() => {
+  if (import.meta.client) document.addEventListener("mousedown", onFilterMenuOutside);
+});
+onUnmounted(() => {
+  if (import.meta.client) document.removeEventListener("mousedown", onFilterMenuOutside);
+});
+
+watch(datePeriod, (v) => {
+  if (v === "custom") filterMenuOpen.value = true;
+});
+
+function clearExtraFilters() {
+  setStatusFilter("all");
+  search.value = "";
+  sourceFilter.value = "";
+  gpsOnly.value = "";
+  setDatePeriod("1");
+  filterMenuOpen.value = false;
+}
+
+/** Points for interactive sebaran — ikut filter status / sumber / GPS / cari */
+const mapPoints = computed<HeatPoint[]>(() =>
+  filtered.value.map((o: any) => ({
+    lat: Number(o.requester_lat) || 0,
+    lng: Number(o.requester_lng) || 0,
+    count: 1,
+    type: o.emergency_type || o.type_name || o.condition || "Pesanan",
+    ticket_number: o.ticket_number,
+    status: o.status,
+    requester_name: o.requester_name,
+    unit_name: o.unit_name,
+    condition: o.condition,
+    location: o.location,
+    created_at: formatDate(o.created_at),
+    regency: o.regency || "",
+    province: o.province || "",
+  })),
+);
 
 // ── Notification + auto-refresh ───────────────────────────────────────────────
 // Alert pakai antrian live (semua pending), bukan filter periode
@@ -136,7 +266,7 @@ useOrderNotification(
   computed(() => orders.value.filter((o: any) => o.status === "pending").length),
   refresh,
   30_000,
-  { sound: "none" },
+  { sound: "none", browser: false },
 );
 
 // ── Update order ──────────────────────────────────────────────────────────────
@@ -174,13 +304,32 @@ async function onRejectConfirm(payload: { reason: string; note: string }) {
   if (await reject(rejectTarget.value.id, payload)) refresh();
 }
 
+async function doArrive(order: any) {
+  if (!order?.id || updating.value) return;
+  dropdownOrder.value = null;
+  updating.value = order.id;
+  try {
+    await $fetch(`${baseUrl}/api/v1/unit/orders/${order.id}/arrive`, {
+      method: "POST",
+      headers: unitHeaders(),
+    });
+    await refresh();
+    const ticket = order.ticket_number || "";
+    toast.success(ticket ? `Tiba di lokasi · ${ticket}` : "Tiba di lokasi");
+  } catch (e: any) {
+    toast.error(e?.data?.message || "Gagal menandai tiba");
+  } finally {
+    updating.value = null;
+  }
+}
+
 async function updateStatus(id: string, status: string, handlerName = "", notes = "") {
   updating.value = id;
   const statusLabel: Record<string, string> = {
-    accepted: "Pesanan diterima",
-    in_progress: "Pesanan sedang diproses",
-    completed: "Pesanan selesai",
-    cancelled: "Pesanan ditolak",
+    accepted: "Terima pesanan",
+    in_progress: "Penanganan dimulai",
+    completed: "Selesai & laporan",
+    cancelled: "Pesanan dibatalkan",
   };
   try {
     await $fetch(`${baseUrl}/api/v1/unit/orders/${id}`, {
@@ -190,8 +339,8 @@ async function updateStatus(id: string, status: string, handlerName = "", notes 
     });
     await refresh();
     toast.success(statusLabel[status] ?? "Status diperbarui");
-  } catch {
-    toast.error("Gagal memperbarui status pesanan");
+  } catch (e: any) {
+    toast.error(e?.data?.message || "Gagal memperbarui status pesanan");
   } finally {
     updating.value = null;
   }
@@ -350,9 +499,46 @@ function sendFollowUpWA(order: any) {
           </p>
         </div>
         <div class="flex items-center gap-2 w-full sm:w-auto">
+          <div class="flex items-center gap-1 bg-neutral-100 rounded-xl p-1 mr-auto sm:mr-0">
+            <button
+              type="button"
+              :class="[
+                'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5',
+                viewMode === 'map' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700',
+              ]"
+              @click="setViewMode('map')"
+            >
+              <Icon icon="lucide:map" class="text-sm" />
+              Peta
+            </button>
+            <button
+              type="button"
+              :class="[
+                'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5',
+                viewMode === 'table' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700',
+              ]"
+              @click="setViewMode('table')"
+            >
+              <Icon icon="lucide:table" class="text-sm" />
+              Tabel
+            </button>
+          </div>
           <UiButton variant="primary" class="flex-1 sm:flex-none justify-center" @click="showCreateTicket = true">
             <Icon icon="lucide:ticket-plus" class="text-sm" />
             <span class="sm:inline">Buat E-Tiket</span>
+          </UiButton>
+          <UiButton
+            variant="secondary"
+            class="flex-1 sm:flex-none justify-center"
+            :title="showOpsStats ? 'Sembunyikan statistik' : 'Tampilkan statistik'"
+            :aria-pressed="showOpsStats"
+            @click="toggleOpsStats()"
+          >
+            <Icon
+              :icon="showOpsStats ? 'lucide:panel-top-close' : 'lucide:panel-top'"
+              class="text-sm"
+            />
+            <span class="hidden md:inline">{{ showOpsStats ? "Sembunyikan" : "Statistik" }}</span>
           </UiButton>
           <UiButton
             variant="secondary"
@@ -367,8 +553,19 @@ function sendFollowUpWA(order: any) {
       </div>
     </div>
 
-    <UnitOpsStats :orders="orders" :loading="pending && !data" />
-
+    <div
+      class="ops-stats-panel"
+      :class="{ 'ops-stats-panel--open': showOpsStats }"
+      :aria-hidden="!showOpsStats"
+    >
+      <div class="ops-stats-panel__inner">
+        <UnitOpsStats
+          :orders="orders"
+          :period-orders="inPeriod"
+          :loading="pending && !data"
+        />
+      </div>
+    </div>
     <CreateOrderModal
       v-model:open="showCreateTicket"
       mode="unit"
@@ -388,54 +585,141 @@ function sendFollowUpWA(order: any) {
     <div v-if="dropdownOrder" class="fixed inset-0 z-[98]" @click="dropdownOrder = null" />
 
     <div class="p-4 sm:p-6">
-      <UiTableCard>
-        <template #toolbar>
-          <div class="flex flex-col gap-2.5 w-full min-w-0">
-            <div class="flex gap-1 overflow-x-auto -mx-0.5 px-0.5 pb-0.5 scrollbar-none">
+      <UiTableCard
+        :badge="filtered.length"
+        :title="viewMode === 'map' ? 'Sebaran Pesanan' : 'Daftar Pesanan'"
+        :description="viewMode === 'map'
+          ? 'Sebaran live — panggilan masuk muncul di peta & kartu'
+          : 'Daftar live — filter & periode sama dengan sebaran'"
+      >
+        <template #actions>
+          <UiSearchInput
+            v-model="search"
+            placeholder="Cari..."
+            class="w-28 sm:w-36 shrink-0"
+          />
+          <UiSelect v-model="statusFilter" class="!w-auto shrink-0">
+            <option value="all">Semua</option>
+            <option value="pending">Masuk</option>
+            <option value="in_progress">Diproses</option>
+            <option value="completed">Selesai</option>
+          </UiSelect>
+          <UiSelect
+            class="!w-auto shrink-0"
+            :model-value="datePeriod"
+            @update:model-value="setDatePeriod"
+          >
+            <option v-for="opt in datePresets" :key="opt.id" :value="opt.id">
+              {{ opt.label }}
+            </option>
+          </UiSelect>
+
+          <button
+            v-if="viewMode === 'map'"
+            type="button"
+            class="inline-flex items-center gap-1.5 h-9 px-2.5 text-xs font-medium rounded-lg border transition-colors shrink-0"
+            :class="showHeat
+              ? 'bg-emergency-50 text-emergency-700 border-emergency-200'
+              : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900'"
+            title="Toggle heatmap"
+            @click="showHeat = !showHeat"
+          >
+            <Icon icon="lucide:flame" class="text-sm" />
+            <span class="hidden lg:inline">Heatmap</span>
+          </button>
+
+          <div ref="filterMenuRef" class="relative shrink-0">
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 h-9 px-2.5 text-xs font-medium rounded-lg border transition-colors"
+              :class="filterMenuOpen || moreFilterCount
+                ? 'bg-neutral-900 text-white border-neutral-900'
+                : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'"
+              :aria-expanded="filterMenuOpen"
+              aria-label="Filter lainnya"
+              @click="filterMenuOpen = !filterMenuOpen"
+            >
+              <Icon icon="lucide:sliders-horizontal" class="text-sm" />
+              <span class="hidden md:inline">Lainnya</span>
+              <span
+                v-if="moreFilterCount"
+                class="inline-flex items-center justify-center min-w-[1.1rem] h-4 px-1 rounded-full text-[10px] font-bold"
+                :class="filterMenuOpen || moreFilterCount ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-700'"
+              >{{ moreFilterCount }}</span>
+            </button>
+
+            <div
+              v-if="filterMenuOpen"
+              class="absolute right-0 top-full mt-1.5 z-[60] w-64 rounded-xl border border-neutral-200 bg-white shadow-lg p-3 space-y-3"
+            >
+              <div>
+                <p class="text-[11px] font-medium text-neutral-400 mb-1.5">Sumber</p>
+                <UiSelect v-model="sourceFilter" class="w-full">
+                  <option value="">Semua sumber</option>
+                  <option value="sos">SOS</option>
+                  <option value="regular">Non-SOS</option>
+                </UiSelect>
+              </div>
+              <div>
+                <p class="text-[11px] font-medium text-neutral-400 mb-1.5">Lokasi</p>
+                <UiSelect v-model="gpsOnly" class="w-full">
+                  <option value="">Semua lokasi</option>
+                  <option value="1">Ada GPS</option>
+                </UiSelect>
+              </div>
+              <div v-if="isCustomDate" class="space-y-2">
+                <p class="text-[11px] font-medium text-neutral-400">Rentang kustom</p>
+                <UiInput
+                  type="date"
+                  class="w-full"
+                  :model-value="customFrom"
+                  @update:model-value="customFrom = $event"
+                />
+                <UiInput
+                  type="date"
+                  class="w-full"
+                  :model-value="customTo"
+                  :min="customFrom || undefined"
+                  @update:model-value="customTo = $event"
+                />
+              </div>
               <button
-                v-for="t in (['pending', 'in_progress', 'completed'] as const)"
-                :key="t"
+                v-if="hasExtraFilters"
                 type="button"
-                :class="[
-                  'shrink-0 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap',
-                  activeTab === t
-                    ? 'bg-primary-50 text-primary-700'
-                    : 'text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50',
-                ]"
-                @click="setTab(t)"
+                class="w-full text-xs font-medium text-neutral-600 hover:text-neutral-900 py-2 rounded-lg hover:bg-neutral-50 transition-colors"
+                @click="clearExtraFilters"
               >
-                {{ t === 'pending' ? 'Masuk' : t === 'in_progress' ? 'Diproses' : 'Selesai' }}
-                <span
-                  v-if="counts[t] > 0"
-                  :class="[
-                    'ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full text-xs font-bold',
-                    activeTab === t ? 'bg-primary-600 text-white' : 'bg-neutral-200 text-neutral-600',
-                  ]"
-                >{{ counts[t] }}</span>
+                Reset semua filter
               </button>
-            </div>
-            <div class="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 w-full min-w-0">
-              <UiSearchInput
-                v-model="search"
-                placeholder="Cari tiket, nama, telepon..."
-                class="w-full sm:flex-1 sm:min-w-[160px] sm:max-w-xs"
-              />
-              <OrderPeriodFilter
-                compact
-                class="w-full sm:w-auto"
-                :period="datePeriod"
-                :presets="datePresets"
-                :is-custom="isCustomDate"
-                :custom-from="customFrom"
-                :custom-to="customTo"
-                @update:period="setDatePeriod"
-                @update:custom-from="customFrom = $event"
-                @update:custom-to="customTo = $event"
-              />
             </div>
           </div>
         </template>
 
+        <!-- Map -->
+        <div v-if="viewMode === 'map'">
+          <ClientOnly>
+            <HeatmapViz
+              v-model:show-heat="showHeat"
+              :points="mapPoints"
+              :loading="showOrdersSkeleton"
+              detail-base-path="/unit/orders"
+              hide-region-filters
+              hide-view-toggle
+              hide-toolbar
+              embedded
+              live
+              :unit-lat="unitCoords?.lat"
+              :unit-lng="unitCoords?.lng"
+              :focus-ticket="focusTicket"
+            />
+            <template #fallback>
+              <div class="soft-skel h-[580px] rounded-none" />
+            </template>
+          </ClientOnly>
+        </div>
+
+        <!-- Table / mobile cards -->
+        <template v-else>
         <!-- Mobile cards -->
         <div class="md:hidden divide-y divide-neutral-100">
           <template v-if="showOrdersSkeleton">
@@ -549,8 +833,7 @@ function sendFollowUpWA(order: any) {
                   <div class="soft-skel h-3.5 w-28" />
                 </td>
                 <td>
-                  <div class="soft-skel h-4 w-48 mb-2" />
-                  <div class="soft-skel h-3.5 w-32" />
+                  <div class="soft-skel h-4 w-40" />
                 </td>
                 <td class="hidden sm:table-cell">
                   <div class="soft-skel h-4 w-14" />
@@ -564,8 +847,7 @@ function sendFollowUpWA(order: any) {
                   </div>
                 </td>
               </tr>
-
-              <tr v-else-if="!filtered.length">
+              <tr v-else-if="!paginated.length">
                 <td colspan="6">
                   <UiEmptyState title="Tidak ada pesanan" description="Belum ada pesanan di kategori ini.">
                     <template #icon>
@@ -574,56 +856,46 @@ function sendFollowUpWA(order: any) {
                   </UiEmptyState>
                 </td>
               </tr>
-
-              <tr
-                v-else
-                v-for="order in paginated"
-                :key="order.id"
-              >
+              <tr v-else v-for="order in paginated" :key="order.id">
                 <td>
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-1.5">
                     <NuxtLink
                       :to="`/unit/orders/${order.ticket_number}`"
-                      class="ui-cell-mono hover:underline"
+                      class="ui-cell-title font-mono text-primary-700 hover:underline"
+                      @click.stop
                     >
                       {{ order.ticket_number }}
                     </NuxtLink>
                     <span
                       v-if="order.source === 'sos'"
-                      class="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs font-medium text-emergency-700 ring-1 ring-inset ring-emergency-200"
+                      class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emergency-600 text-white uppercase tracking-wide animate-pulse shrink-0"
                     >
-                      <span class="h-1.5 w-1.5 rounded-full bg-emergency-500 animate-pulse" />
+                      <Icon icon="lucide:siren" class="text-[10px]" />
                       SOS
                     </span>
                   </div>
                   <p class="ui-cell-desc">{{ formatDate(order.created_at) }}</p>
                 </td>
-
                 <td>
                   <p class="ui-cell-title">{{ order.requester_name }}</p>
                   <p class="ui-cell-desc">{{ order.requester_phone }}</p>
                 </td>
-
-                <td class="max-w-xs">
-                  <p v-if="order.location" class="ui-cell-title line-clamp-1">{{ order.location }}</p>
+                <td>
+                  <p class="ui-cell-title line-clamp-2 max-w-[14rem]">{{ order.location || "—" }}</p>
                   <p v-if="order.condition" class="ui-cell-desc line-clamp-1">{{ order.condition }}</p>
-                  <p v-if="!order.location && !order.condition" class="text-sm text-neutral-400">—</p>
                 </td>
-
                 <td class="hidden sm:table-cell">
                   <p class="ui-cell-title tabular-nums">{{ formatEta(orderEta(order)) }}</p>
                   <p class="ui-cell-desc">ke lokasi</p>
                 </td>
-
                 <td>
                   <UiStatusBadge :status="order.status" />
                 </td>
-
                 <td class="ui-td-right">
                   <div class="inline-flex items-center justify-end gap-2">
                     <NuxtLink
                       :to="`/unit/orders/${order.ticket_number}`"
-                      class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-neutral-700 bg-white rounded-lg shadow-sm ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50 transition-colors"
+                      class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-neutral-700 bg-white rounded-lg shadow-sm ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50 transition-colors relative z-10"
                     >
                       <Icon icon="lucide:external-link" class="text-sm text-neutral-500" />
                       Detail
@@ -640,8 +912,9 @@ function sendFollowUpWA(order: any) {
               </tr>
             </tbody>
         </UiTable>
+        </template>
 
-        <template v-if="sortedFiltered.length" #footer>
+        <template v-if="viewMode === 'table' && sortedFiltered.length" #footer>
           <UiPagination
             v-model:page="page"
             :total-pages="totalPages"
@@ -651,8 +924,6 @@ function sendFollowUpWA(order: any) {
         </template>
       </UiTableCard>
     </div>
-
-    <!-- Aksi dropdown (teleported to avoid overflow clipping) -->
     <Teleport to="body">
       <div
         v-if="dropdownOrder"
@@ -692,24 +963,33 @@ function sendFollowUpWA(order: any) {
               Pilih unit manual
             </button>
           </template>
-          <template v-else-if="dropdownOrder.status === 'accepted'">
+          <template v-else-if="dropdownOrder.status === 'accepted' || (dropdownOrder.status === 'in_progress' && !dropdownOrder.arrived_at)">
             <button
               class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors disabled:opacity-50"
               :disabled="updating === dropdownOrder.id"
-              @click="updateStatus(dropdownOrder.id, 'in_progress'); dropdownOrder = null"
+              @click="doArrive(dropdownOrder)"
             >
-              <Icon icon="lucide:play" class="text-primary-600 text-base shrink-0" />
-              Mulai Proses
+              <Icon icon="lucide:map-pin-check" class="text-primary-600 text-base shrink-0" />
+              Sampai lokasi
             </button>
             <button
+              v-if="dropdownOrder.status === 'accepted'"
               class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors"
               @click="openReassign(dropdownOrder)"
             >
               <Icon icon="lucide:arrow-right-left" class="text-neutral-500 text-base shrink-0" />
               Alihkan ke Unit...
             </button>
+            <NuxtLink
+              :to="`/unit/orders/${dropdownOrder.ticket_number}`"
+              class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors"
+              @click="dropdownOrder = null"
+            >
+              <Icon icon="lucide:share-2" class="text-neutral-500 text-base shrink-0" />
+              Bagikan lokasi (detail)
+            </NuxtLink>
           </template>
-          <template v-else-if="dropdownOrder.status === 'in_progress'">
+          <template v-else-if="dropdownOrder.status === 'in_progress' && dropdownOrder.arrived_at">
             <button
               class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors"
               @click="openComplete(dropdownOrder); dropdownOrder = null"
@@ -909,5 +1189,32 @@ function sendFollowUpWA(order: any) {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.ops-stats-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.24s ease;
+  pointer-events: none;
+}
+
+.ops-stats-panel--open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ops-stats-panel__inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ops-stats-panel {
+    transition: none;
+  }
 }
 </style>

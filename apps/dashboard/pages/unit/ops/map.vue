@@ -17,8 +17,6 @@ watch(
   { immediate: true },
 );
 
-const config = useRuntimeConfig();
-const { token } = useUnitAuth();
 const { getOrders, getUnits } = useUnitOpsFetch();
 
 const { data: orderData, pending: ordersPending, refresh: refreshOrders } = await useAsyncData(
@@ -113,23 +111,15 @@ onActivated(() => {
   refreshUnits();
 });
 
+const activeOffer = useState<any>("bb-unit-active-alert", () => null);
+const focusTicket = computed(() => activeOffer.value?.ticket_number || null);
+
+// Poll only — layout owns SSE + OS notifications (avoids double EventSource / double notif).
 useOrderNotification(
   computed(() => stats.value.pending),
   refresh,
   20_000,
-  { sound: "none" },
-);
-
-useOrderSSE(
-  () => token.value,
-  config.public.apiBaseUrl as string,
-  {
-    silentToast: true,
-    onNewOrder: () => refresh(),
-    onReassigned: () => refresh(),
-    onArrived: () => refresh(),
-  },
-  "unit",
+  { sound: "none", browser: false },
 );
 </script>
 
@@ -191,7 +181,12 @@ useOrderSSE(
         </template>
       </div>
 
-      <OpsLiveMap :incidents="incidents" :units="units" :loading="loading" />
+      <OpsLiveMap
+        :incidents="incidents"
+        :units="units"
+        :loading="loading"
+        :focus-ticket="focusTicket"
+      />
     </div>
   </div>
 </template>

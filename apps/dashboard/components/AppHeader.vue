@@ -31,7 +31,7 @@ onUnmounted(() => document.removeEventListener("mousedown", onClickOutside));
 </script>
 
 <template>
-  <header class="h-[60px] shrink-0 bg-white border-b border-neutral-200 flex items-center gap-3 px-4 z-30">
+  <header class="h-[60px] shrink-0 bg-white border-b border-neutral-200 flex items-center gap-3 px-4 relative z-40">
     <!-- Mobile hamburger -->
     <button
       class="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100 transition-colors"

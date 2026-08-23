@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
 import { storeToRefs } from "pinia";
+import { appToast } from "~/utils/appToast";
 
 const searchSheet = useSearchSheetStore();
 const userLocationStore = useUserLocationStore();
 const leaflet = useLeafletStore();
 const detailSheet = useDetailSheetStore();
+const appError = useAppErrorStore();
 const { loadEmergencyData } = useEmergencyApi();
+const { getCurrentLocation, applyFix } = useGeolocation();
+const toast = appToast();
 
-const { fullAddress, isGetCurrentLocation, isAddressLoading, gpsLat, gpsLong } =
+const { fullAddress, isGetCurrentLocation, isAddressLoading } =
   storeToRefs(userLocationStore);
 
 const displayAddress = computed(() => fullAddress.value || "Mendeteksi lokasi...");
@@ -21,34 +25,77 @@ function handleSearchBoxClick() {
 
 async function handleGetCurrentLocation(e: Event) {
   e.preventDefault();
+  e.stopPropagation();
   if (isGetCurrentLocation.value) return;
 
   userLocationStore.updateIsGetCurrentLocation(true);
-
-  // gpsLat/gpsLong are always kept current by watchPosition (even in manual mode).
-  // Use them directly — no second getCurrentPosition call needed.
-  const lat = gpsLat.value || userLocationStore.lat;
-  const long = gpsLong.value || userLocationStore.long;
-
-  if (!lat || !long) {
-    userLocationStore.updateIsGetCurrentLocation(false);
-    return;
-  }
-
-  // Snap the visible marker back to the real GPS position
-  userLocationStore.setManualLocation(false);
-  userLocationStore.updateCoordinate(lat, long);
-  leaflet.resetLeafletRouting();
   detailSheet.onClose();
+  leaflet.resetLeafletRouting();
+  toast.loading("Mencari GPS...");
 
-  await loadEmergencyData(lat, long);
+  try {
+    // Give map time to clear its background watch before we start ours
+    await new Promise((r) => setTimeout(r, 50));
 
-  userLocationStore.updateIsGetCurrentLocation(false);
+    const fix = await getCurrentLocation({
+      preferGps: true,
+      onSample: (sample) => {
+        void applyFix(sample, { force: true, skipGeocode: true });
+        const m = sample.accuracyM;
+        if (m != null && m <= 120) {
+          toast.loading(`GPS ±${Math.round(m)} m...`);
+        }
+      },
+    });
+
+    if (fix.errorCode === 1 && !fix.fromGps) {
+      toast.dismiss();
+      appError.setErrorMessage("permission_denied");
+      appError.onOpenSheet();
+      return;
+    }
+
+    if (!fix.fromGps) {
+      toast.error(
+        "GPS belum dapat kunci. Geser pin biru di peta, atau coba lagi di HP (luar ruangan).",
+        { duration: 5000 },
+      );
+      return;
+    }
+
+    // Unblock UI immediately — geocode + services run in background
+    await applyFix(fix, { force: true, skipGeocode: true });
+    leaflet.requestDefaultView();
+
+    const meters = fix.accuracyM ?? 0;
+    if (meters > 0 && meters <= 50) {
+      toast.success(`Lokasi akurat ±${Math.round(meters)} m`, { duration: 2500 });
+    } else if (meters > 50 && meters <= 120) {
+      toast.success(
+        `Lokasi ±${Math.round(meters)} m — geser pin biru jika belum tepat`,
+        { duration: 4000 },
+      );
+    } else if (meters > 120) {
+      toast.success(
+        `Lokasi ±${Math.round(meters)} m — geser pin biru jika belum tepat`,
+        { duration: 4000 },
+      );
+    } else {
+      toast.success("Lokasi diperbarui", { duration: 2500 });
+    }
+
+    void applyFix(fix, { force: true });
+    void loadEmergencyData(fix.lat, fix.long);
+  } catch {
+    toast.error("Gagal mengambil lokasi");
+  } finally {
+    userLocationStore.updateIsGetCurrentLocation(false);
+  }
 }
 </script>
 
 <template>
-  <div class="search-box relative w-full">
+  <div class="search-box relative w-full isolate h-10">
     <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none z-10">
       <Icon icon="ph:magnifying-glass" class="text-xl text-gray-400" />
     </div>
@@ -57,28 +104,36 @@ async function handleGetCurrentLocation(e: Event) {
       :class="['searchbox', isLoading ? 'cursor-default' : 'cursor-pointer']"
       @click="handleSearchBoxClick"
     >
-      <!-- Skeleton height matches text-sm line-height (h-5 = 1.25rem = 20px) -->
       <template v-if="isLoading">
-        <div class="animate-pulse flex items-center w-full gap-2">
-          <div class="h-5 bg-gray-200 rounded w-1/2" />
-          <div class="h-5 bg-gray-100 rounded w-1/4" />
+        <div class="searchbox__skeleton animate-pulse" aria-hidden="true">
+          <div class="searchbox__skeleton-bar w-1/2" />
+          <div class="searchbox__skeleton-bar w-1/4 opacity-70" />
         </div>
       </template>
       <template v-else>
-        <span class="truncate">{{ displayAddress }}</span>
+        <span class="truncate block w-full">{{ displayAddress }}</span>
       </template>
     </div>
 
-    <div class="absolute inset-y-0 end-0 flex items-center mx-2">
+    <div class="absolute inset-y-0 end-0 flex items-center mx-2 z-30">
       <button
         type="button"
         :disabled="isGetCurrentLocation"
-        class="flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-200 disabled:opacity-50 transition-opacity"
-        @click="handleGetCurrentLocation"
+        class="relative z-30 flex items-center justify-center w-9 h-9 disabled:opacity-50 transition-opacity"
+        style="
+          border-radius: var(--bb-radius-pill);
+          background: var(--bb-bg-surface);
+          border: 1px solid var(--bb-border);
+          box-shadow: var(--bb-shadow-xs);
+          color: var(--bb-text);
+        "
+        title="Lokasi terkini"
+        aria-label="Ambil lokasi terkini"
+        @click.stop.prevent="handleGetCurrentLocation"
       >
         <Icon
-          :icon="isGetCurrentLocation ? 'line-md:loading-loop' : 'line-md:my-location-loop'"
-          class="text-neutral-500 text-xl"
+          :icon="isGetCurrentLocation ? 'line-md:loading-loop' : 'mdi:crosshairs-gps'"
+          class="text-xl pointer-events-none"
         />
       </button>
     </div>

@@ -216,11 +216,23 @@ useOrderNotification(
             <p v-if="o.condition" class="text-[11px] text-neutral-600 line-clamp-2">{{ o.condition }}</p>
             <div
               v-if="o.dispatch_status === 'exhausted' || o.dispatch_status === 'escalated'"
-              class="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1"
+              class="space-y-2"
             >
-              {{ o.dispatch_status === "escalated" ? "Escalated PSC" : "Exhausted" }}
+              <ExhaustedPlaybook
+                compact
+                :unit-name="o.unit_name"
+                :requester-phone="o.requester_phone"
+                :dispatch-status="o.dispatch_status"
+                :escalation-hotline="o.escalation_hotline"
+                :escalation-label="o.escalation_label"
+                show-reassign
+                show-escalate
+                :escalating="acting === o.id"
+                @reassign="openReassign(o)"
+                @escalate="doEscalate(o)"
+              />
             </div>
-            <div class="flex flex-wrap gap-1.5 pt-1">
+            <div v-else class="flex flex-wrap gap-1.5 pt-1">
               <button
                 type="button"
                 class="text-[10px] font-semibold px-2 py-1 rounded-md bg-emerald-600 text-white disabled:opacity-50"
@@ -243,15 +255,6 @@ useOrderNotification(
                 @click="openReassign(o)"
               >
                 Alihkan
-              </button>
-              <button
-                v-if="o.dispatch_status === 'exhausted'"
-                type="button"
-                class="text-[10px] font-semibold px-2 py-1 rounded-md bg-amber-700 text-white"
-                :disabled="acting === o.id"
-                @click="doEscalate(o)"
-              >
-                PSC
               </button>
             </div>
           </article>

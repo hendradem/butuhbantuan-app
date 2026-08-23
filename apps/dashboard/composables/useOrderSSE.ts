@@ -1,9 +1,11 @@
-import { toast } from "vue3-hot-toast";
+import { toast } from "~/utils/appToast";
 
 type OrderSSEHandlers = {
   onNewOrder?: (order?: any) => void;
   onArrived?: (order: any) => void;
   onReassigned?: () => void;
+  /** Status / wilayah ops refresh (accept, exhausted, location, etc.). */
+  onOrderUpdated?: (order?: any) => void;
   /** Skip built-in toast (use custom UI instead). */
   silentToast?: boolean;
 };
@@ -54,8 +56,31 @@ export function useOrderSSE(
       opts.onReassigned?.() ?? opts.onNewOrder?.();
     });
 
-    es.addEventListener("order_dispatch_exhausted", () => {
-      opts.onNewOrder?.();
+    es.addEventListener("order_dispatch_exhausted", (e: MessageEvent) => {
+      try {
+        const order = JSON.parse(e.data);
+        opts.onOrderUpdated?.(order) ?? opts.onNewOrder?.(order);
+      } catch {
+        opts.onOrderUpdated?.() ?? opts.onNewOrder?.();
+      }
+    });
+
+    es.addEventListener("order_updated", (e: MessageEvent) => {
+      try {
+        const order = JSON.parse(e.data);
+        opts.onOrderUpdated?.(order) ?? opts.onNewOrder?.(order);
+      } catch {
+        opts.onOrderUpdated?.() ?? opts.onNewOrder?.();
+      }
+    });
+
+    es.addEventListener("responder_location", (e: MessageEvent) => {
+      try {
+        const order = JSON.parse(e.data);
+        opts.onOrderUpdated?.(order);
+      } catch {
+        // ignore
+      }
     });
 
     es.addEventListener("order_arrived", (e: MessageEvent) => {

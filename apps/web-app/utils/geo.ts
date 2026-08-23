@@ -3,11 +3,23 @@ export function formatGeoAddress(geoRes: any): string {
   const a = geoRes.address;
   if (!a) return geoRes.display_name || "";
 
-  const street = a.road || a.pedestrian || a.footway || "";
-  const area = a.suburb || a.village || a.neighbourhood || a.hamlet || "";
+  const house = a.house_number ? `${a.house_number} ` : "";
+  const street = a.road || a.pedestrian || a.footway || a.path || "";
+  const streetBit = street ? `${house}${street}`.trim() : "";
+  const area =
+    a.suburb ||
+    a.village ||
+    a.neighbourhood ||
+    a.hamlet ||
+    a.quarter ||
+    "";
   const region = a.county || a.city || a.town || a.municipality || "";
 
-  return [street, area, region].filter(Boolean).join(", ") || geoRes.display_name || "";
+  return (
+    [streetBit, area, region].filter(Boolean).join(", ") ||
+    geoRes.display_name ||
+    ""
+  );
 }
 
 export function formatDistance(meters: number): string {

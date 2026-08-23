@@ -31,6 +31,7 @@ func (s *EmergencyService) Delete(id string) error                              
 func (s *EmergencyService) UpdateOperational(id string, st domain.OperationalStatus) error        { return s.repo.UpdateOperational(id, st) }
 func (s *EmergencyService) UpdateFleet(id string, fleet domain.FleetStatus) error                 { return s.repo.UpdateFleet(id, fleet) }
 func (s *EmergencyService) UpdateActive(id string, isActive bool) error                           { return s.repo.UpdateActive(id, isActive) }
+func (s *EmergencyService) UpdateWilayah(id string, addr domain.Address) error                    { return s.repo.UpdateWilayah(id, addr) }
 
 func (s *EmergencyService) GetAllTypes() ([]domain.EmergencyType, error)                         { return s.typeRepo.FindAllTypes() }
 func (s *EmergencyService) CreateType(t domain.EmergencyType) (*domain.EmergencyType, error)     { return s.typeRepo.CreateType(t) }

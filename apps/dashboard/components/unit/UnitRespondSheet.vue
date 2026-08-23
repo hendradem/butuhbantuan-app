@@ -13,11 +13,13 @@ const props = defineProps<{
   unitLat?: number | null;
   unitLng?: number | null;
   unitName?: string;
+  soundNeedsTap?: boolean;
 }>();
 
 const emit = defineEmits<{
   accept: [];
   reject: [];
+  enableSound: [];
 }>();
 
 const config = useRuntimeConfig();
@@ -25,11 +27,17 @@ const apiBase = config.public.apiBaseUrl as string;
 
 function assetUrl(url: string): string {
   if (!url) return "";
-  if (url.startsWith("http") || url.startsWith("data:")) return url;
-  return apiBase + url;
+  if (url.startsWith("http") || url.startsWith("data:") || url.startsWith("blob:")) return url;
+  const base = String(apiBase || "").replace(/\/$/, "");
+  const path = url.startsWith("/") ? url : `/${url}`;
+  return `${base}${path}`;
 }
 
 const photoSrc = computed(() => assetUrl(String(props.order?.photo_url || "")));
+const photoBroken = ref(false);
+watch(photoSrc, () => {
+  photoBroken.value = false;
+});
 
 const mapEl = ref<HTMLDivElement | null>(null);
 const mapReady = ref(false);
@@ -41,6 +49,7 @@ const routeDurationMin = ref<number | null>(null);
 let map: any = null;
 let L: any = null;
 let routeLine: any = null;
+let routeCasing: any = null;
 let markersLayer: any = null;
 let routeToken = 0;
 
@@ -127,6 +136,10 @@ const telUrl = computed(() => {
 });
 
 function clearRoute() {
+  if (routeCasing) {
+    routeCasing.remove();
+    routeCasing = null;
+  }
   if (routeLine) {
     routeLine.remove();
     routeLine = null;
@@ -180,29 +193,80 @@ async function drawRoute() {
   const token = ++routeToken;
   routeLoading.value = true;
 
+  // Always seed haversine so chips never stay empty while routing.
+  const straight = haversineKm(from[0], from[1], to[0], to[1]);
+  if (Number.isFinite(straight)) {
+    routeDistanceKm.value = straight;
+    routeDurationMin.value = estimateEtaMinutes(from[0], from[1], to[0], to[1]);
+  }
+
+  const applyStraight = () => {
+    clearRoute();
+    routeLine = L.polyline([from, to], {
+      color: "#2563eb",
+      weight: 4,
+      dashArray: "8, 10",
+      opacity: 0.85,
+    }).addTo(map);
+    routeMode.value = "straight";
+    if (Number.isFinite(straight)) {
+      routeDistanceKm.value = straight;
+      routeDurationMin.value = estimateEtaMinutes(from[0], from[1], to[0], to[1]);
+    }
+    map.fitBounds(L.latLngBounds([from, to]), { padding: [40, 40], maxZoom: 15 });
+  };
+
+  const origin = `${from[1]},${from[0]}`;
+  const destination = `${to[1]},${to[0]}`;
+
+  const applyDriving = (
+    coords: [number, number][],
+    distanceM?: number,
+    durationS?: number,
+  ) => {
+    if (coords.length < 2) return false;
+    clearRoute();
+    // Mapbox/OSRM GeoJSON is [lng, lat] → Leaflet wants [lat, lng].
+    const latlngs = coords.map((c) => [Number(c[1]), Number(c[0])] as [number, number]);
+    // Casing + route (Maps-style).
+    routeCasing = L.polyline(latlngs, { color: "#1e3a8a", weight: 8, opacity: 0.35 }).addTo(map);
+    routeLine = L.polyline(latlngs, {
+      color: "#2563eb",
+      weight: 5,
+      opacity: 0.95,
+      lineJoin: "round",
+      lineCap: "round",
+    }).addTo(map);
+    routeMode.value = "driving";
+    if (typeof distanceM === "number" && Number.isFinite(distanceM)) {
+      routeDistanceKm.value = distanceM / 1000;
+    }
+    if (typeof durationS === "number" && Number.isFinite(durationS)) {
+      routeDurationMin.value = Math.max(1, Math.round(durationS / 60));
+    }
+    map.fitBounds(routeLine.getBounds(), { padding: [40, 40], maxZoom: 15 });
+    return true;
+  };
+
   try {
-    const url =
-      `https://router.project-osrm.org/route/v1/driving/` +
-      `${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson`;
-    const res = await fetch(url);
-    const data = await res.json();
+    // Backend tries Mapbox then OSRM — always returns road geometry when available.
+    const res = await $fetch<{
+      data?: {
+        coordinates?: [number, number][];
+        distance_m?: number;
+        duration_s?: number;
+      };
+      coordinates?: [number, number][];
+      distance_m?: number;
+      duration_s?: number;
+    }>(
+      `${apiBase}/api/v1/directions/?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`,
+    );
     if (token !== routeToken) return;
 
-    const route = data?.routes?.[0];
-    const coords = route?.geometry?.coordinates as [number, number][] | undefined;
-    if (coords?.length) {
-      const latlngs = coords.map((c) => [c[1], c[0]] as [number, number]);
-      routeLine = L.polyline(latlngs, {
-        color: "#2563eb",
-        weight: 5,
-        opacity: 0.9,
-      }).addTo(map);
-      routeMode.value = "driving";
-      if (typeof route.distance === "number") routeDistanceKm.value = route.distance / 1000;
-      if (typeof route.duration === "number") {
-        routeDurationMin.value = Math.max(1, Math.round(route.duration / 60));
-      }
-      map.fitBounds(routeLine.getBounds(), { padding: [40, 40], maxZoom: 15 });
+    const payload = res?.data ?? res;
+    const coords = (payload as any)?.coordinates as [number, number][] | undefined;
+    if (coords?.length && applyDriving(coords, (payload as any)?.distance_m, (payload as any)?.duration_s)) {
       return;
     }
   } catch {
@@ -211,15 +275,8 @@ async function drawRoute() {
     if (token === routeToken) routeLoading.value = false;
   }
 
-  // Fallback: garis lurus + ETA haversine
-  routeLine = L.polyline([from, to], {
-    color: "#2563eb",
-    weight: 4,
-    dashArray: "8, 10",
-    opacity: 0.85,
-  }).addTo(map);
-  routeMode.value = "straight";
-  map.fitBounds(L.latLngBounds([from, to]), { padding: [40, 40], maxZoom: 15 });
+  if (token !== routeToken) return;
+  applyStraight();
 }
 
 async function initMap() {
@@ -248,7 +305,14 @@ async function initMap() {
 
   drawMarkers();
   await drawRoute();
-  setTimeout(() => map?.invalidateSize(), 120);
+  setTimeout(() => {
+    map?.invalidateSize();
+    void drawRoute();
+  }, 120);
+  setTimeout(() => {
+    map?.invalidateSize();
+    void drawRoute();
+  }, 400);
 }
 
 function destroyMap() {
@@ -279,7 +343,13 @@ watch(
 );
 
 onMounted(() => {
-  nextTick(() => setTimeout(initMap, 80));
+  nextTick(() => {
+    setTimeout(() => {
+      void initMap();
+      setTimeout(() => map?.invalidateSize(), 280);
+      setTimeout(() => map?.invalidateSize(), 600);
+    }, 60);
+  });
 });
 
 onBeforeUnmount(() => {
@@ -302,196 +372,165 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <!-- Minimal floating offer — map page stays visible underneath -->
   <div
-    class="fixed inset-0 z-[100] flex items-stretch sm:items-center justify-center bg-neutral-950/80 sm:p-4"
+    class="fixed inset-0 z-[100] pointer-events-none"
     role="dialog"
     aria-modal="true"
-    aria-label="Pesanan darurat — wajib direspons"
+    aria-label="Pesanan masuk — butuh respons"
   >
-    <!-- Blocking shell: no backdrop click close -->
+    <div class="absolute inset-0 bg-neutral-950/20" aria-hidden="true" />
+
     <div
-      class="flex flex-col w-full h-full sm:h-auto sm:max-h-[min(920px,96vh)] sm:max-w-5xl bg-white sm:rounded-2xl shadow-2xl overflow-hidden ring-1 ring-black/10"
+      class="pointer-events-auto absolute left-3 right-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:left-auto sm:right-5 sm:bottom-5 sm:w-[380px] bg-white rounded-2xl shadow-2xl ring-1 ring-black/10 overflow-hidden flex flex-col max-h-[min(78vh,640px)]"
     >
-      <!-- Header -->
+      <!-- Compact header -->
       <div
         :class="[
-          'shrink-0 px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 border-b',
-          isSos ? 'bg-emergency-600 border-emergency-700 text-white' : 'bg-neutral-900 border-neutral-800 text-white',
+          'shrink-0 px-3.5 py-2.5 flex items-center gap-2.5',
+          isSos ? 'bg-emergency-600 text-white' : 'bg-neutral-900 text-white',
         ]"
       >
-        <div class="flex items-center gap-2.5 min-w-0">
-          <div class="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0 animate-pulse">
-            <Icon :icon="isSos ? 'lucide:siren' : 'lucide:bell-ring'" class="text-xl" />
-          </div>
-          <div class="min-w-0">
-            <p class="text-sm font-bold tracking-tight truncate">
-              {{ isSos ? "SOS masuk — butuh respons" : "Pesanan masuk — butuh respons" }}
-            </p>
-            <p class="text-xs text-white/70 font-mono truncate">
-              {{ order.ticket_number || "—" }}
-              <span v-if="(queueLength || 0) > 1"> · +{{ (queueLength || 1) - 1 }} antrean</span>
-            </p>
-          </div>
+        <div class="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+          <Icon :icon="isSos ? 'lucide:siren' : 'lucide:bell-ring'" class="text-base animate-pulse" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="text-xs font-bold truncate">
+            {{ isSos ? "SOS masuk" : "Pesanan masuk" }}
+          </p>
+          <p class="text-[11px] text-white/70 font-mono truncate">
+            {{ order.ticket_number || "—" }}
+            <span v-if="(queueLength || 0) > 1"> · +{{ (queueLength || 1) - 1 }}</span>
+          </p>
         </div>
         <SlaCountdown v-if="order.sla_deadline" :deadline="order.sla_deadline" />
       </div>
 
-      <!-- Body: map + detail -->
-      <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 overflow-hidden">
-        <!-- Map -->
-        <div class="relative min-h-[240px] sm:min-h-[320px] lg:min-h-0 lg:h-full bg-neutral-100 border-b lg:border-b-0 lg:border-r border-neutral-200">
-          <div ref="mapEl" class="absolute inset-0" />
-
-          <div
-            v-if="!mapReady"
-            class="absolute inset-0 z-[500] flex items-center justify-center bg-neutral-100"
-          >
-            <div class="flex items-center gap-2 text-sm text-neutral-500">
-              <Icon icon="lucide:loader-2" class="animate-spin" />
-              Memuat peta...
-            </div>
-          </div>
-
-          <div
-            v-else-if="!hasRequesterGps"
-            class="absolute inset-0 z-[500] flex items-center justify-center pointer-events-none"
-          >
-            <div class="bg-white/95 rounded-xl px-4 py-3 text-center shadow max-w-[240px]">
-              <Icon icon="lucide:map-pin-off" class="text-2xl text-neutral-300 mb-1" />
-              <p class="text-sm text-neutral-600 font-medium">Lokasi GPS tidak tersedia</p>
-              <p class="text-xs text-neutral-400 mt-0.5">Gunakan alamat teks & WhatsApp</p>
-            </div>
-          </div>
-
-          <!-- Distance / ETA chips -->
-          <div
-            v-if="hasRequesterGps"
-            class="absolute top-3 left-3 z-[500] flex flex-wrap gap-1.5"
-          >
-            <span class="inline-flex items-center gap-1.5 text-xs font-semibold bg-white/95 text-neutral-800 px-2.5 py-1.5 rounded-lg shadow">
-              <Icon icon="lucide:route" class="text-primary-600" />
-              <template v-if="displayKm != null">
-                {{ displayKm < 10 ? displayKm.toFixed(1) : Math.round(displayKm) }} km
-              </template>
-              <template v-else>—</template>
-            </span>
-            <span class="inline-flex items-center gap-1.5 text-xs font-semibold bg-white/95 text-neutral-800 px-2.5 py-1.5 rounded-lg shadow">
-              <Icon icon="lucide:clock" class="text-orange-600" />
-              {{ formatEta(displayEtaMin) }}
-            </span>
-            <span
-              v-if="routeLoading"
-              class="inline-flex items-center gap-1 text-[11px] bg-white/95 text-neutral-500 px-2 py-1.5 rounded-lg shadow"
-            >
-              <Icon icon="lucide:loader-2" class="animate-spin" />
-              Route...
-            </span>
-            <span
-              v-else-if="routeMode === 'straight'"
-              class="inline-flex items-center text-[11px] bg-amber-50 text-amber-700 px-2 py-1.5 rounded-lg shadow border border-amber-100"
-            >
-              Estimasi lurus
-            </span>
-          </div>
+      <!-- Mini map + route -->
+      <div class="relative h-40 bg-neutral-100 shrink-0 border-b border-neutral-100">
+        <div ref="mapEl" class="absolute inset-0" />
+        <div
+          v-if="!mapReady"
+          class="absolute inset-0 z-[1] flex items-center justify-center bg-neutral-100"
+        >
+          <Icon icon="lucide:loader-2" class="animate-spin text-neutral-400" />
         </div>
+        <div
+          v-if="hasRequesterGps"
+          class="absolute top-2 left-2 z-[2] flex flex-wrap gap-1 pointer-events-none"
+        >
+          <span class="inline-flex items-center gap-1 text-[10px] font-semibold bg-white/95 text-neutral-800 px-1.5 py-0.5 rounded-md shadow-sm">
+            <Icon icon="lucide:route" class="text-primary-600 text-[11px]" />
+            <template v-if="displayKm != null">
+              {{ displayKm < 10 ? displayKm.toFixed(1) : Math.round(displayKm) }} km
+            </template>
+            <template v-else>—</template>
+          </span>
+          <span class="inline-flex items-center gap-1 text-[10px] font-semibold bg-white/95 text-neutral-800 px-1.5 py-0.5 rounded-md shadow-sm">
+            <Icon icon="lucide:clock" class="text-orange-600 text-[11px]" />
+            {{ formatEta(displayEtaMin) }}
+          </span>
+        </div>
+      </div>
 
-        <!-- Detail panel -->
-        <div class="flex flex-col min-h-0 overflow-y-auto">
-          <div class="p-4 sm:p-5 space-y-4 flex-1">
-            <div>
-              <p class="text-[11px] font-semibold text-neutral-400 uppercase tracking-wide">Pelapor</p>
-              <h2 class="text-xl font-semibold text-neutral-900 mt-0.5 leading-tight">
-                {{ order.requester_name || "Anonim" }}
-              </h2>
-              <p v-if="order.requester_phone" class="text-sm text-neutral-500 mt-0.5">
-                {{ order.requester_phone }}
-              </p>
-            </div>
-
-            <div v-if="order.condition" class="rounded-xl bg-emergency-50 border border-emergency-100 px-3.5 py-3">
-              <p class="text-[11px] font-semibold text-emergency-600 uppercase tracking-wide mb-1">Kondisi / kejadian</p>
-              <p class="text-sm text-neutral-800 leading-relaxed whitespace-pre-wrap">{{ order.condition }}</p>
-            </div>
-
-            <div v-if="order.location" class="flex gap-3 items-start">
-              <div class="w-9 h-9 rounded-xl bg-neutral-100 flex items-center justify-center shrink-0">
-                <Icon icon="lucide:map-pin" class="text-neutral-600" />
-              </div>
-              <div class="min-w-0 pt-0.5">
-                <p class="text-[11px] font-semibold text-neutral-400 uppercase tracking-wide">Lokasi</p>
-                <p class="text-sm text-neutral-800 leading-snug mt-0.5">{{ order.location }}</p>
-              </div>
-            </div>
-
-            <div
-              v-if="photoSrc"
-              class="rounded-xl overflow-hidden border border-neutral-200 max-h-40"
-            >
-              <img :src="photoSrc" alt="Foto kejadian" class="w-full h-40 object-cover">
-            </div>
-
-            <div class="grid grid-cols-3 gap-2">
-              <a
-                v-if="mapsUrl"
-                :href="mapsUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex flex-col items-center justify-center gap-1 py-3 rounded-xl bg-primary-50 text-primary-700 text-xs font-semibold border border-primary-100 hover:bg-primary-100 transition-colors"
-              >
-                <Icon icon="lucide:navigation" class="text-lg" />
-                Google Maps
-              </a>
-              <a
-                v-if="waUrl"
-                :href="waUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex flex-col items-center justify-center gap-1 py-3 rounded-xl bg-green-50 text-green-700 text-xs font-semibold border border-green-100 hover:bg-green-100 transition-colors"
-              >
-                <Icon icon="mdi:whatsapp" class="text-lg" />
-                WhatsApp
-              </a>
-              <a
-                v-if="telUrl"
-                :href="telUrl"
-                class="inline-flex flex-col items-center justify-center gap-1 py-3 rounded-xl bg-neutral-50 text-neutral-700 text-xs font-semibold border border-neutral-200 hover:bg-neutral-100 transition-colors"
-              >
-                <Icon icon="lucide:phone" class="text-lg" />
-                Telepon
-              </a>
-            </div>
-
-            <p class="text-[11px] text-neutral-400 leading-relaxed">
-              Modal ini tidak bisa ditutup tanpa keputusan. Tolak akan mengalihkan ke unit/dispatcher lain.
+      <!-- Compact detail -->
+      <div class="px-3.5 py-3 space-y-2 overflow-y-auto min-h-0 flex-1">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-neutral-900 truncate">
+              {{ order.requester_name || "Anonim" }}
+            </p>
+            <p v-if="order.requester_phone" class="text-xs text-neutral-500 truncate">
+              {{ order.requester_phone }}
             </p>
           </div>
-
-          <!-- Actions -->
-          <div
-            class="shrink-0 p-4 sm:p-5 pt-3 border-t border-neutral-100 space-y-2.5 bg-white pb-[max(1rem,env(safe-area-inset-bottom))]"
-          >
-            <button
-              type="button"
-              :disabled="acting"
-              class="w-full py-4 rounded-2xl bg-emerald-600 text-white text-lg font-bold hover:bg-emerald-700 active:scale-[0.99] transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
-              @click="emit('accept')"
+          <div class="flex items-center gap-1 shrink-0">
+            <a
+              v-if="mapsUrl"
+              :href="mapsUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="w-8 h-8 rounded-lg bg-primary-50 text-primary-700 flex items-center justify-center hover:bg-primary-100"
+              title="Google Maps"
             >
-              <Icon v-if="acting" icon="lucide:loader-2" class="animate-spin text-xl" />
-              <template v-else>
-                <Icon icon="lucide:check" class="text-xl" />
-                Terima pesanan
-              </template>
-            </button>
-            <button
-              type="button"
-              :disabled="acting"
-              class="w-full py-3.5 rounded-2xl border border-neutral-200 bg-white text-neutral-800 text-base font-semibold hover:bg-neutral-50 disabled:opacity-50"
-              @click="emit('reject')"
+              <Icon icon="lucide:navigation" class="text-sm" />
+            </a>
+            <a
+              v-if="telUrl"
+              :href="telUrl"
+              class="w-8 h-8 rounded-lg bg-neutral-100 text-neutral-700 flex items-center justify-center hover:bg-neutral-200"
+              title="Telepon"
             >
-              Tidak bisa · Alihkan
-            </button>
+              <Icon icon="lucide:phone" class="text-sm" />
+            </a>
+            <a
+              v-if="waUrl"
+              :href="waUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="w-8 h-8 rounded-lg bg-green-50 text-green-700 flex items-center justify-center hover:bg-green-100"
+              title="WhatsApp"
+            >
+              <Icon icon="mdi:whatsapp" class="text-sm" />
+            </a>
           </div>
         </div>
+
+        <p v-if="order.condition" class="text-xs text-neutral-700 leading-snug line-clamp-2 bg-emergency-50/80 rounded-lg px-2.5 py-2">
+          {{ order.condition }}
+        </p>
+        <p v-if="order.location" class="text-[11px] text-neutral-500 flex items-start gap-1.5">
+          <Icon icon="lucide:map-pin" class="text-neutral-400 shrink-0 mt-0.5" />
+          <span class="line-clamp-2">{{ order.location }}</span>
+        </p>
+
+        <div
+          v-if="photoSrc && !photoBroken"
+          class="rounded-lg overflow-hidden border border-neutral-100"
+        >
+          <img
+            :src="photoSrc"
+            alt="Foto kejadian"
+            class="w-full h-24 object-cover"
+            loading="eager"
+            referrerpolicy="no-referrer"
+            @error="photoBroken = true"
+          >
+        </div>
+
+        <button
+          v-if="soundNeedsTap"
+          type="button"
+          class="w-full text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5 flex items-center justify-center gap-1.5"
+          @click="emit('enableSound')"
+        >
+          <Icon icon="lucide:volume-2" class="text-sm" />
+          Aktifkan suara alarm
+        </button>
+      </div>
+
+      <!-- Actions -->
+      <div class="shrink-0 p-3 pt-2 border-t border-neutral-100 grid grid-cols-2 gap-2 bg-white">
+        <button
+          type="button"
+          :disabled="acting"
+          class="py-2.5 rounded-xl border border-neutral-200 bg-white text-neutral-800 text-sm font-semibold hover:bg-neutral-50 disabled:opacity-50"
+          @click="emit('reject')"
+        >
+          Alihkan
+        </button>
+        <button
+          type="button"
+          :disabled="acting"
+          class="py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+          @click="emit('accept')"
+        >
+          <Icon v-if="acting" icon="lucide:loader-2" class="animate-spin text-base" />
+          <template v-else>
+            <Icon icon="lucide:check" class="text-base" />
+            Terima
+          </template>
+        </button>
       </div>
     </div>
   </div>

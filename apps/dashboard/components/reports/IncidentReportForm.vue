@@ -79,6 +79,43 @@ const location = ref("");
 const maleCount = ref("");
 const femaleCount = ref("");
 
+// ── RS Rujukan ─────────────────────────────────────────────────────────────────
+const referralHospitalId = ref("");
+const referralHospitalName = ref("");
+const hospitalOptions = ref<{ id: string; name: string; class?: string }[]>([]);
+const loadingHospitals = ref(false);
+
+async function fetchHospitals() {
+  const regencyId = String(props.ticket?.regency_id || "").trim();
+  if (!regencyId) return;
+  const root = props.mode === "unit" ? "/api/v1/unit/hospitals" : "/api/v1/admin/hospitals";
+  loadingHospitals.value = true;
+  try {
+    const res = await $fetch<{ data: any[] }>(
+      `${baseUrl}${root}/master?regency_id=${encodeURIComponent(regencyId)}`,
+      { headers: authHeaders() },
+    ).catch(() => null);
+    hospitalOptions.value = (res?.data ?? []).map((h: any) => ({
+      id: h.id,
+      name: h.name,
+      class: h.class,
+    }));
+  } finally {
+    loadingHospitals.value = false;
+  }
+}
+
+function onHospitalSelect(id: string) {
+  referralHospitalId.value = id;
+  referralHospitalName.value = hospitalOptions.value.find((h) => h.id === id)?.name ?? "";
+}
+
+watch(
+  () => props.ticket?.regency_id,
+  (id) => { if (id && !hospitalOptions.value.length) fetchHospitals(); },
+  { immediate: true },
+);
+
 // ── Victims ────────────────────────────────────────────────────────────────────
 interface Victim { id: string; name: string; age: string; gender: string; address: string; conditions: string; treatments: string }
 function newVictim(): Victim {
@@ -149,6 +186,8 @@ function applyReportData(data: any) {
     }));
   }
   if (data.vehicle !== undefined) vehicle.value = String(data.vehicle || "");
+  if (data.referralHospitalId !== undefined) referralHospitalId.value = String(data.referralHospitalId || "");
+  if (data.referralHospitalName !== undefined) referralHospitalName.value = String(data.referralHospitalName || "");
   if (data._savedAt) savedAt.value = String(data._savedAt);
 }
 
@@ -165,6 +204,8 @@ function resetEventFields() {
   parties.value = "";
   volunteers.value = [{ id: Math.random().toString(36).slice(2), name: "", role: "" }];
   vehicle.value = "";
+  referralHospitalId.value = "";
+  referralHospitalName.value = "";
   savedAt.value = null;
   saveError.value = "";
 }
@@ -223,6 +264,8 @@ const formSnapshot = computed(() => ({
   parties: parties.value,
   volunteers: volunteers.value.map(v => ({ ...v })),
   vehicle: vehicle.value,
+  referralHospitalId: referralHospitalId.value,
+  referralHospitalName: referralHospitalName.value,
 }));
 
 watch(formSnapshot, () => {
@@ -401,6 +444,12 @@ const message = computed(() => {
     L.push("");
   }
 
+  if (referralHospitalName.value.trim()) {
+    L.push("🏥 *RS RUJUKAN:*");
+    L.push(`- ${referralHospitalName.value.trim()}`);
+    L.push("");
+  }
+
   if (closing.value.trim()) { L.push(closing.value.trim()); L.push(""); }
   if (footer.value.trim()) L.push(footer.value.trim());
 
@@ -557,6 +606,29 @@ const prefillHint = computed(() => {
             <label class="text-xs text-neutral-500 font-medium block mb-1">Korban Perempuan</label>
             <UiInput v-model="femaleCount" placeholder="-" />
           </div>
+        </div>
+        <div>
+          <label class="text-xs text-neutral-500 font-medium block mb-1">
+            RS Rujukan
+            <span class="text-neutral-400 font-normal">(opsional)</span>
+          </label>
+          <div v-if="loadingHospitals" class="h-9 soft-skel rounded-lg" />
+          <select
+            v-else
+            class="w-full h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-800 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
+            :value="referralHospitalId"
+            @change="onHospitalSelect(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">— Tidak dirujuk —</option>
+            <option
+              v-for="h in hospitalOptions"
+              :key="h.id"
+              :value="h.id"
+            >{{ h.name }}{{ h.class ? ` · Kelas ${h.class}` : "" }}</option>
+          </select>
+          <p v-if="!hospitalOptions.length && !loadingHospitals && props.ticket?.regency_id" class="mt-1 text-xs text-neutral-400">
+            Belum ada data RS — sync dulu di halaman Rumah Sakit.
+          </p>
         </div>
       </div>
 

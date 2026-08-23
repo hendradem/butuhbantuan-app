@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { toast } from "vue3-hot-toast";
+import { toast } from "~/utils/appToast";
 
 const props = defineProps<{
   mode: "admin" | "unit";

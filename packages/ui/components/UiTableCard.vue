@@ -16,20 +16,23 @@ defineProps<{
       v-if="title || $slots.actions"
       class="px-4 sm:px-5 py-3 border-b border-neutral-200"
     >
-      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div v-if="title" class="min-w-0">
-          <div class="flex items-center gap-2 flex-wrap">
-            <h2 class="text-base font-semibold text-neutral-900 tracking-tight">{{ title }}</h2>
+      <div class="flex items-center gap-3 sm:justify-between min-w-0">
+        <div v-if="title" class="min-w-0 shrink">
+          <div class="flex items-center gap-2 min-w-0">
+            <h2 class="text-base font-semibold text-neutral-900 tracking-tight truncate">{{ title }}</h2>
             <span
               v-if="badge != null && badge !== ''"
-              class="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 ring-1 ring-inset ring-neutral-200"
+              class="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 ring-1 ring-inset ring-neutral-200 shrink-0"
             >
               {{ badge }}
             </span>
           </div>
-          <p v-if="description" class="mt-0.5 text-sm font-normal text-neutral-500">{{ description }}</p>
+          <p v-if="description" class="mt-0.5 text-sm font-normal text-neutral-500 truncate hidden sm:block">{{ description }}</p>
         </div>
-        <div v-if="$slots.actions" class="flex flex-wrap items-center gap-2 shrink-0 sm:ml-auto">
+        <div
+          v-if="$slots.actions"
+          class="flex items-center gap-2 flex-nowrap min-w-0 shrink-0 sm:ml-auto"
+        >
           <slot name="actions" />
         </div>
       </div>

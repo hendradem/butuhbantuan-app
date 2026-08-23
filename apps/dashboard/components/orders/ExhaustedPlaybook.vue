@@ -10,6 +10,8 @@ const props = defineProps<{
   showReassign?: boolean;
   showEscalate?: boolean;
   escalating?: boolean;
+  /** Tighter layout for queue/sla cards */
+  compact?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -39,13 +41,23 @@ function waRequester() {
 </script>
 
 <template>
-  <div class="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3.5 space-y-3">
+  <div
+    :class="[
+      'rounded-xl border border-amber-200 bg-amber-50/80 space-y-3',
+      compact ? 'px-3 py-3' : 'px-4 py-3.5',
+    ]"
+  >
     <div class="flex items-start gap-3">
-      <div class="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 ring-1 ring-amber-200">
+      <div
+        :class="[
+          'rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 ring-1 ring-amber-200',
+          compact ? 'w-8 h-8' : 'w-9 h-9',
+        ]"
+      >
         <Icon :icon="isEscalated ? 'lucide:phone-call' : 'lucide:hourglass'" class="text-base" />
       </div>
       <div class="min-w-0">
-        <p class="text-sm font-semibold text-amber-900">
+        <p :class="compact ? 'text-xs font-semibold text-amber-900' : 'text-sm font-semibold text-amber-900'">
           {{ isEscalated ? "Dieskalasi ke pusat darurat" : "Dispatch habis — belum ada unit yang merespons" }}
         </p>
         <p class="text-xs text-amber-800/80 mt-0.5 leading-relaxed">
@@ -55,15 +67,21 @@ function waRequester() {
             <span v-if="escalationHotline"> · {{ escalationHotline }}</span>.
           </template>
           <template v-else>
-            Cascade lokal → dispatcher kab/kota → provinsi sudah dijalankan
-            <span v-if="unitName"> (terakhir: {{ unitName }})</span>.
-            Lanjutkan manual atau eskalasi PSC agar warga tetap tertangani.
+            <template v-if="compact">
+              Urutan: Alihkan → Eskalasi PSC → Hubungi pelapor
+              <span v-if="unitName"> · terakhir {{ unitName }}</span>
+            </template>
+            <template v-else>
+              Cascade lokal → dispatcher kab → provinsi → nearby sudah dijalankan
+              <span v-if="unitName"> (terakhir: {{ unitName }})</span>.
+              Lanjutkan manual atau eskalasi PSC agar warga tetap tertangani.
+            </template>
           </template>
         </p>
       </div>
     </div>
 
-    <ol v-if="!isEscalated" class="text-xs text-amber-900/90 space-y-1.5 list-decimal list-inside">
+    <ol v-if="!isEscalated && !compact" class="text-xs text-amber-900/90 space-y-1.5 list-decimal list-inside">
       <li>Alihkan ke unit lain (auto-recommend atau pilih manual)</li>
       <li>Eskalasi ke PSC / hotline pusat (tiket tetap pending)</li>
       <li>Hubungi pelapor via WhatsApp untuk update kondisi</li>

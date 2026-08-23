@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
 import { slaSortKey, slaUrgency, type SlaUrgency } from "~/utils/slaBreach";
-import { isUnitDispatcher, type UnitProfile } from "~/composables/useUnitOps";
+import { isUnitDispatcher, canAcceptTicket, type UnitProfile } from "~/composables/useUnitOps";
 
 definePageMeta({ layout: "unit", title: "SLA Breach", keepalive: true });
 
@@ -118,6 +118,7 @@ function openReassign(o: any) {
 }
 
 async function doAccept(o: any) {
+  if (!canAcceptTicket(profile.value, o)) return;
   if (await accept(o.id)) refresh();
 }
 
@@ -129,7 +130,7 @@ useOrderNotification(
   computed(() => counts.value.total),
   refresh,
   15_000,
-  { sound: "none" },
+  { sound: "none", browser: false },
 );
 </script>
 
@@ -278,8 +279,28 @@ useOrderNotification(
               </div>
             </div>
 
-            <div class="flex flex-wrap gap-2">
-              <UiButton size="sm" :disabled="acting === o.id" :loading="acting === o.id" @click="doAccept(o)">
+            <ExhaustedPlaybook
+              v-if="o.dispatch_status === 'exhausted' || o.dispatch_status === 'escalated'"
+              compact
+              :unit-name="o.unit_name"
+              :requester-phone="o.requester_phone"
+              :dispatch-status="o.dispatch_status"
+              :escalation-hotline="o.escalation_hotline"
+              :escalation-label="o.escalation_label"
+              show-reassign
+              show-escalate
+              :escalating="acting === o.id"
+              @reassign="openReassign(o)"
+              @escalate="doEscalate(o)"
+            />
+            <div v-else class="flex flex-wrap gap-2">
+              <UiButton
+                v-if="canAcceptTicket(profile, o)"
+                size="sm"
+                :disabled="acting === o.id"
+                :loading="acting === o.id"
+                @click="doAccept(o)"
+              >
                 Terima
               </UiButton>
               <UiButton variant="secondary" size="sm" :disabled="acting === o.id" @click="openReject(o)">
@@ -288,15 +309,6 @@ useOrderNotification(
               <UiButton variant="secondary" size="sm" @click="openReassign(o)">
                 Alihkan
               </UiButton>
-              <UiButton
-                v-if="o.dispatch_status === 'exhausted'"
-                variant="secondary"
-                size="sm"
-                :disabled="acting === o.id"
-                @click="doEscalate(o)"
-              >
-                Eskalasi PSC
-              </UiButton>
               <NuxtLink
                 :to="`/unit/orders/${o.ticket_number}`"
                 class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-white text-neutral-950 border border-neutral-950/10 shadow-sm hover:bg-neutral-50 transition-colors"
@@ -304,6 +316,13 @@ useOrderNotification(
                 Detail
               </NuxtLink>
             </div>
+            <NuxtLink
+              v-if="o.dispatch_status === 'exhausted' || o.dispatch_status === 'escalated'"
+              :to="`/unit/orders/${o.ticket_number}`"
+              class="inline-flex text-xs font-medium text-primary-700 hover:underline"
+            >
+              Buka detail tiket
+            </NuxtLink>
           </li>
         </ul>
       </UiTableCard>

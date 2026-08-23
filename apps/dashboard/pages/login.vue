@@ -39,6 +39,9 @@ async function submitUnit() {
   unitError.value = "";
   try {
     await unitLogin(unitUsername.value, unitPassword.value);
+    // Arm alert audio in this same user-gesture turn so MP3 can autoplay later.
+    const { armFromGesture } = useAlertSound();
+    await armFromGesture();
     await navigateTo("/unit/orders");
   } catch {
     unitError.value = "Username atau password salah.";

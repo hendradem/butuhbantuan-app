@@ -6,24 +6,44 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/butuhbantuan/api/internal/domain"
+	"github.com/butuhbantuan/api/internal/service"
 	"github.com/butuhbantuan/api/pkg/hub"
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
 )
 
 type StreamHandler struct {
-	hub *hub.Hub
+	hub          *hub.Hub
+	emergencySvc service.EmergencyUseCase
 }
 
 func NewStreamHandler(h *hub.Hub) *StreamHandler {
 	return &StreamHandler{hub: h}
 }
 
-// Stream opens a persistent SSE connection for a unit. It streams real-time
-// events (new_order) and sends a heartbeat every 25 s to keep proxies alive.
+func (h *StreamHandler) WithEmergency(emergencySvc service.EmergencyUseCase) *StreamHandler {
+	h.emergencySvc = emergencySvc
+	return h
+}
+
+// Stream opens a persistent SSE connection for a unit. Dispatcher units also
+// subscribe to their wilayah channel so ops dashboards get live updates.
 func (h *StreamHandler) Stream(c *fiber.Ctx) error {
 	uuid := c.Locals("emergency_uuid").(string)
-	return h.stream(c, uuid)
+	channels := []string{uuid}
+	if h.emergencySvc != nil {
+		if units, err := h.emergencySvc.GetByIDs([]string{uuid}); err == nil && len(units) > 0 {
+			if scope, ok := domain.OpsScopeFromEmergency(units[0]); ok {
+				if scope.ProvinceWide && scope.ProvinceID != "" {
+					channels = append(channels, hub.ProvinceChannel(scope.ProvinceID))
+				} else if scope.RegencyID != "" {
+					channels = append(channels, hub.RegencyChannel(scope.RegencyID))
+				}
+			}
+		}
+	}
+	return h.stream(c, channels...)
 }
 
 // AdminStream opens SSE for admin ops (broadcast channel).
@@ -31,8 +51,8 @@ func (h *StreamHandler) AdminStream(c *fiber.Ctx) error {
 	return h.stream(c, hub.AdminChannel)
 }
 
-func (h *StreamHandler) stream(c *fiber.Ctx, channel string) error {
-	events, unsub := h.hub.Subscribe(channel)
+func (h *StreamHandler) stream(c *fiber.Ctx, channels ...string) error {
+	events, unsub := h.hub.SubscribeMany(channels)
 
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")

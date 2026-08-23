@@ -4,16 +4,16 @@ import "time"
 
 // Order event types for the per-ticket timeline.
 const (
-	OrderEventCreated      = "created"
-	OrderEventOffered      = "offered"
-	OrderEventReassigned   = "reassigned"
-	OrderEventAccepted     = "accepted"
-	OrderEventRejected     = "rejected"
-	OrderEventInProgress   = "in_progress"
-	OrderEventCompleted    = "completed"
-	OrderEventCancelled    = "cancelled"
-	OrderEventExhausted    = "exhausted"
-	OrderEventEscalatedPSC = "escalated_psc"
+	OrderEventCreated       = "created"
+	OrderEventOffered       = "offered"
+	OrderEventReassigned    = "reassigned"
+	OrderEventAccepted      = "accepted"
+	OrderEventRejected      = "rejected"
+	OrderEventInProgress    = "in_progress"
+	OrderEventCompleted     = "completed"
+	OrderEventCancelled     = "cancelled"
+	OrderEventExhausted     = "exhausted"
+	OrderEventEscalatedPSC  = "escalated_psc"
 	OrderEventTrackEnabled  = "track_enabled"
 	OrderEventTrackDisabled = "track_disabled"
 	OrderEventArrived       = "arrived"
@@ -22,6 +22,7 @@ const (
 // Dispatch cascade tiers recorded on offered/reassigned events.
 const (
 	DispatchTierLocal         = "local"
+	DispatchTierNearby        = "nearby" // trusted PSC/verified within radius, other regency
 	DispatchTierKabDispatcher = "kab_dispatcher"
 	DispatchTierProvince      = "province"
 )
@@ -47,6 +48,6 @@ type OrderEvent struct {
 	Actor        string    `json:"actor,omitempty"` // system | admin | unit
 	FromUnit     string    `json:"from_unit,omitempty"`
 	ToUnit       string    `json:"to_unit,omitempty"`
-	Tier         string    `json:"dispatch_tier,omitempty"` // local | kab_dispatcher | province
+	Tier         string    `json:"dispatch_tier,omitempty"` // local | nearby | kab_dispatcher | province
 	CreatedAt    time.Time `json:"created_at"`
 }

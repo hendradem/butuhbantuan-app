@@ -18,6 +18,12 @@ const groups: NavGroup[] = [
     ],
   },
   {
+    label: "Aplikasi",
+    items: [
+      { label: "SRU Mission Map", to: "/apps/sru", icon: "lucide:radar" },
+    ],
+  },
+  {
     label: "Operasional",
     items: [
       { label: "Pesanan Masuk",    to: "/orders",          icon: "lucide:clipboard-list", badgeKey: "orders" },
@@ -26,15 +32,15 @@ const groups: NavGroup[] = [
       { label: "Live Map Ops",    to: "/ops/map",         icon: "lucide:map" },
       { label: "Feedback",        to: "/feedback",        icon: "lucide:message-square-heart" },
       { label: "Laporan",         to: "/reports",         icon: "lucide:file-text" },
-      { label: "Mock · Steps",    to: "/labs/order-steps", icon: "lucide:waypoints" },
     ],
   },
   {
     label: "Data",
     items: [
-      { label: "Layanan Darurat",  to: "/emergencies",    icon: "lucide:shield-check" },
-      { label: "Jenis Layanan",    to: "/emergency-types", icon: "lucide:tag" },
-      { label: "Wilayah Tercakup", to: "/regions",         icon: "lucide:map-pin" },
+      { label: "Layanan Darurat", to: "/emergencies", icon: "lucide:shield-check" },
+      { label: "Import RS", to: "/hospitals", icon: "lucide:hospital" },
+      { label: "Jenis Layanan", to: "/emergency-types", icon: "lucide:tag" },
+      { label: "Wilayah Tercakup", to: "/regions", icon: "lucide:map-pin" },
     ],
   },
 ];
@@ -56,11 +62,11 @@ function isActive(to: string) {
   if (to === "/orders/sla") {
     return route.path === "/orders/sla" || route.path.startsWith("/orders/sla/");
   }
+  if (to === "/apps/sru") {
+    return route.path === "/apps/sru" || route.path.startsWith("/apps/sru/");
+  }
   if (to === "/ops/map") {
     return route.path === "/ops/map" || route.path.startsWith("/ops/map/");
-  }
-  if (to === "/labs/order-steps") {
-    return route.path === "/labs/order-steps" || route.path.startsWith("/labs/");
   }
   if (to === "/feedback") {
     return route.path === "/feedback" || route.path.startsWith("/feedback/");

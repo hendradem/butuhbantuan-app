@@ -1,4 +1,4 @@
-import { toast } from "vue3-hot-toast";
+import { toast } from "~/utils/appToast";
 
 export type OrderDispatchMode = "admin" | "unit";
 export type ReassignMode = "auto" | "manual";
@@ -34,7 +34,7 @@ export function useOrderDispatch(mode: OrderDispatchMode) {
         method: "POST",
         headers: headers(),
       });
-      toast.success("Pesanan diterima");
+      toast.success("Terima pesanan");
       return true;
     } catch (e: any) {
       toast.error(e?.data?.message || "Gagal menerima pesanan");

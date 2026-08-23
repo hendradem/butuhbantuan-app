@@ -114,6 +114,22 @@ func (r *RegionRepo) FindProvinces() ([]domain.Province, error) {
 	return out, nil
 }
 
+func (r *RegionRepo) FindRegency(id string) (*domain.Regency, error) {
+	var row Regency
+	if err := r.db.Where("id = ?", id).First(&row).Error; err != nil {
+		return nil, err
+	}
+	return &domain.Regency{ID: row.ID, ProvinceID: row.ProvinceID, Name: row.Name}, nil
+}
+
+func (r *RegionRepo) FindProvince(id string) (*domain.Province, error) {
+	var row Province
+	if err := r.db.Where("id = ?", id).First(&row).Error; err != nil {
+		return nil, err
+	}
+	return &domain.Province{ID: row.ID, Name: row.Name}, nil
+}
+
 func (r *RegionRepo) FindRegenciesByProvince(provinceID string) ([]domain.Regency, error) {
 	var rows []Regency
 	if err := r.db.Where("province_id = ?", provinceID).Order("name").Find(&rows).Error; err != nil {

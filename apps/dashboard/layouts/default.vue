@@ -3,7 +3,6 @@ import { Icon } from "@iconify/vue";
 
 const mobileOpen = ref(false);
 const { setPendingOrders, setPendingSos, setSlaBreachCount, pushNotification } = useOpsAlerts();
-const { playShort, unlock } = useAlertSound();
 
 function closeMobile() { mobileOpen.value = false; }
 
@@ -75,13 +74,10 @@ function pushToast(order: any) {
   );
 }
 
-function announceOrders(orders: any[], { sound = true } = {}) {
+function announceOrders(orders: any[]) {
   if (!orders.length) return;
   addSeenIds(orders.map((o: any) => o.id));
-  if (sound) {
-    unlock();
-    playShort();
-  }
+  // Admin dashboard: visual / browser notif only — no emergency MP3 (unit panel only).
   for (const o of orders) {
     pushNotification({
       id: `order-${o.id}`,
@@ -91,6 +87,9 @@ function announceOrders(orders: any[], { sound = true } = {}) {
       kind: o.source === "sos" ? "sos" : "order",
     });
     pushToast(o);
+  }
+  if (import.meta.client) {
+    window.dispatchEvent(new CustomEvent("bb:admin-order-live"));
   }
 }
 
@@ -163,6 +162,14 @@ useOrderSSE(
   baseUrl,
   {
     silentToast: true,
+    onOrderUpdated: (order?: any) => {
+      // Status / location changes — refresh overview sebaran colors when open
+      if (import.meta.client) {
+        window.dispatchEvent(new CustomEvent("bb:admin-order-live"));
+      }
+      // fall through: handlers below are only onNewOrder path for exhausted etc.
+      void order;
+    },
     onNewOrder: (order?: any) => {
       if (order?.id) {
         const seen = getSeenIds();
@@ -173,19 +180,21 @@ useOrderSSE(
       }
       // Fallback: refresh pending counts via poll (dedupe by seen ids)
       pollOrders();
+      if (import.meta.client) {
+        window.dispatchEvent(new CustomEvent("bb:admin-order-live"));
+      }
     },
     onArrived: (order: any) => {
       const ticket = order?.ticket_number || "";
       pushNotification({
         id: `arrived-${order?.id || ticket}`,
-        title: "Petugas sudah sampai",
+        title: "Tiba di lokasi",
         body: ticket
           ? `${order?.unit_name || "Unit"} · ${ticket} · ${order?.requester_name || ""}`
           : "Petugas tiba di lokasi pelapor",
         href: ticket ? `/orders/${ticket}` : "/orders",
         kind: "arrived",
       });
-      playShort();
     },
   },
   "admin",

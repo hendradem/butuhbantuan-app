@@ -151,6 +151,10 @@ func (r *Repo) UpdateActive(_ string, _ bool) error {
 	return repository.ErrNotSupported
 }
 
+func (r *Repo) UpdateWilayah(_ string, _ domain.Address) error {
+	return repository.ErrNotSupported
+}
+
 func (r *Repo) FindAllTypes() ([]domain.EmergencyType, error) {
 	return r.types, nil
 }
@@ -200,6 +204,14 @@ func (r *Repo) SearchRegencies(_ string) ([]domain.Regency, error) {
 }
 
 func (r *Repo) FindProvinces() ([]domain.Province, error) {
+	return nil, repository.ErrNotSupported
+}
+
+func (r *Repo) FindRegency(_ string) (*domain.Regency, error) {
+	return nil, repository.ErrNotSupported
+}
+
+func (r *Repo) FindProvince(_ string) (*domain.Province, error) {
 	return nil, repository.ErrNotSupported
 }
 

@@ -27,6 +27,7 @@ type EmergencyRepository interface {
 	UpdateOperational(id string, status domain.OperationalStatus) error
 	UpdateFleet(id string, fleet domain.FleetStatus) error
 	UpdateActive(id string, isActive bool) error
+	UpdateWilayah(id string, addr domain.Address) error
 }
 
 type PushRepository interface {
@@ -82,7 +83,10 @@ type OrderRepository interface {
 	MarkArrivedByToken(token string) (*domain.OrderTicket, error)
 	MarkArrived(id string) (*domain.OrderTicket, error)
 	DisableTrack(id string) (*domain.OrderTicket, error)
+	// ExpireTrack soft-closes live sharing: keeps token for read-only field view.
+	ExpireTrack(id string) (*domain.OrderTicket, error)
 	SaveIncidentReport(id, reportJSON string) (*domain.OrderTicket, error)
+	SetReferralHospital(id, hospitalID, hospitalName string) error
 }
 
 type DispatchAttemptRepository interface {
@@ -120,6 +124,7 @@ func (r *NoopUnitCredentialRepository) FindByUsername(_ string) (*domain.UnitCre
 type AnalyticsRepository interface {
 	GetAnalytics(periodDays int) (domain.Analytics, error)
 	GetHeatmap(periodDays int) ([]domain.HeatmapPoint, error)
+	GetUnitPeriodAggregates(emergencyUUID string, periodDays int) (domain.UnitPeriodAggregates, error)
 }
 
 type RegionRepository interface {
@@ -130,6 +135,8 @@ type RegionRepository interface {
 	DeleteAvailableRegion(id string) error
 	SearchRegencies(q string) ([]domain.Regency, error)
 	FindProvinces() ([]domain.Province, error)
+	FindRegency(id string) (*domain.Regency, error)
+	FindProvince(id string) (*domain.Province, error)
 	FindRegenciesByProvince(provinceID string) ([]domain.Regency, error)
 	FindCoveredProvinces() ([]domain.Province, error)
 	FindCoveredRegenciesByProvince(provinceID string) ([]domain.Regency, error)

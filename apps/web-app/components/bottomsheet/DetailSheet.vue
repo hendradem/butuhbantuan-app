@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import { displayEtaMinutes } from "~/utils/rankUnits";
 
 const detailSheet = useDetailSheetStore();
 const leaflet = useLeafletStore();
@@ -10,52 +11,149 @@ const emergencyData = computed(() => data.value?.emergency?.emergencyData);
 const emergencyType = computed(() => data.value?.emergencyType);
 const tripData = computed(() => data.value?.emergency?.trip);
 
+const menuOpen = ref(false);
+const menuRef = ref<HTMLElement | null>(null);
+
+const unitStatsPath = computed(() => {
+  const id = emergencyData.value?.id;
+  return id ? `/unit/${id}` : "";
+});
+
+/** Prefer live OSRM route (matches map bubble); else Matrix trip minutes. */
+const etaMinutes = computed(() => {
+  const sec = leaflet.routeTravel?.durationSec;
+  if (sec != null && Number.isFinite(sec)) {
+    return Math.max(1, Math.round(sec / 60));
+  }
+  return displayEtaMinutes(tripData.value?.duration);
+});
+
 function handleClose() {
+  menuOpen.value = false;
   detailSheet.onClose();
   leaflet.resetLeafletRouting();
   if (leaflet.mapInstance && userLocation.lat && userLocation.long) {
-    leaflet.mapInstance.setView([userLocation.lat, userLocation.long], 13);
+    leaflet.mapInstance.setView([userLocation.lat, userLocation.long], 13, { animate: true });
   }
 }
+
+function onStatsNavigate() {
+  menuOpen.value = false;
+  detailSheet.onClose();
+}
+
+function onDocPointer(e: Event) {
+  const el = menuRef.value;
+  if (!el || !menuOpen.value) return;
+  if (e.target instanceof Node && !el.contains(e.target)) {
+    menuOpen.value = false;
+  }
+}
+
+watch(
+  () => detailSheet.isOpen,
+  (open) => {
+    if (!open) menuOpen.value = false;
+  },
+);
+
+onMounted(() => {
+  if (!import.meta.client) return;
+  document.addEventListener("pointerdown", onDocPointer, true);
+});
+onBeforeUnmount(() => {
+  if (!import.meta.client) return;
+  document.removeEventListener("pointerdown", onDocPointer, true);
+});
 </script>
 
 <template>
   <CoreSheet
     :is-open="detailSheet.isOpen"
-    :snap-points="[280, 0]"
+    :snap-points="[330, 0]"
     scrollable
     @close="handleClose"
   >
     <template #header>
       <div
         v-if="emergencyData"
-        class="border-b py-3 px-3 bg-white border-neutral-100 rounded-t-[40px] flex items-center justify-between"
+        class="relative py-3 px-3 flex items-center justify-between gap-2"
+        style="border-bottom: 1px solid var(--bb-border); border-radius: var(--bb-radius-sheet) var(--bb-radius-sheet) 0 0"
       >
-        <div class="flex gap-2 items-center min-w-0">
-          <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-red-50 shrink-0">
-            <Icon :icon="emergencyType?.icon || 'mynaui:ambulance-solid'" class="text-red-500 text-xl" />
+        <div class="flex gap-2 items-center min-w-0 flex-1">
+          <div class="flex items-center justify-center w-8 h-8 shrink-0 ui-icon-well--danger" style="border-radius: 0.75rem">
+            <Icon :icon="emergencyType?.icon || 'mynaui:ambulance-solid'" class="text-xl" />
           </div>
           <div class="min-w-0">
-            <h1 class="text-md leading-none m-0 text-neutral-800 font-semibold truncate">
+            <h1 class="text-md leading-none m-0 font-semibold truncate ui-text-primary">
               {{ emergencyData.name }}
             </h1>
-            <p v-if="tripData" class="m-0 mt-1 leading-none text-[13px] text-neutral-500">
-              ±{{ Math.min(Math.floor(tripData.duration) * 2, 20) }} menit dari lokasimu
+            <p v-if="etaMinutes != null" class="m-0 mt-1 leading-none text-[13px] ui-text-secondary">
+              ±{{ etaMinutes }} menit dari lokasimu
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          class="bg-neutral-100 flex items-center justify-center w-8 h-8 rounded-full shrink-0 ml-2"
-          @click="handleClose"
-        >
-          <Icon icon="ion:close" class="text-neutral-600 text-xl" />
-        </button>
+
+        <div class="flex items-center gap-1.5 shrink-0">
+          <div v-if="unitStatsPath" ref="menuRef" class="relative">
+            <button
+              type="button"
+              class="flex items-center justify-center w-8 h-8 ui-icon-well"
+              title="Lainnya"
+              aria-label="Lainnya"
+              aria-haspopup="menu"
+              :aria-expanded="menuOpen"
+              @click.stop="menuOpen = !menuOpen"
+            >
+              <Icon icon="mdi:dots-vertical" class="text-xl" style="color: var(--bb-text-secondary)" />
+            </button>
+
+            <Transition name="filter-drop">
+              <div
+                v-if="menuOpen"
+                class="ui-card absolute right-0 bottom-full mb-1.5 w-56 z-[80] overflow-hidden py-1"
+                style="box-shadow: var(--bb-shadow-soft)"
+                role="menu"
+              >
+                <NuxtLink
+                  :to="unitStatsPath"
+                  class="flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium ui-text-primary hover:bg-neutral-50 active:bg-neutral-100"
+                  role="menuitem"
+                  @click="onStatsNavigate"
+                >
+                  <Icon icon="lucide:bar-chart-2" class="text-base shrink-0" style="color: var(--bb-text-secondary)" />
+                  <span class="min-w-0 flex-1">Statistik publik</span>
+                  <Icon icon="lucide:arrow-up-right" class="text-xs shrink-0" style="color: var(--bb-text-tertiary)" />
+                </NuxtLink>
+              </div>
+            </Transition>
+          </div>
+
+          <button
+            type="button"
+            class="flex items-center justify-center w-8 h-8 shrink-0 ui-icon-well"
+            @click="handleClose"
+          >
+            <Icon icon="ion:close" class="text-xl" style="color: var(--bb-text-secondary)" />
+          </button>
+        </div>
       </div>
     </template>
 
-    <div class="mt-2 pb-6">
+    <div class="pb-6" style="background: #fafafa">
       <EmergencyDataSingleList :data="data?.emergency" />
     </div>
   </CoreSheet>
 </template>
+
+<style scoped>
+.filter-drop-enter-active,
+.filter-drop-leave-active {
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.filter-drop-enter-from,
+.filter-drop-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
+</style>

@@ -81,6 +81,7 @@ type EmergencyEntity struct {
 	Whatsapp             string              `gorm:"type:varchar(50)"`
 	IsDispatcher         bool                `gorm:"type:tinyint(1);default:0;index"`
 	IsProvinceDispatcher bool                `gorm:"type:tinyint(1);default:0"`
+	HospitalMasterID     *uint               `gorm:"index"` // link ke master RS bila diimpor
 	CreatedAt            time.Time           `gorm:"autoCreateTime"`
 	UpdatedAt            time.Time           `gorm:"autoUpdateTime"`
 	DeletedAt            gorm.DeletedAt      `gorm:"index"`
@@ -131,6 +132,37 @@ func (e *FeedbackEntity) BeforeCreate(_ *gorm.DB) error {
 	return nil
 }
 
+// HospitalMasterEntity caches RS directory rows synced per kabupaten (SATUSEHAT MSI / stub).
+type HospitalMasterEntity struct {
+	ID                    uint      `gorm:"primaryKey"`
+	UUID                  uuid.UUID `gorm:"type:char(36);uniqueIndex;not null"`
+	Source                string    `gorm:"type:varchar(32);not null;uniqueIndex:ux_hospital_source_code"`
+	SourceCode            string    `gorm:"type:varchar(64);not null;uniqueIndex:ux_hospital_source_code"`
+	Name                  string    `gorm:"type:varchar(255);not null;index"`
+	Address               string    `gorm:"type:text"`
+	Phone                 string    `gorm:"type:varchar(50)"`
+	Class                 string    `gorm:"type:varchar(64)"`
+	Ownership             string    `gorm:"type:varchar(64)"`
+	Latitude              float64   `gorm:"type:double;default:0"`
+	Longitude             float64   `gorm:"type:double;default:0"`
+	ProvinceID            string    `gorm:"type:varchar(10);not null;index"`
+	RegencyID             string    `gorm:"type:varchar(10);not null;index"`
+	ProvinceName          string    `gorm:"type:varchar(255)"`
+	RegencyName           string    `gorm:"type:varchar(255)"`
+	RawJSON               string    `gorm:"type:longtext"`
+	SyncedAt              time.Time `gorm:"index"`
+	ImportedEmergencyUUID string    `gorm:"type:char(36);index"`
+	CreatedAt             time.Time `gorm:"autoCreateTime"`
+	UpdatedAt             time.Time `gorm:"autoUpdateTime"`
+}
+
+func (e *HospitalMasterEntity) BeforeCreate(_ *gorm.DB) error {
+	if e.UUID == uuid.Nil {
+		e.UUID = uuid.New()
+	}
+	return nil
+}
+
 type OrderTicketEntity struct {
 	ID             uint       `gorm:"primaryKey"`
 	UUID           uuid.UUID  `gorm:"type:char(36);uniqueIndex;not null"`
@@ -167,6 +199,9 @@ type OrderTicketEntity struct {
 	AcceptedAt         *time.Time `gorm:"index"`
 	CompletedAt        *time.Time `gorm:"index"`
 	CancelledAt        *time.Time
+	// Referral hospital (set on complete modal).
+	ReferralHospitalID   string `gorm:"type:varchar(36)"`
+	ReferralHospitalName string `gorm:"type:varchar(255)"`
 	// Incident report drafted by unit/admin (JSON blob shared across dashboards).
 	IncidentReport   string     `gorm:"type:longtext"`
 	IncidentReportAt *time.Time

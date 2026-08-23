@@ -1,5 +1,11 @@
 <script setup lang="ts">
 import type { Map as LeafletMap, Marker, Polyline } from "leaflet";
+import {
+  ROUTE_LINE_CASING_WEIGHT,
+  ROUTE_LINE_WEIGHT,
+  routeLineCasingColor,
+  routeLineColorFromTravel,
+} from "~/utils/routeAdvice";
 
 const props = defineProps<{
   requesterLat: number;
@@ -16,6 +22,7 @@ let map: LeafletMap | null = null;
 let requesterMarker: Marker | null = null;
 let responderMarker: Marker | null = null;
 let routeLine: Polyline | null = null;
+let routeCasing: Polyline | null = null;
 let Lref: any = null;
 let routeToken = 0;
 let lastRouteKey = "";
@@ -59,27 +66,58 @@ function clearRoute() {
     routeLine.remove();
     routeLine = null;
   }
+  if (routeCasing) {
+    routeCasing.remove();
+    routeCasing = null;
+  }
+}
+
+function addRoutePolyline(
+  latlngs: [number, number][],
+  opts?: { dashed?: boolean; durationSec?: number },
+) {
+  if (!map || !Lref) return;
+  const dashed = Boolean(opts?.dashed);
+  const color = routeLineColorFromTravel({ durationSec: opts?.durationSec });
+  const shared = {
+    lineCap: "round" as const,
+    lineJoin: "round" as const,
+  };
+  if (!dashed) {
+    routeCasing = Lref.polyline(latlngs, {
+      ...shared,
+      color: routeLineCasingColor(color),
+      weight: ROUTE_LINE_CASING_WEIGHT,
+      opacity: 0.32,
+      interactive: false,
+    }).addTo(map);
+  }
+  routeLine = Lref.polyline(latlngs, {
+    ...shared,
+    color,
+    weight: dashed ? 2.5 : ROUTE_LINE_WEIGHT,
+    dashArray: dashed ? "6, 8" : undefined,
+    opacity: dashed ? 0.9 : 1,
+  }).addTo(map);
 }
 
 function setStraightRoute(
   from: [number, number],
   to: [number, number],
-  dashed = true
+  dashed = true,
 ) {
   if (!map || !Lref) return;
   clearRoute();
-  routeLine = Lref.polyline([from, to], {
-    color: "#2563eb",
-    weight: dashed ? 3 : 4,
-    dashArray: dashed ? "6, 8" : undefined,
-    opacity: 0.85,
-  }).addTo(map);
+  const dlat = (to[0] - from[0]) * 111_000;
+  const dlng = (to[1] - from[1]) * 111_000 * Math.cos((from[0] * Math.PI) / 180);
+  const approxM = Math.hypot(dlat, dlng);
+  const approxSec = (approxM / 1000 / 30) * 3600;
+  addRoutePolyline([from, to], { dashed, durationSec: approxSec });
 }
 
 async function drawRoute(from: [number, number], to: [number, number]) {
   if (!map || !Lref) return;
 
-  // Throttle OSRM: round to ~11m so tiny GPS jitter doesn't spam requests.
   const key = [
     from[0].toFixed(4),
     from[1].toFixed(4),
@@ -97,17 +135,16 @@ async function drawRoute(from: [number, number], to: [number, number]) {
     const data = await res.json();
     if (token !== routeToken) return;
 
-    const coords = data?.routes?.[0]?.geometry?.coordinates as [number, number][] | undefined;
+    const route = data?.routes?.[0];
+    const coords = route?.geometry?.coordinates as [number, number][] | undefined;
     if (coords?.length) {
       clearRoute();
       const latlngs = coords.map((c) => [c[1], c[0]] as [number, number]);
-      routeLine = Lref.polyline(latlngs, {
-        color: "#2563eb",
-        weight: 4,
-        opacity: 0.9,
-      }).addTo(map);
+      addRoutePolyline(latlngs, { durationSec: Number(route?.duration) });
       lastRouteKey = key;
-      map.fitBounds(routeLine.getBounds(), { padding: [28, 28], maxZoom: 15 });
+      if (routeLine) {
+        map.fitBounds(routeLine.getBounds(), { padding: [28, 28], maxZoom: 15 });
+      }
       return;
     }
   } catch {

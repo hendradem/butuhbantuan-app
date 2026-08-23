@@ -31,7 +31,7 @@ const sizeClass = {
       />
       <!--
         Untitled stacked modal: featured icon (optional) → title/desc → body → footer actions.
-        Scroll on outer content so in-dialog UiSelect menus are not clipped.
+        UiSelect menus teleport to body (fixed), so dialog overflow does not clip them.
       -->
       <DialogContent
         :class="[

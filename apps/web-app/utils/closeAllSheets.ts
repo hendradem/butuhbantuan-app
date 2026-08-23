@@ -1,5 +1,5 @@
 /**
- * Close every bottom sheet + clear stack. Used when leaving e-ticket / resetting home.
+ * Close every bottom sheet + clear map routes. Used when leaving e-ticket / resetting home.
  */
 export function closeAllSheets() {
   useCoreSheetStore().onClose();
@@ -11,6 +11,9 @@ export function closeAllSheets() {
   useDetailSheetStore().onClose();
   useMoreSheetStore().onClose();
   useSosStore().close();
+  useNeedHelpSheetStore().onClose();
+  useTicketSheetStore().close();
   useAppErrorStore().onCloseSheet();
   useSheetStackStore().clear();
+  useLeafletStore().resetLeafletRouting();
 }

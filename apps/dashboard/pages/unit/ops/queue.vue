@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { isUnitDispatcher, type UnitProfile } from "~/composables/useUnitOps";
+import { isUnitDispatcher, canAcceptTicket, type UnitProfile } from "~/composables/useUnitOps";
 
 definePageMeta({ layout: "unit", title: "Antrian Wilayah", keepalive: true });
 
@@ -42,6 +42,12 @@ const pendingOrders = computed(() =>
   orders.value
     .filter((o: any) => o.status === "pending")
     .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+);
+
+const exhaustedOrders = computed(() =>
+  pendingOrders.value.filter(
+    (o: any) => o.dispatch_status === "exhausted" || o.dispatch_status === "escalated",
+  ),
 );
 
 type Lane = { key: string; label: string; icon: string; match: (o: any) => boolean };
@@ -114,6 +120,7 @@ function openReassign(o: any) {
 }
 
 async function doAccept(o: any) {
+  if (!canAcceptTicket(profile.value, o)) return;
   if (await accept(o.id)) refresh();
 }
 
@@ -125,7 +132,7 @@ useOrderNotification(
   computed(() => pendingOrders.value.length),
   refresh,
   20_000,
-  { sound: "none" },
+  { sound: "none", browser: false },
 );
 </script>
 
@@ -152,7 +159,40 @@ useOrderNotification(
     </div>
 
     <div class="p-4 sm:p-6 space-y-4">
-      <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
+    <!-- Attention: exhausted first -->
+    <div
+      v-if="!showSkeleton && exhaustedOrders.length"
+      class="rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3 space-y-2"
+    >
+      <div class="flex items-center gap-2">
+        <Icon icon="lucide:triangle-alert" class="text-amber-700" />
+        <p class="text-sm font-semibold text-amber-900">
+          {{ exhaustedOrders.length }} tiket butuh playbook
+        </p>
+      </div>
+      <p class="text-xs text-amber-800/80">
+        Cascade habis atau sudah dieskalasi — alihkan unit, eskalasi PSC, atau hubungi pelapor.
+      </p>
+      <div class="flex flex-wrap gap-2 pt-1">
+        <NuxtLink
+          v-for="o in exhaustedOrders.slice(0, 4)"
+          :key="o.id"
+          :to="`/unit/orders/${o.ticket_number}`"
+          class="text-xs font-mono font-semibold px-2.5 py-1 rounded-md bg-white border border-amber-200 text-amber-900 hover:bg-amber-100 transition-colors"
+        >
+          {{ o.ticket_number }}
+        </NuxtLink>
+        <NuxtLink
+          v-if="exhaustedOrders.length > 4"
+          to="/unit/ops/queue"
+          class="text-xs font-semibold px-2.5 py-1 text-amber-800 hover:underline"
+        >
+          +{{ exhaustedOrders.length - 4 }} di antrian
+        </NuxtLink>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
         <section
           v-for="lane in lanes"
           :key="lane.key"
@@ -204,14 +244,23 @@ useOrderNotification(
               </div>
               <p class="text-[11px] text-neutral-500 truncate">{{ o.unit_name || "Belum ada unit" }}</p>
               <p v-if="o.condition" class="text-[11px] text-neutral-600 line-clamp-2">{{ o.condition }}</p>
-              <div
+              <ExhaustedPlaybook
                 v-if="o.dispatch_status === 'exhausted' || o.dispatch_status === 'escalated'"
-                class="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1"
-              >
-                {{ o.dispatch_status === "escalated" ? "Escalated PSC" : "Exhausted" }}
-              </div>
-              <div class="flex flex-wrap gap-1.5 pt-1">
+                compact
+                :unit-name="o.unit_name"
+                :requester-phone="o.requester_phone"
+                :dispatch-status="o.dispatch_status"
+                :escalation-hotline="o.escalation_hotline"
+                :escalation-label="o.escalation_label"
+                show-reassign
+                show-escalate
+                :escalating="acting === o.id"
+                @reassign="openReassign(o)"
+                @escalate="doEscalate(o)"
+              />
+              <div v-else class="flex flex-wrap gap-1.5 pt-1">
                 <button
+                  v-if="canAcceptTicket(profile, o)"
                   type="button"
                   class="text-[10px] font-semibold px-2 py-1 rounded-md bg-emerald-600 text-white disabled:opacity-50"
                   :disabled="acting === o.id"
@@ -233,15 +282,6 @@ useOrderNotification(
                   @click="openReassign(o)"
                 >
                   Alihkan
-                </button>
-                <button
-                  v-if="o.dispatch_status === 'exhausted'"
-                  type="button"
-                  class="text-[10px] font-semibold px-2 py-1 rounded-md bg-amber-700 text-white"
-                  :disabled="acting === o.id"
-                  @click="doEscalate(o)"
-                >
-                  PSC
                 </button>
               </div>
             </article>

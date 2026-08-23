@@ -1,0 +1,1059 @@
+{
+  "config": {
+    "enabled": true,
+    "onboarded": true,
+    "active_mission_id": "sar-demo-merapi-01"
+  },
+  "missions": {
+    "esar-hist-merbabu": {
+      "id": "esar-hist-merbabu",
+      "name": "ESAR Merbabu — evakuasi cedera (arsip)",
+      "area": "Magelang / jalur Selo–Merbabu",
+      "status": "closed",
+      "kind": "archive",
+      "kml_url": "",
+      "center_lat": -7.455,
+      "center_lng": 110.44,
+      "started_at": "2026-07-19T15:31:00.326059+07:00",
+      "notes": "History ESAR lain — read-only."
+    },
+    "esar-hist-sindoro": {
+      "id": "esar-hist-sindoro",
+      "name": "ESAR Sindoro — pencarian hilang (arsip)",
+      "area": "Temanggung / lereng Sindoro",
+      "status": "closed",
+      "kind": "archive",
+      "kml_url": "",
+      "center_lat": -7.3005,
+      "center_lng": 110.0055,
+      "started_at": "2026-08-04T15:31:00.326059+07:00",
+      "notes": "History ESAR lain — read-only."
+    },
+    "sar-demo-merapi-01": {
+      "id": "sar-demo-merapi-01",
+      "name": "Pencarian Hilang — Lereng Merapi (Dummy)",
+      "area": "Sleman / kawasan hutan lereng",
+      "status": "active",
+      "kind": "live",
+      "kml_url": "/sar/sample-merapi-karvak.kml",
+      "center_lat": -7.5405,
+      "center_lng": 110.4462,
+      "started_at": "2026-08-17T10:00:00+07:00",
+      "notes": "Dummy SMC. Roster SRU \u0026 perlengkapan berubah tiap hari (shift)."
+    }
+  },
+  "shifts": {
+    "esar-hist-merbabu": [
+      {
+        "id": "shift-merbabu-1",
+        "mission_id": "esar-hist-merbabu",
+        "date": "2026-07-20",
+        "label": "Hari ops · arsip",
+        "status": "closed"
+      }
+    ],
+    "esar-hist-sindoro": [
+      {
+        "id": "shift-sindoro-1",
+        "mission_id": "esar-hist-sindoro",
+        "date": "2026-08-05",
+        "label": "Hari ops · arsip",
+        "status": "closed"
+      }
+    ],
+    "sar-demo-merapi-01": [
+      {
+        "id": "shift-d2",
+        "mission_id": "sar-demo-merapi-01",
+        "date": "2026-08-17",
+        "label": "H-2 · pembukaan sektor",
+        "status": "closed"
+      },
+      {
+        "id": "shift-d1",
+        "mission_id": "sar-demo-merapi-01",
+        "date": "2026-08-18",
+        "label": "Kemarin · rotasi siang",
+        "status": "closed"
+      },
+      {
+        "id": "shift-d0",
+        "mission_id": "sar-demo-merapi-01",
+        "date": "2026-08-19",
+        "label": "Hari ini · shift aktif",
+        "status": "active"
+      }
+    ]
+  },
+  "teams": {
+    "shift-d0": [
+      {
+        "shift_id": "shift-d0",
+        "sru": "SRU-Alpha",
+        "color": "#2563eb",
+        "assigned_sectors": [
+          "A1"
+        ],
+        "equipment": [
+          {
+            "name": "HT VHF",
+            "qty": 3,
+            "unit": "unit"
+          },
+          {
+            "name": "GPS handheld",
+            "qty": 1,
+            "unit": "unit"
+          },
+          {
+            "name": "Parang",
+            "qty": 2,
+            "unit": "buah"
+          }
+        ]
+      },
+      {
+        "shift_id": "shift-d0",
+        "sru": "SRU-Bravo",
+        "color": "#059669",
+        "assigned_sectors": [
+          "B1"
+        ],
+        "equipment": [
+          {
+            "name": "HT VHF",
+            "qty": 4,
+            "unit": "unit"
+          },
+          {
+            "name": "Thermal cam",
+            "qty": 1,
+            "unit": "unit"
+          },
+          {
+            "name": "P3K kit",
+            "qty": 2,
+            "unit": "set"
+          },
+          {
+            "name": "Tali 50m",
+            "qty": 1,
+            "unit": "gulung"
+          }
+        ],
+        "notes": "Thermal untuk canopy dense"
+      },
+      {
+        "shift_id": "shift-d0",
+        "sru": "SRU-Charlie",
+        "color": "#d97706",
+        "assigned_sectors": [
+          "C1"
+        ],
+        "equipment": [
+          {
+            "name": "HT VHF",
+            "qty": 3,
+            "unit": "unit"
+          },
+          {
+            "name": "Life jacket",
+            "qty": 4,
+            "unit": "buah"
+          },
+          {
+            "name": "Throw bag",
+            "qty": 2,
+            "unit": "buah"
+          }
+        ],
+        "notes": "Sektor sungai"
+      }
+    ],
+    "shift-d1": [
+      {
+        "shift_id": "shift-d1",
+        "sru": "SRU-Foxtrot",
+        "color": "#7c3aed",
+        "assigned_sectors": [
+          "B1"
+        ],
+        "equipment": [
+          {
+            "name": "HT VHF",
+            "qty": 5,
+            "unit": "unit"
+          },
+          {
+            "name": "K9 unit",
+            "qty": 1,
+            "unit": "tim"
+          },
+          {
+            "name": "GPS handheld",
+            "qty": 3,
+            "unit": "unit"
+          },
+          {
+            "name": "Headlamp",
+            "qty": 6,
+            "unit": "buah"
+          }
+        ],
+        "notes": "K9 di B1"
+      },
+      {
+        "shift_id": "shift-d1",
+        "sru": "SRU-Alpha",
+        "color": "#2563eb",
+        "assigned_sectors": [
+          "A1",
+          "C1"
+        ],
+        "equipment": [
+          {
+            "name": "HT VHF",
+            "qty": 4,
+            "unit": "unit"
+          },
+          {
+            "name": "Medic pack",
+            "qty": 1,
+            "unit": "set"
+          },
+          {
+            "name": "Water 5L",
+            "qty": 4,
+            "unit": "galon"
+          }
+        ]
+      }
+    ],
+    "shift-d2": [
+      {
+        "shift_id": "shift-d2",
+        "sru": "SRU-Delta",
+        "color": "#2563eb",
+        "assigned_sectors": [
+          "A1",
+          "B1"
+        ],
+        "equipment": [
+          {
+            "name": "HT VHF",
+            "qty": 4,
+            "unit": "unit"
+          },
+          {
+            "name": "GPS handheld",
+            "qty": 2,
+            "unit": "unit"
+          },
+          {
+            "name": "Tali 30m",
+            "qty": 2,
+            "unit": "gulung"
+          },
+          {
+            "name": "P3K kit",
+            "qty": 1,
+            "unit": "set"
+          }
+        ],
+        "notes": "Pembukaan A1/B1"
+      },
+      {
+        "shift_id": "shift-d2",
+        "sru": "SRU-Echo",
+        "color": "#059669",
+        "assigned_sectors": [
+          "C1"
+        ],
+        "equipment": [
+          {
+            "name": "HT VHF",
+            "qty": 3,
+            "unit": "unit"
+          },
+          {
+            "name": "Drone mini",
+            "qty": 1,
+            "unit": "unit"
+          },
+          {
+            "name": "Stretchers",
+            "qty": 1,
+            "unit": "buah"
+          }
+        ]
+      }
+    ],
+    "shift-merbabu-1": [
+      {
+        "shift_id": "shift-merbabu-1",
+        "sru": "SRU-Echo",
+        "color": "#059669",
+        "assigned_sectors": [
+          "M1"
+        ],
+        "equipment": [
+          {
+            "name": "HT VHF",
+            "qty": 3,
+            "unit": "unit"
+          },
+          {
+            "name": "Stretcher",
+            "qty": 1,
+            "unit": "buah"
+          }
+        ]
+      }
+    ],
+    "shift-sindoro-1": [
+      {
+        "shift_id": "shift-sindoro-1",
+        "sru": "SRU-Delta",
+        "color": "#2563eb",
+        "assigned_sectors": [
+          "S1"
+        ],
+        "equipment": [
+          {
+            "name": "HT VHF",
+            "qty": 4,
+            "unit": "unit"
+          },
+          {
+            "name": "GPS",
+            "qty": 2,
+            "unit": "unit"
+          }
+        ]
+      }
+    ]
+  },
+  "sectors": {
+    "esar-hist-merbabu": [
+      {
+        "id": "mer-a",
+        "code": "M1",
+        "label": "Koridor M1",
+        "color": "#c62828",
+        "assigned_sru": "SRU-Echo",
+        "ring": [
+          [
+            -7.452,
+            110.436
+          ],
+          [
+            -7.452,
+            110.444
+          ],
+          [
+            -7.458,
+            110.444
+          ],
+          [
+            -7.458,
+            110.436
+          ]
+        ]
+      }
+    ],
+    "esar-hist-sindoro": [
+      {
+        "id": "sind-a",
+        "code": "S1",
+        "label": "Sektor S1",
+        "color": "#c62828",
+        "assigned_sru": "SRU-Delta",
+        "ring": [
+          [
+            -7.298,
+            110.002
+          ],
+          [
+            -7.298,
+            110.01
+          ],
+          [
+            -7.305,
+            110.01
+          ],
+          [
+            -7.305,
+            110.002
+          ]
+        ]
+      }
+    ],
+    "sar-demo-merapi-01": [
+      {
+        "id": "sec-a",
+        "code": "A1",
+        "label": "Karvak A1 — Jalur Selo",
+        "color": "#c62828",
+        "ring": [
+          [
+            -7.536,
+            110.44
+          ],
+          [
+            -7.536,
+            110.448
+          ],
+          [
+            -7.542,
+            110.448
+          ],
+          [
+            -7.542,
+            110.44
+          ]
+        ]
+      },
+      {
+        "id": "sec-b",
+        "code": "B1",
+        "label": "Karvak B1 — Rimba Timur",
+        "color": "#c62828",
+        "ring": [
+          [
+            -7.536,
+            110.448
+          ],
+          [
+            -7.536,
+            110.456
+          ],
+          [
+            -7.542,
+            110.456
+          ],
+          [
+            -7.542,
+            110.448
+          ]
+        ]
+      },
+      {
+        "id": "sec-c",
+        "code": "C1",
+        "label": "Karvak C1 — Sungai / jurang",
+        "color": "#c62828",
+        "ring": [
+          [
+            -7.542,
+            110.44
+          ],
+          [
+            -7.542,
+            110.448
+          ],
+          [
+            -7.548,
+            110.448
+          ],
+          [
+            -7.548,
+            110.44
+          ]
+        ]
+      }
+    ]
+  },
+  "members": {
+    "esar-hist-merbabu": [
+      {
+        "id": "mer-m1",
+        "mission_id": "esar-hist-merbabu",
+        "shift_id": "shift-merbabu-1",
+        "callsign": "Echo-1",
+        "name": "Tono",
+        "sru": "SRU-Echo",
+        "role": "leader",
+        "status": "returning"
+      }
+    ],
+    "esar-hist-sindoro": [
+      {
+        "id": "sind-m1",
+        "mission_id": "esar-hist-sindoro",
+        "shift_id": "shift-sindoro-1",
+        "callsign": "Delta-1",
+        "name": "Agus",
+        "sru": "SRU-Delta",
+        "role": "leader",
+        "status": "returning"
+      },
+      {
+        "id": "sind-m2",
+        "mission_id": "esar-hist-sindoro",
+        "shift_id": "shift-sindoro-1",
+        "callsign": "Delta-2",
+        "name": "Rina",
+        "sru": "SRU-Delta",
+        "role": "member",
+        "status": "returning"
+      }
+    ],
+    "sar-demo-merapi-01": [
+      {
+        "id": "m-d1",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d2",
+        "callsign": "Delta-1",
+        "name": "Eko Prasetyo",
+        "sru": "SRU-Delta",
+        "role": "leader",
+        "status": "returning"
+      },
+      {
+        "id": "m-d2",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d2",
+        "callsign": "Delta-2",
+        "name": "Maya Sari",
+        "sru": "SRU-Delta",
+        "role": "member",
+        "status": "returning"
+      },
+      {
+        "id": "m-e1",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d2",
+        "callsign": "Echo-1",
+        "name": "Fajar Nugroho",
+        "sru": "SRU-Echo",
+        "role": "leader",
+        "status": "returning"
+      },
+      {
+        "id": "m-f1",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d1",
+        "callsign": "Foxtrot-1",
+        "name": "Gilang Putra",
+        "sru": "SRU-Foxtrot",
+        "role": "leader",
+        "status": "returning"
+      },
+      {
+        "id": "m-f2",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d1",
+        "callsign": "Foxtrot-2",
+        "name": "Hana Dewi",
+        "sru": "SRU-Foxtrot",
+        "role": "member",
+        "status": "returning"
+      },
+      {
+        "id": "m-a1y",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d1",
+        "callsign": "Alpha-1",
+        "name": "Budi Santoso",
+        "sru": "SRU-Alpha",
+        "role": "leader",
+        "status": "returning"
+      },
+      {
+        "id": "m-a2y",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d1",
+        "callsign": "Alpha-2",
+        "name": "Siti Rahma",
+        "sru": "SRU-Alpha",
+        "role": "medic",
+        "status": "returning"
+      },
+      {
+        "id": "m-a1",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "callsign": "Alpha-1",
+        "name": "Budi Santoso",
+        "sru": "SRU-Alpha",
+        "role": "leader",
+        "status": "searching"
+      },
+      {
+        "id": "m-a2",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "callsign": "Alpha-2",
+        "name": "Siti Rahma",
+        "sru": "SRU-Alpha",
+        "role": "member",
+        "status": "searching"
+      },
+      {
+        "id": "m-b1",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "callsign": "Bravo-1",
+        "name": "Andi Wijaya",
+        "sru": "SRU-Bravo",
+        "role": "leader",
+        "status": "searching"
+      },
+      {
+        "id": "m-b2",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "callsign": "Bravo-2",
+        "name": "Dewi Lestari",
+        "sru": "SRU-Bravo",
+        "role": "medic",
+        "status": "searching"
+      },
+      {
+        "id": "m-c1",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "callsign": "Charlie-1",
+        "name": "Rudi Hartono",
+        "sru": "SRU-Charlie",
+        "role": "leader",
+        "status": "searching"
+      },
+      {
+        "id": "m-c2",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "callsign": "Charlie-2",
+        "name": "Nina Putri",
+        "sru": "SRU-Charlie",
+        "role": "member",
+        "status": "standby"
+      }
+    ]
+  },
+  "positions": {
+    "esar-hist-merbabu": [
+      {
+        "id": "mer-p1",
+        "mission_id": "esar-hist-merbabu",
+        "shift_id": "shift-merbabu-1",
+        "member_id": "mer-m1",
+        "callsign": "Echo-1",
+        "lat": -7.454,
+        "lng": 110.438,
+        "source": "ht",
+        "note": "Evac start",
+        "reported_at": "2026-07-20T11:31:00.326059+07:00",
+        "logged_by": "SMC"
+      },
+      {
+        "id": "mer-p2",
+        "mission_id": "esar-hist-merbabu",
+        "shift_id": "shift-merbabu-1",
+        "member_id": "mer-m1",
+        "callsign": "Echo-1",
+        "lat": -7.456,
+        "lng": 110.441,
+        "source": "ht",
+        "note": "Titik cedera",
+        "reported_at": "2026-07-20T13:31:00.326059+07:00",
+        "logged_by": "SMC"
+      }
+    ],
+    "esar-hist-sindoro": [
+      {
+        "id": "sind-p1",
+        "mission_id": "esar-hist-sindoro",
+        "shift_id": "shift-sindoro-1",
+        "member_id": "sind-m1",
+        "callsign": "Delta-1",
+        "lat": -7.2995,
+        "lng": 110.004,
+        "source": "ht",
+        "note": "Masuk S1",
+        "reported_at": "2026-08-05T12:31:00.326059+07:00",
+        "logged_by": "SMC"
+      },
+      {
+        "id": "sind-p2",
+        "mission_id": "esar-hist-sindoro",
+        "shift_id": "shift-sindoro-1",
+        "member_id": "sind-m1",
+        "callsign": "Delta-1",
+        "lat": -7.301,
+        "lng": 110.0065,
+        "source": "ht",
+        "note": "Last known",
+        "reported_at": "2026-08-05T14:31:00.326059+07:00",
+        "logged_by": "SMC"
+      }
+    ],
+    "sar-demo-merapi-01": [
+      {
+        "id": "pos-demo-00-35b1089f",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d2",
+        "member_id": "m-d1",
+        "callsign": "Delta-1",
+        "lat": -7.537,
+        "lng": 110.442,
+        "source": "ht",
+        "note": "Delta buka A1",
+        "sector_hint": "A1",
+        "reported_at": "2026-08-17T07:00:00+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-01-fd8270b8",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d2",
+        "member_id": "m-d1",
+        "callsign": "Delta-1",
+        "lat": -7.539,
+        "lng": 110.444,
+        "source": "ht",
+        "note": "HT: lanjut timur",
+        "sector_hint": "A1",
+        "reported_at": "2026-08-17T09:00:00+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-02-1e6978dc",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d2",
+        "member_id": "m-d2",
+        "callsign": "Delta-2",
+        "lat": -7.538,
+        "lng": 110.45,
+        "source": "ht",
+        "note": "Masuk B1",
+        "sector_hint": "B1",
+        "reported_at": "2026-08-17T08:00:00+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-03-3a87113c",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d2",
+        "member_id": "m-e1",
+        "callsign": "Echo-1",
+        "lat": -7.544,
+        "lng": 110.443,
+        "source": "ht",
+        "note": "Echo C1",
+        "sector_hint": "C1",
+        "reported_at": "2026-08-17T09:00:00+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-04-74ca5f7f",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d2",
+        "member_id": "m-e1",
+        "callsign": "Echo-1",
+        "lat": -7.546,
+        "lng": 110.445,
+        "source": "ht",
+        "note": "HT: jurang kecil",
+        "sector_hint": "C1",
+        "reported_at": "2026-08-17T11:00:00+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-05-36d760ef",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d1",
+        "member_id": "m-f1",
+        "callsign": "Foxtrot-1",
+        "lat": -7.5385,
+        "lng": 110.4495,
+        "source": "ht",
+        "note": "K9 start B1",
+        "sector_hint": "B1",
+        "reported_at": "2026-08-18T06:00:00+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-06-99970d38",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d1",
+        "member_id": "m-f1",
+        "callsign": "Foxtrot-1",
+        "lat": -7.54,
+        "lng": 110.452,
+        "source": "ht",
+        "note": "HT: scent trail",
+        "sector_hint": "B1",
+        "reported_at": "2026-08-18T09:00:00+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-07-4a49a63f",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d1",
+        "member_id": "m-f2",
+        "callsign": "Foxtrot-2",
+        "lat": -7.5395,
+        "lng": 110.451,
+        "source": "ht",
+        "note": "Support Foxtrot",
+        "sector_hint": "B1",
+        "reported_at": "2026-08-18T10:00:00+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-08-214b6314",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d1",
+        "member_id": "m-a1y",
+        "callsign": "Alpha-1",
+        "lat": -7.5375,
+        "lng": 110.4415,
+        "source": "ht",
+        "note": "Alpha A1",
+        "sector_hint": "A1",
+        "reported_at": "2026-08-18T07:00:00+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-09-78301f2a",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d1",
+        "member_id": "m-a1y",
+        "callsign": "Alpha-1",
+        "lat": -7.5405,
+        "lng": 110.4435,
+        "source": "ht",
+        "note": "HT: batas A1/C1",
+        "sector_hint": "A1",
+        "reported_at": "2026-08-18T10:00:00+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-10-0f1e9499",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d1",
+        "member_id": "m-a2y",
+        "callsign": "Alpha-2",
+        "lat": -7.5435,
+        "lng": 110.442,
+        "source": "ht",
+        "note": "Medic C1",
+        "sector_hint": "C1",
+        "reported_at": "2026-08-18T09:00:00+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-11-d1bef733",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "member_id": "m-a1",
+        "callsign": "Alpha-1",
+        "lat": -7.5382,
+        "lng": 110.4415,
+        "source": "ht",
+        "note": "Masuk A1 dari pos",
+        "sector_hint": "A1",
+        "reported_at": "2026-08-19T14:01:25.667349+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-12-c530b9de",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "member_id": "m-a1",
+        "callsign": "Alpha-1",
+        "lat": -7.539,
+        "lng": 110.443,
+        "source": "ht",
+        "note": "HT: lanjut ke timur jalur",
+        "sector_hint": "A1",
+        "reported_at": "2026-08-19T14:31:25.667349+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-13-b9879dc0",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "member_id": "m-a1",
+        "callsign": "Alpha-1",
+        "lat": -7.5398,
+        "lng": 110.4448,
+        "source": "ht",
+        "note": "HT: dekat batas A1/B1",
+        "sector_hint": "A1",
+        "reported_at": "2026-08-19T15:06:25.667349+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-14-6f831d1a",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "member_id": "m-a2",
+        "callsign": "Alpha-2",
+        "lat": -7.5375,
+        "lng": 110.4422,
+        "source": "ht",
+        "note": "Ikut Alpha-1",
+        "sector_hint": "A1",
+        "reported_at": "2026-08-19T14:11:25.667349+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-15-15c920fb",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "member_id": "m-a2",
+        "callsign": "Alpha-2",
+        "lat": -7.5388,
+        "lng": 110.444,
+        "source": "ht",
+        "note": "HT: cek sisi utara",
+        "sector_hint": "A1",
+        "reported_at": "2026-08-19T14:56:25.667349+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-16-0baadf3d",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "member_id": "m-b1",
+        "callsign": "Bravo-1",
+        "lat": -7.5378,
+        "lng": 110.4505,
+        "source": "ht",
+        "note": "Buka B1",
+        "sector_hint": "B1",
+        "reported_at": "2026-08-19T14:21:25.667349+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-17-043336c5",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "member_id": "m-b1",
+        "callsign": "Bravo-1",
+        "lat": -7.5392,
+        "lng": 110.452,
+        "source": "ht",
+        "note": "HT: dense canopy",
+        "sector_hint": "B1",
+        "reported_at": "2026-08-19T14:51:25.667349+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-18-8b42d311",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "member_id": "m-b1",
+        "callsign": "Bravo-1",
+        "lat": -7.5405,
+        "lng": 110.4535,
+        "source": "ht",
+        "note": "HT: last known Bravo-1",
+        "sector_hint": "B1",
+        "reported_at": "2026-08-19T15:19:25.667349+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-19-911d93fc",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "member_id": "m-b2",
+        "callsign": "Bravo-2",
+        "lat": -7.5385,
+        "lng": 110.4495,
+        "source": "ht",
+        "note": "Medic standby jalur",
+        "sector_hint": "B1",
+        "reported_at": "2026-08-19T14:36:25.667349+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-20-4fd1a1e3",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "member_id": "m-c1",
+        "callsign": "Charlie-1",
+        "lat": -7.5435,
+        "lng": 110.4425,
+        "source": "ht",
+        "note": "Masuk C1",
+        "sector_hint": "C1",
+        "reported_at": "2026-08-19T14:26:25.667349+07:00",
+        "logged_by": "SMC-Dummy"
+      },
+      {
+        "id": "pos-demo-21-14e01ace",
+        "mission_id": "sar-demo-merapi-01",
+        "shift_id": "shift-d0",
+        "member_id": "m-c1",
+        "callsign": "Charlie-1",
+        "lat": -7.545,
+        "lng": 110.444,
+        "source": "ht",
+        "note": "HT: turun ke jurang kecil",
+        "sector_hint": "C1",
+        "reported_at": "2026-08-19T15:11:25.667349+07:00",
+        "logged_by": "SMC-Dummy"
+      }
+    ]
+  },
+  "markers": {
+    "esar-hist-merbabu": null,
+    "esar-hist-sindoro": [
+      {
+        "id": "sind-mk1",
+        "mission_id": "esar-hist-sindoro",
+        "kind": "lp",
+        "label": "LP Sindoro",
+        "lat": -7.2975,
+        "lng": 110.003,
+        "color": "#1a1a1a",
+        "icon": "flag",
+        "created_at": "2026-08-04T15:31:00.326059+07:00"
+      }
+    ],
+    "sar-demo-merapi-01": [
+      {
+        "id": "mk-lp1",
+        "mission_id": "sar-demo-merapi-01",
+        "kind": "lp",
+        "label": "LP / ICP Selo",
+        "lat": -7.5355,
+        "lng": 110.441,
+        "note": "Last Point / Incident Command Post",
+        "color": "#1a1a1a",
+        "icon": "flag",
+        "created_at": "2026-08-17T12:00:00+07:00",
+        "created_by": "SMC-Dummy"
+      },
+      {
+        "id": "mk-clue1",
+        "mission_id": "sar-demo-merapi-01",
+        "kind": "clue",
+        "label": "Clue: jejak sepatu",
+        "lat": -7.5402,
+        "lng": 110.4528,
+        "note": "HT Bravo-1",
+        "color": "#1a1a1a",
+        "icon": "search",
+        "created_at": "2026-08-19T13:31:25.667349+07:00",
+        "created_by": "SMC-Dummy"
+      },
+      {
+        "id": "mk-wp1",
+        "mission_id": "sar-demo-merapi-01",
+        "kind": "waypoint",
+        "label": "WP jurang C1",
+        "lat": -7.5455,
+        "lng": 110.4435,
+        "color": "#1a1a1a",
+        "icon": "pin",
+        "created_at": "2026-08-19T14:01:25.667349+07:00",
+        "created_by": "SMC-Dummy"
+      }
+    ]
+  },
+  "share_index": {}
+}

@@ -53,13 +53,10 @@ async function submit() {
 <template>
   <CoreSheet :is-open="reviewSheet.isOpen" :snap-points="[600, 0]" scrollable is-overlay @close="reviewSheet.onClose()">
     <template #header>
-      <div class="border-b py-3 px-3 bg-white border-neutral-100 rounded-t-[40px] flex items-center justify-between">
-        <h1 class="text-md font-semibold text-neutral-800">Beri Penilaian</h1>
-        <button
-          class="bg-neutral-100 flex items-center justify-center w-8 h-8 rounded-full"
-          @click="reviewSheet.onClose()"
-        >
-          <Icon icon="ion:close" class="text-neutral-600 text-xl" />
+      <div class="ui-sheet-header">
+        <h1 class="ui-sheet-title">Beri Penilaian</h1>
+        <button type="button" class="ui-close-btn" @click="reviewSheet.onClose()">
+          <Icon icon="ion:close" class="text-xl" />
         </button>
       </div>
     </template>
@@ -70,13 +67,13 @@ async function submit() {
         <div class="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center">
           <Icon icon="lucide:check-circle" class="text-green-500 text-3xl" />
         </div>
-        <p class="font-semibold text-neutral-800">Terima kasih!</p>
-        <p class="text-sm text-neutral-500">Penilaianmu membantu kami berkembang.</p>
+        <p class="font-semibold ui-text-primary">Terima kasih!</p>
+        <p class="text-sm ui-text-secondary">Penilaianmu membantu kami berkembang.</p>
       </div>
 
       <!-- Review form -->
       <div v-else class="space-y-5">
-        <p class="text-sm text-neutral-500 leading-relaxed">
+        <p class="text-sm ui-text-secondary leading-relaxed">
           Semoga kamu baik-baik saja. Bantu kami dengan menjawab pertanyaan singkat berikut.
         </p>
 
@@ -166,7 +163,7 @@ async function submit() {
             rows="3"
             maxlength="500"
             placeholder="Ceritakan pengalamanmu..."
-            class="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl bg-neutral-50 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-red-400 focus:bg-white resize-none transition-colors"
+            class="ui-field resize-none"
           />
           <p class="text-right text-xs text-neutral-300 mt-1">{{ comment.length }}/500</p>
         </div>

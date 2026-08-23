@@ -41,20 +41,23 @@ async function handleInstall() {
   <Transition name="slide-down">
     <div
       v-if="showBanner"
-      class="fixed top-0 left-0 right-0 max-w-md shadow mx-auto z-50 w-full bg-emerald-500 h-[60px] flex items-center justify-center px-3 text-white"
+      class="fixed top-0 left-0 right-0 max-w-md mx-auto z-50 w-full h-[60px] flex items-center justify-center px-3 text-white"
+      style="background: var(--bb-accent); box-shadow: var(--bb-shadow-soft)"
     >
       <div class="w-full flex justify-between items-center">
         <div class="flex gap-3 items-center">
           <div>
             <p class="m-0 leading-none text-[15px]">Install Butuhbantuan</p>
-            <p class="text-xs m-0 leading-tight text-neutral-100 font-normal">
+            <p class="text-xs m-0 leading-tight font-normal" style="color: rgba(255,255,255,0.75)">
               Sekali klik, penggunaan lebih mudah.
             </p>
           </div>
         </div>
         <div class="flex gap-2 items-center">
           <button
-            class="bg-white flex items-center justify-center rounded-lg text-emerald-700 px-4 py-1 gap-2 text-sm"
+            type="button"
+            class="flex items-center justify-center px-4 py-1 gap-2 text-sm"
+            style="background: var(--bb-bg-surface); color: var(--bb-accent); border-radius: var(--bb-radius-control)"
             @click="handleInstall"
           >
             <Icon icon="solar:download-square-outline" class="w-4 h-4" />

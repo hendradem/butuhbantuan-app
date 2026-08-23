@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * Custom listbox select.
- * Menu is positioned absolutely under the trigger (no body teleport) so it
- * works inside reka-ui Dialog — teleported menus lose pointer-events when the
- * dialog locks the body, and get aria-hidden by hideOthers.
+ * Menu is teleported to body with fixed positioning so parent overflow
+ * (UiCard, UiTableCard, etc.) cannot clip it. Uses pointer-events:auto and
+ * clears aria-hidden so it still works inside reka-ui Dialog.
  */
 import {
   Comment,
@@ -19,6 +19,7 @@ import {
   type VNode,
   type VNodeArrayChildren,
 } from "vue";
+import { placeAnchoredMenu, refineAnchoredMenuTop } from "../utils/placeAnchoredMenu";
 
 defineOptions({ inheritAttrs: false });
 
@@ -55,6 +56,9 @@ const searchEl = ref<HTMLInputElement | null>(null);
 const open = ref(false);
 const openUp = ref(false);
 const query = ref("");
+const menuStyle = ref<Record<string, string>>({});
+
+let ariaObserver: MutationObserver | null = null;
 
 type Opt = { value: string; label: string; disabled: boolean };
 const slotOptions = ref<Opt[]>([]);
@@ -140,18 +144,61 @@ const isPlaceholder = computed(() => {
   return !v && !!props.placeholder;
 });
 
-function updateFlip() {
-  if (!rootEl.value) return;
+function applyMenuStyle(rect: DOMRect, top: number, flip: boolean) {
+  openUp.value = flip;
+  menuStyle.value = {
+    top: `${top}px`,
+    left: `${rect.left}px`,
+    width: `${rect.width}px`,
+    transform: flip ? "translateY(-100%)" : "",
+    pointerEvents: "auto",
+  };
+}
+
+function updatePosition() {
+  if (!rootEl.value || !open.value) return;
   const rect = rootEl.value.getBoundingClientRect();
   const est = Math.min(280, 52 + Math.max(filteredOptions.value.length, 1) * 36);
-  const spaceBelow = window.innerHeight - rect.bottom;
-  const spaceAbove = rect.top;
-  openUp.value = spaceBelow < est + 8 && spaceAbove > spaceBelow;
+  const pos = placeAnchoredMenu(rect, {
+    menuHeight: est,
+    gap: 4,
+    alignRight: false,
+    menuWidth: rect.width,
+  });
+  applyMenuStyle(rect, pos.top, pos.openUp);
+}
+
+function keepMenuInteractive() {
+  const el = menuEl.value;
+  if (!el) return;
+  el.style.pointerEvents = "auto";
+  el.removeAttribute("aria-hidden");
+  ariaObserver?.disconnect();
+  ariaObserver = new MutationObserver(() => {
+    if (el.getAttribute("aria-hidden") === "true") {
+      el.removeAttribute("aria-hidden");
+    }
+  });
+  ariaObserver.observe(el, { attributes: true, attributeFilter: ["aria-hidden"] });
+}
+
+async function placeMenu() {
+  await nextTick();
+  updatePosition();
+  await nextTick();
+  if (menuEl.value && rootEl.value) {
+    const rect = rootEl.value.getBoundingClientRect();
+    const refined = refineAnchoredMenuTop(rect, menuEl.value, openUp.value, 4);
+    applyMenuStyle(rect, refined.top, refined.openUp);
+    keepMenuInteractive();
+  }
 }
 
 function closeMenu() {
   open.value = false;
   query.value = "";
+  ariaObserver?.disconnect();
+  ariaObserver = null;
 }
 
 async function toggle() {
@@ -163,8 +210,7 @@ async function toggle() {
   syncOptions();
   query.value = "";
   open.value = true;
-  await nextTick();
-  updateFlip();
+  await placeMenu();
   if (isSearchable.value) {
     // Defer so dialog focus trap settles first
     requestAnimationFrame(() => searchEl.value?.focus({ preventScroll: true }));
@@ -189,7 +235,7 @@ function onOptPointerDown(e: PointerEvent, opt: Opt) {
 function onDocPointer(e: Event) {
   if (!open.value) return;
   const t = e.target as Node;
-  if (rootEl.value?.contains(t)) return;
+  if (rootEl.value?.contains(t) || menuEl.value?.contains(t)) return;
   closeMenu();
 }
 
@@ -200,6 +246,10 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
+function onScrollOrResize() {
+  if (open.value) updatePosition();
+}
+
 watch(
   () => props.options,
   () => {
@@ -208,16 +258,24 @@ watch(
   { deep: true },
 );
 
+watch(filteredOptions, () => {
+  if (open.value) void placeMenu();
+});
+
 onMounted(() => {
   syncOptions();
   document.addEventListener("pointerdown", onDocPointer, true);
   window.addEventListener("keydown", onKey);
-  window.addEventListener("resize", updateFlip);
+  window.addEventListener("resize", onScrollOrResize);
+  document.addEventListener("scroll", onScrollOrResize, true);
 });
 onUnmounted(() => {
   document.removeEventListener("pointerdown", onDocPointer, true);
   window.removeEventListener("keydown", onKey);
-  window.removeEventListener("resize", updateFlip);
+  window.removeEventListener("resize", onScrollOrResize);
+  document.removeEventListener("scroll", onScrollOrResize, true);
+  ariaObserver?.disconnect();
+  ariaObserver = null;
 });
 </script>
 
@@ -269,15 +327,17 @@ onUnmounted(() => {
         <path d="M10.25 5.25L8 3L5.75 5.25" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
     </span>
+  </span>
 
+  <Teleport to="body">
     <div
       v-if="open"
       ref="menuEl"
       data-ui-select-menu
       role="listbox"
+      :style="menuStyle"
       :class="[
-        'absolute left-0 right-0 z-[80] rounded-lg border border-neutral-200 bg-white shadow-lg overflow-hidden',
-        openUp ? 'bottom-full mb-1' : 'top-full mt-1',
+        'fixed z-[200] rounded-lg border border-neutral-200 bg-white shadow-lg overflow-hidden',
       ]"
       @pointerdown.stop
     >
@@ -334,5 +394,5 @@ onUnmounted(() => {
         </li>
       </ul>
     </div>
-  </span>
+  </Teleport>
 </template>

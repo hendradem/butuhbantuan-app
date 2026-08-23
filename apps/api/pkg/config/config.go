@@ -20,10 +20,15 @@ type Config struct {
 	GeoapifyURL     string
 	GeoapifyKey     string
 	NominatimURL    string
-	VAPIDPublicKey  string // Web Push VAPID public key  (generate: go run github.com/SherClockHolmes/webpush-go/cmd/vapid-key-gen@latest)
-	VAPIDPrivateKey string // Web Push VAPID private key
-	VAPIDSubject    string // mailto: or https: contact for push service
-	DispatchSLASecs int    // seconds before a pending SOS ticket is reassigned
+	VAPIDPublicKey  string
+	VAPIDPrivateKey string
+	VAPIDSubject    string
+	DispatchSLASecs int
+	// SATUSEHAT MSI (hospital master). Empty credentials → stub provider.
+	SatuSehatBaseURL      string
+	SatuSehatClientID     string
+	SatuSehatClientSecret string
+	SatuSehatForceStub    bool
 }
 
 func Load() *Config {
@@ -63,6 +68,10 @@ func Load() *Config {
 		VAPIDPrivateKey: getEnv("VAPID_PRIVATE_KEY", ""),
 		VAPIDSubject:    getEnv("VAPID_SUBJECT", "mailto:admin@butuhbantuan.id"),
 		DispatchSLASecs: getEnvInt("DISPATCH_SLA_SECONDS", 90),
+		SatuSehatBaseURL:      getEnv("SATUSEHAT_BASE_URL", "https://api-satusehat-stg.dto.kemkes.go.id"),
+		SatuSehatClientID:     getEnv("SATUSEHAT_CLIENT_ID", ""),
+		SatuSehatClientSecret: getEnv("SATUSEHAT_CLIENT_SECRET", ""),
+		SatuSehatForceStub:    getEnv("SATUSEHAT_FORCE_STUB", "0") == "1" || getEnv("SATUSEHAT_FORCE_STUB", "") == "true",
 	}
 }
 

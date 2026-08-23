@@ -45,23 +45,24 @@ function finish() {
 <template>
   <div
     ref="container"
-    class="min-h-screen flex flex-col p-6 text-center justify-end select-none"
+    class="ui-page min-h-screen flex flex-col p-6 text-center justify-end select-none"
   >
     <div class="flex h-[400px] items-center justify-center">
       <div class="flex flex-col items-center">
         <Transition name="fade" mode="out-in">
           <div :key="stepIndex" class="w-full h-[200px] mb-6">
-            <img
+            <SkeletonImage
               :src="current.image"
               :alt="current.title"
-              class="h-full w-full object-contain"
+              wrapper-class="h-full w-full"
+              img-class="h-full w-full object-contain"
             />
           </div>
         </Transition>
         <Transition name="fade" mode="out-in">
           <div :key="stepIndex">
-            <h2 class="text-lg font-semibold mb-2">{{ current.title }}</h2>
-            <p class="text-gray-500 text-sm max-w-sm">{{ current.description }}</p>
+            <h2 class="text-lg font-semibold mb-2 ui-text-primary">{{ current.title }}</h2>
+            <p class="text-sm max-w-sm ui-text-secondary">{{ current.description }}</p>
           </div>
         </Transition>
       </div>
@@ -72,17 +73,20 @@ function finish() {
         <button
           v-for="(_, i) in steps"
           :key="i"
-          :class="['w-2.5 h-2.5 rounded-full transition-colors duration-300', i === stepIndex ? 'bg-black scale-110' : 'bg-gray-300']"
+          type="button"
+          :class="['w-2.5 h-2.5 rounded-full transition-colors duration-300', i === stepIndex ? 'scale-110' : '']"
+          :style="
+            i === stepIndex
+              ? { background: 'var(--bb-accent)' }
+              : { background: 'var(--bb-text-tertiary)' }
+          "
           @click="goToStep(i)"
         />
       </div>
-      <button
-        class="w-full bg-black text-white py-3 rounded-xl text-sm font-medium"
-        @click="nextStep"
-      >
+      <button type="button" class="ui-btn-primary" @click="nextStep">
         {{ isLast ? "Mulai" : "Lanjut" }}
       </button>
-      <button class="text-gray-400 text-sm" @click="finish">Lewati</button>
+      <button type="button" class="text-sm ui-text-secondary" @click="finish">Lewati</button>
     </div>
   </div>
 </template>

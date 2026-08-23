@@ -79,6 +79,17 @@ watch(hmPeriod, () => {
   refreshHeatmap();
 });
 
+// Live: new orders / status changes → soft-refresh sebaran (popup tetap dari layout)
+if (import.meta.client) {
+  const onLiveOrder = () => refreshHeatmap();
+  onMounted(() => {
+    window.addEventListener("bb:admin-order-live", onLiveOrder);
+  });
+  onUnmounted(() => {
+    window.removeEventListener("bb:admin-order-live", onLiveOrder);
+  });
+}
+
 const orders = computed(() => ordersData.value?.data ?? []);
 
 /** Keep last good analytics so period/refresh never blitzes the overview. */
@@ -684,6 +695,7 @@ const slaOptions = computed(() => ({
           <HeatmapViz
             :points="heatmapPoints"
             :loading="hmPending && lastHeatmap.length === 0"
+            live
           />
           <template #fallback>
             <div class="rounded-xl border border-neutral-200 overflow-hidden">

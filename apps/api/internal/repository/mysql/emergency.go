@@ -170,6 +170,50 @@ func (r *EmergencyRepo) UpdateActive(id string, isActive bool) error {
 	return r.db.Model(&row).Update("is_active", isActive).Error
 }
 
+func (r *EmergencyRepo) UpdateWilayah(id string, addr domain.Address) error {
+	var row EmergencyEntity
+	if err := r.db.Where("uuid = ?", id).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return repository.ErrNotFound
+		}
+		return err
+	}
+	provinceID := strings.TrimSpace(addr.ProvinceID)
+	regencyID := strings.TrimSpace(addr.RegencyID)
+	if provinceID == "" || regencyID == "" {
+		return fmt.Errorf("province_id dan regency_id wajib")
+	}
+	provinceName := strings.TrimSpace(addr.Province)
+	if provinceName == "" {
+		provinceName = "Provinsi " + provinceID
+	}
+	regencyName := strings.TrimSpace(addr.Regency)
+	if regencyName == "" {
+		regencyName = "Kabupaten " + regencyID
+	}
+	// Pastikan baris wilayah ada sebelum update FK emergency.
+	if err := r.db.Exec(
+		"INSERT INTO province (id, name) VALUES (?, ?) ON DUPLICATE KEY UPDATE name = IF(name = '' OR name IS NULL, VALUES(name), name)",
+		provinceID, provinceName,
+	).Error; err != nil {
+		return fmt.Errorf("province upsert: %w", err)
+	}
+	if err := r.db.Exec(
+		"INSERT INTO regency (id, province_id, name) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE province_id = VALUES(province_id), name = IF(name = '' OR name IS NULL, VALUES(name), name)",
+		regencyID, provinceID, regencyName,
+	).Error; err != nil {
+		return fmt.Errorf("regency upsert: %w", err)
+	}
+	updates := map[string]any{
+		"province_id": provinceID,
+		"regency_id":  regencyID,
+	}
+	if strings.TrimSpace(addr.FullAddress) != "" {
+		updates["full_address"] = strings.TrimSpace(addr.FullAddress)
+	}
+	return r.db.Model(&row).Updates(updates).Error
+}
+
 func (r *EmergencyRepo) Create(e domain.Emergency) (*domain.Emergency, error) {
 	row := r.buildEntity(e)
 	if err := r.db.Omit(clause.Associations).Create(&row).Error; err != nil {

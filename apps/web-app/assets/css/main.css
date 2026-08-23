@@ -1,10 +1,64 @@
+@import "./theme.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
-  background-color: #fff;
-  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  background-color: var(--bb-bg-page);
+  color: var(--bb-text);
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: var(--bb-fw-body, 500);
+  font-optical-sizing: auto;
+  /* Subpixel keeps strokes a bit fuller than antialiased-only (less “thin”) */
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  text-rendering: optimizeLegibility;
+}
+
+/**
+ * Soft theme typography: stronger hierarchy like the design refs.
+ * Avoid light/thin; body ≈ medium, labels/titles = semibold/bold.
+ */
+html[data-ui-theme="soft"] {
+  --bb-fw-body: 500;
+  --bb-fw-secondary: 500;
+  --bb-fw-medium: 600;
+  --bb-fw-semibold: 700;
+  --bb-fw-bold: 800;
+}
+
+html[data-ui-theme="soft"] .font-light,
+html[data-ui-theme="soft"] .font-thin,
+html[data-ui-theme="soft"] .font-extralight {
+  font-weight: var(--bb-fw-secondary) !important;
+}
+
+html[data-ui-theme="soft"] .font-normal {
+  font-weight: var(--bb-fw-secondary) !important;
+}
+
+html[data-ui-theme="soft"] .font-medium {
+  font-weight: var(--bb-fw-medium) !important;
+}
+
+html[data-ui-theme="soft"] .font-semibold {
+  font-weight: var(--bb-fw-semibold) !important;
+}
+
+html[data-ui-theme="soft"] .font-bold,
+html[data-ui-theme="soft"] .font-extrabold,
+html[data-ui-theme="soft"] .font-black {
+  font-weight: var(--bb-fw-bold) !important;
+}
+
+html[data-ui-theme="soft"] h1,
+html[data-ui-theme="soft"] h2,
+html[data-ui-theme="soft"] h3,
+html[data-ui-theme="soft"] h4 {
+  font-weight: var(--bb-fw-semibold);
+  letter-spacing: -0.02em;
+  color: var(--bb-text);
 }
 
 .leaflet-routing-container {
@@ -28,41 +82,101 @@ body {
 
 @layer components {
   .badge {
-    @apply inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-neutral-50 text-neutral-700 text-xs font-medium px-2.5 py-0.5;
+    @apply inline-flex items-center gap-1 text-xs;
+    font-weight: var(--bb-fw-medium, 600);
+    border-radius: var(--bb-radius-pill);
+    border: 1px solid var(--bb-border);
+    background: var(--bb-bg-muted);
+    color: var(--bb-text-secondary);
+    padding: 0.2rem 0.65rem;
   }
   .badge-icon {
     @apply inline-flex items-center gap-1;
   }
   .searchbox {
-    @apply bg-gray-100 border-0 text-gray-900 text-sm rounded-xl focus:border-0 focus:outline-none block w-full px-10 py-3 placeholder-gray-400 pr-[45px] truncate;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 2.5rem; /* match SosButton h-10 */
+    border: 0;
+    background: var(--bb-bg-muted);
+    color: var(--bb-text);
+    font-size: 0.875rem;
+    font-weight: var(--bb-fw-secondary, 500);
+    line-height: 1.25rem;
+    border-radius: var(--bb-radius-control);
+    padding: 0 2.75rem 0 2.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    box-sizing: border-box;
+  }
+  .searchbox::placeholder {
+    color: var(--bb-text-tertiary);
+    font-weight: var(--bb-fw-secondary, 500);
+  }
+  .searchbox:focus {
+    outline: none;
+  }
+  .searchbox__skeleton {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 0.5rem;
+    height: 1.25rem;
+  }
+  .searchbox__skeleton-bar {
+    height: 0.75rem;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--bb-text-tertiary) 28%, transparent);
   }
   .btn-base {
-    @apply text-sm font-medium rounded-lg px-5 py-2.5 me-2 mb-2 focus:outline-none;
+    @apply text-sm focus:outline-none;
+    font-weight: var(--bb-fw-medium, 600);
+    border-radius: var(--bb-radius-control);
+    padding: 0.625rem 1.25rem;
   }
   .btn-whatsapp {
-    @apply btn-base flex items-center w-full justify-center bg-green-600 text-white transition hover:bg-green-700;
+    @apply btn-base flex items-center w-full justify-center text-white transition;
+    background: #16a34a;
+    border-radius: var(--bb-radius-control);
+  }
+  .btn-whatsapp:hover {
+    background: #15803d;
   }
   .btn-call {
-    @apply btn-base flex w-full items-center justify-center bg-white border border-gray-300 text-neutral-600 hover:bg-gray-50 transition;
+    @apply btn-base flex w-full items-center justify-center transition;
+    background: var(--bb-bg-surface);
+    color: var(--bb-text-secondary);
+    border: 1px solid var(--bb-border-strong);
+    border-radius: var(--bb-radius-control);
+  }
+  .btn-call:hover {
+    background: var(--bb-bg-muted);
   }
   .btn-dark {
-    @apply btn-base text-white bg-gray-800 hover:bg-gray-900 w-full justify-center flex items-center;
+    @apply btn-base flex w-full items-center justify-center text-white transition;
+    background: var(--bb-accent);
+    border-radius: var(--bb-radius-control);
+  }
+  .btn-dark:hover {
+    filter: brightness(1.08);
   }
   .bottom-menu-shadow {
-    box-shadow: rgba(0, 0, 0, 0.25) 0px 14px 28px, rgba(0, 0, 0, 0.22) 0px 10px 10px;
+    box-shadow: var(--bb-shadow-menu);
   }
   .bottom-sheet-shadow {
-    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--bb-shadow-sheet);
   }
 
-  /* Soft skeleton — gentle shimmer, avoids harsh pulse flash */
   .soft-skel {
-    @apply rounded-md bg-neutral-100/80;
+    border-radius: 0.5rem;
+    background-color: color-mix(in srgb, var(--bb-bg-muted) 80%, white);
     background-image: linear-gradient(
       90deg,
-      rgba(245, 245, 245, 0.55) 0%,
-      rgba(229, 229, 229, 0.9) 45%,
-      rgba(245, 245, 245, 0.55) 100%
+      color-mix(in srgb, var(--bb-bg-muted) 55%, white) 0%,
+      var(--bb-bg-muted) 45%,
+      color-mix(in srgb, var(--bb-bg-muted) 55%, white) 100%
     );
     background-size: 200% 100%;
     animation: soft-skel-shimmer 1.6s ease-in-out infinite;
@@ -74,7 +188,7 @@ body {
   100% { background-position: -100% 0; }
 }
 
-/* Map markers */
+/* Map markers — classic (circular) — kept for rollback via mapAppearance markers:classic */
 .current-location-marker {
   background-image: url('/assets/icons/current-location-blue.svg');
   padding: 10px;
@@ -140,6 +254,342 @@ body {
   height: 25px;
   border-radius: 50%;
   cursor: pointer;
+}
+
+.bb-svc-pin-wrap,
+.bb-user-pin-wrap {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Teardrop service pins (BMKG / Apple–inspired) */
+.bb-svc-pin {
+  width: 28px;
+  height: 34px;
+  position: relative;
+  cursor: pointer;
+  pointer-events: auto;
+  transform-origin: 50% 100%;
+}
+
+.bb-svc-pin__head {
+  width: 22px;
+  height: 22px;
+  border-radius: 50% 50% 50% 3px;
+  transform: rotate(-45deg);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2px auto 0;
+}
+
+.bb-svc-pin__icon {
+  display: block;
+  width: 11px;
+  height: 11px;
+  transform: rotate(45deg);
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.bb-svc-pin--ambulance .bb-svc-pin__head { background-color: #1e1e1e; }
+.bb-svc-pin--ambulance .bb-svc-pin__icon {
+  background-image: url('/assets/icons/ambulance-logo.svg');
+}
+
+.bb-svc-pin--damkar .bb-svc-pin__head { background-color: #ef4444; }
+.bb-svc-pin--damkar .bb-svc-pin__icon {
+  background-image: url('/assets/icons/fire-fighter-logo.svg');
+}
+
+.bb-svc-pin--hospital .bb-svc-pin__head { background-color: #8b5cf6; }
+.bb-svc-pin--hospital .bb-svc-pin__icon {
+  background-image: url('/assets/icons/hospital-logo.svg');
+}
+
+.bb-svc-pin--sar .bb-svc-pin__head { background-color: #f97316; }
+.bb-svc-pin--sar .bb-svc-pin__icon {
+  background-image: url('/assets/icons/sar-logo.svg');
+}
+
+/* Apple Maps–style drop-in when markers (re)appear after location/data change */
+.bb-svc-pin--enter {
+  animation: bb-pin-drop 0.48s cubic-bezier(0.34, 1.45, 0.64, 1) both;
+}
+
+/* Selected / detail-card focus — larger pin + stronger pop */
+.bb-svc-pin--active {
+  width: 48px;
+  height: 58px;
+  z-index: 5;
+}
+
+.bb-svc-pin--active .bb-svc-pin__head {
+  width: 40px;
+  height: 40px;
+  border-width: 3px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.45);
+}
+
+.bb-svc-pin--active .bb-svc-pin__icon {
+  width: 18px;
+  height: 18px;
+}
+
+.bb-svc-pin--active.bb-svc-pin--enter {
+  animation: bb-pin-pop 0.7s cubic-bezier(0.22, 1.4, 0.36, 1) both;
+}
+
+/* Selected emergency — soft pulse rings (same language as user location) */
+.bb-svc-pin__pulse {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-radius: 9999px;
+  border: 2px solid rgba(26, 28, 46, 0.28);
+  background: rgba(26, 28, 46, 0.08);
+  animation: bb-svc-pulse 2s ease-out infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.bb-svc-pin__pulse--delay {
+  animation-delay: 1s;
+}
+
+.bb-svc-pin--active .bb-svc-pin__head {
+  position: relative;
+  z-index: 2;
+}
+
+@keyframes bb-svc-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes bb-pin-drop {
+  0% {
+    transform: translateY(-22px) scale(0.35);
+    opacity: 0;
+  }
+  55% {
+    transform: translateY(2px) scale(1.06);
+    opacity: 1;
+  }
+  75% {
+    transform: translateY(-1px) scale(0.97);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bb-pin-pop {
+  0% {
+    transform: translateY(-28px) scale(0.45);
+    opacity: 0;
+  }
+  45% {
+    transform: translateY(4px) scale(1.35);
+    opacity: 1;
+  }
+  68% {
+    transform: translateY(-6px) scale(0.92);
+  }
+  84% {
+    transform: translateY(2px) scale(1.08);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Current location — pulsing rings (Apple / BMKG style) */
+.bb-user-pin {
+  width: 44px;
+  height: 44px;
+  position: relative;
+  cursor: grab;
+  pointer-events: auto;
+}
+
+.bb-user-pin__core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 9999px;
+  background: #2563eb;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 8px rgba(37, 99, 235, 0.55);
+  z-index: 2;
+}
+
+.bb-user-pin__ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 9999px;
+  border: 2px solid rgba(37, 99, 235, 0.45);
+  background: rgba(59, 130, 246, 0.12);
+  animation: bb-user-pulse 2s ease-out infinite;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.bb-user-pin__ring--delay {
+  animation-delay: 1s;
+}
+
+@keyframes bb-user-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bb-user-pin__ring {
+    animation: none;
+    opacity: 0;
+  }
+  .bb-svc-pin--enter,
+  .bb-svc-pin--active.bb-svc-pin--enter {
+    animation: none;
+  }
+  .bb-svc-pin__pulse {
+    animation: none;
+    opacity: 0;
+  }
+  .bb-route-bubble {
+    animation: none;
+  }
+}
+
+/* Route ETA bubble — black chip + pointer to route + advice hint */
+.bb-route-bubble-wrap {
+  background: transparent !important;
+  border: none !important;
+  overflow: visible !important;
+}
+
+.bb-route-bubble {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  animation: bb-route-bubble-pop 0.36s cubic-bezier(0.22, 1.2, 0.36, 1) both;
+  transform-origin: 50% 100%;
+  overflow: visible;
+}
+
+.bb-route-bubble__card {
+  background: #111111;
+  border-radius: 14px;
+  padding: 8px 12px 9px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  min-width: 120px;
+  max-width: 176px;
+  text-align: left;
+  border: none;
+}
+
+.bb-route-bubble__label {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.2;
+}
+
+.bb-route-bubble__value {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.bb-route-bubble__sep {
+  margin: 0 0.3em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.bb-route-bubble__hint {
+  margin: 5px 0 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.bb-route-bubble__hint[data-level="good"] {
+  color: #86efac;
+}
+
+.bb-route-bubble__hint[data-level="ok"] {
+  color: #fde68a;
+}
+
+.bb-route-bubble__hint[data-level="stretch"] {
+  color: #fdba74;
+}
+
+.bb-route-bubble__hint[data-level="far"] {
+  color: #fca5a5;
+}
+
+/* Triangle tip points down onto the route line */
+.bb-route-bubble__tail {
+  display: block;
+  width: 0;
+  height: 0;
+  margin-top: -1px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 9px solid #111111;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.18));
+}
+
+@keyframes bb-route-bubble-pop {
+  0% {
+    transform: translateY(6px) scale(0.72);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
 }
 
 /* Scrollbar */

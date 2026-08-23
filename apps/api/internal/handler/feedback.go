@@ -1,39 +1,74 @@
 package handler
 
 import (
+	"errors"
+	"strings"
+
 	"github.com/butuhbantuan/api/internal/domain"
+	"github.com/butuhbantuan/api/internal/repository"
 	"github.com/butuhbantuan/api/internal/service"
 	"github.com/butuhbantuan/api/pkg/response"
 	"github.com/gofiber/fiber/v2"
 )
 
 type FeedbackHandler struct {
-	svc service.FeedbackUseCase
+	svc     service.FeedbackUseCase
+	orderSvc service.OrderUseCase
 }
 
 func NewFeedbackHandler(svc service.FeedbackUseCase) *FeedbackHandler {
 	return &FeedbackHandler{svc: svc}
 }
 
+func (h *FeedbackHandler) WithOrders(orderSvc service.OrderUseCase) *FeedbackHandler {
+	h.orderSvc = orderSvc
+	return h
+}
+
 func (h *FeedbackHandler) Submit(c *fiber.Ctx) error {
 	var body struct {
-		EmergencyID string `json:"emergency_id"`
-		UnitName    string `json:"unit_name"`
-		UnitHelpful bool   `json:"unit_helpful"`
-		AppHelpful  *bool  `json:"app_helpful"`
-		CallType    string `json:"call_type"`
-		Comment     string `json:"comment"`
+		EmergencyID   string `json:"emergency_id"`
+		EmergencyUUID string `json:"emergency_uuid"` // alias from public ticket DTO
+		TicketNumber  string `json:"ticket_number"`
+		UnitName      string `json:"unit_name"`
+		UnitHelpful   bool   `json:"unit_helpful"`
+		AppHelpful    *bool  `json:"app_helpful"`
+		CallType      string `json:"call_type"`
+		Comment       string `json:"comment"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
 	}
-	if body.EmergencyID == "" {
-		return response.Error(c, fiber.StatusBadRequest, "emergency_id is required")
+
+	emergencyID := strings.TrimSpace(body.EmergencyID)
+	if emergencyID == "" {
+		emergencyID = strings.TrimSpace(body.EmergencyUUID)
+	}
+	ticketNumber := strings.TrimSpace(body.TicketNumber)
+	unitName := strings.TrimSpace(body.UnitName)
+
+	// Citizen e-ticket may only have ticket_number (or stripped emergency_uuid on older DTOs).
+	if emergencyID == "" && ticketNumber != "" && h.orderSvc != nil {
+		order, err := h.orderSvc.GetByTicketNumber(ticketNumber)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return response.Error(c, fiber.StatusBadRequest, "ticket not found")
+			}
+			return response.Error(c, fiber.StatusInternalServerError, "failed to resolve ticket")
+		}
+		emergencyID = strings.TrimSpace(order.EmergencyUUID)
+		if unitName == "" {
+			unitName = order.UnitName
+		}
+	}
+
+	if emergencyID == "" {
+		return response.Error(c, fiber.StatusBadRequest, "emergency_id or ticket_number is required")
 	}
 
 	f := domain.Feedback{
-		EmergencyID: body.EmergencyID,
-		UnitName:    body.UnitName,
+		EmergencyID: emergencyID,
+		UnitName:    unitName,
 		UnitHelpful: body.UnitHelpful,
 		AppHelpful:  body.AppHelpful,
 		CallType:    body.CallType,

@@ -8,7 +8,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="bg-white flex items-center justify-center px-8 py-3">
+  <div class="flex items-center justify-center px-8 py-3">
     <div class="text-center max-w-md">
       <div class="mb-3 flex items-center justify-center">
         <img
@@ -17,8 +17,8 @@ defineProps<{
           :class="sizeMap[size ?? 'xs']"
         />
       </div>
-      <h2 class="text-lg font-semibold text-gray-900 mb-1">{{ title }}</h2>
-      <p v-if="description" class="text-gray-600 text-[15px] mb-3">{{ description }}</p>
+      <h2 class="text-lg font-semibold ui-text-primary mb-1">{{ title }}</h2>
+      <p v-if="description" class="ui-text-secondary text-[15px] mb-3">{{ description }}</p>
       <slot />
     </div>
   </div>

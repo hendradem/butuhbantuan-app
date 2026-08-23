@@ -51,3 +51,18 @@ func TestOpsScopeFromEmergency(t *testing.T) {
 		t.Fatal("non-dispatcher must not get scope")
 	}
 }
+
+func TestMayAcceptOnBehalf(t *testing.T) {
+	pmi := Emergency{Name: "PMI Sleman", IsDispatcher: true, PartnerTier: PartnerTierVerified}
+	if MayAcceptOnBehalf(pmi) {
+		t.Fatal("PMI field dispatcher must not accept-on-behalf")
+	}
+	ses := Emergency{Name: "PSC 119 SES", IsDispatcher: true, PartnerTier: PartnerTierPSC}
+	if !MayAcceptOnBehalf(ses) {
+		t.Fatal("PSC must accept-on-behalf")
+	}
+	prov := Emergency{Name: "BPBD DIY", IsProvinceDispatcher: true}
+	if !MayAcceptOnBehalf(prov) {
+		t.Fatal("province command must accept-on-behalf")
+	}
+}

@@ -1,60 +1,19 @@
 <script setup lang="ts">
+/**
+ * Ops stats cards for unit/admin order list.
+ * Live queue from all orders; period metrics from `periodOrders`.
+ */
+import { Icon } from "@iconify/vue";
+
 const props = withDefaults(
   defineProps<{
     orders: any[];
+    /** Orders already filtered by page period — drives selesai / avg / completion */
+    periodOrders?: any[];
     loading?: boolean;
-    title?: string;
-    storageKey?: string;
   }>(),
-  {
-    title: "Statistik unit",
-    storageKey: "bb-unit-ops-period",
-  },
+  { periodOrders: undefined },
 );
-
-const PERIODS = [
-  { id: "1", label: "Hari ini" },
-  { id: "7", label: "7 hari" },
-  { id: "30", label: "30 hari" },
-] as const;
-
-type PeriodId = (typeof PERIODS)[number]["id"];
-
-function readPeriod(): PeriodId {
-  if (!import.meta.client) return "1";
-  try {
-    const v = sessionStorage.getItem(props.storageKey);
-    if (v === "1" || v === "7" || v === "30") return v;
-  } catch {
-    /* ignore */
-  }
-  return "1";
-}
-
-const period = ref<PeriodId>(readPeriod());
-
-watch(period, (v) => {
-  if (!import.meta.client) return;
-  try {
-    sessionStorage.setItem(props.storageKey, v);
-  } catch {
-    /* ignore */
-  }
-});
-
-function startOfDay(d = new Date()) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function inPeriod(iso: string | null | undefined, days: number): boolean {
-  if (!iso) return false;
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return false;
-  if (days <= 1) return t >= startOfDay().getTime();
-  return t >= Date.now() - days * 24 * 60 * 60 * 1000;
-}
 
 function secBetween(a?: string | null, b?: string | null): number | null {
   if (!a || !b) return null;
@@ -70,194 +29,181 @@ function fmtSec(sec: number | null): string {
   return `${(sec / 3600).toFixed(1)}j`;
 }
 
-function fmtPct(v: number): string {
-  return v > 0 ? `${v.toFixed(0)}%` : "—";
-}
-
-const days = computed(() => Number(period.value) || 1);
-
-const stats = computed(() => {
+const live = computed(() => {
   const all = props.orders ?? [];
-  const d = days.value;
+  return {
+    pending: all.filter((o) => o.status === "pending").length,
+    active: all.filter((o) => o.status === "accepted" || o.status === "in_progress").length,
+    slaLate: all.filter(
+      (o) =>
+        o.status === "pending" &&
+        o.sla_deadline &&
+        new Date(o.sla_deadline).getTime() <= Date.now(),
+    ).length,
+  };
+});
 
-  const pending = all.filter((o) => o.status === "pending").length;
-  const active = all.filter((o) => o.status === "accepted" || o.status === "in_progress").length;
-  const slaLate = all.filter(
-    (o) =>
-      o.status === "pending" &&
-      o.sla_deadline &&
-      new Date(o.sla_deadline).getTime() <= Date.now(),
-  ).length;
-
-  const inRange = all.filter((o) => inPeriod(o.created_at, d));
+const periodStats = computed(() => {
+  const inRange = props.periodOrders ?? props.orders ?? [];
   const completed = inRange.filter((o) => o.status === "completed").length;
   const cancelled = inRange.filter((o) => o.status === "cancelled").length;
   const closed = completed + cancelled;
-  const completionRate = closed > 0 ? (completed * 100) / closed : 0;
-
   const responseSecs = inRange
     .map((o) => secBetween(o.created_at, o.accepted_at))
     .filter((s): s is number => s != null);
   const arrivalSecs = inRange
     .map((o) => secBetween(o.accepted_at, o.arrived_at))
     .filter((s): s is number => s != null);
-
-  const avgResponse =
-    responseSecs.length > 0
-      ? Math.round(responseSecs.reduce((a, b) => a + b, 0) / responseSecs.length)
-      : null;
-  const avgArrival =
-    arrivalSecs.length > 0
-      ? Math.round(arrivalSecs.reduce((a, b) => a + b, 0) / arrivalSecs.length)
-      : null;
-
+  const avg = (secs: number[]) =>
+    secs.length > 0 ? Math.round(secs.reduce((a, b) => a + b, 0) / secs.length) : null;
   return {
-    pending,
-    active,
-    slaLate,
     completed,
-    completionRate,
-    avgResponse,
-    avgArrival,
+    cancelled,
     volume: inRange.length,
+    avgResponse: avg(responseSecs),
+    avgArrival: avg(arrivalSecs),
+    completionRate: closed > 0 ? Math.round((completed * 100) / closed) : 0,
   };
 });
 
-const cards = computed(() => [
-  {
-    key: "pending",
-    label: "Menunggu",
-    value: String(stats.value.pending),
-    hint: "antrian sekarang",
-    shell: "bg-amber-50/80 border-amber-100",
-    labelCls: "text-amber-700/80",
-    valueCls: "text-amber-900",
-    hintCls: "text-amber-700/60",
-  },
-  {
-    key: "active",
-    label: "Berjalan",
-    value: String(stats.value.active),
-    hint: "diterima / diproses",
-    shell: "bg-sky-50/80 border-sky-100",
-    labelCls: "text-sky-700/80",
-    valueCls: "text-sky-900",
-    hintCls: "text-sky-700/60",
-  },
-  {
-    key: "completed",
-    label: "Selesai",
-    value: String(stats.value.completed),
-    hint: period.value === "1" ? "hari ini" : `${period.value} hari`,
-    shell: "bg-emerald-50/80 border-emerald-100",
-    labelCls: "text-emerald-700/80",
-    valueCls: "text-emerald-900",
-    hintCls: "text-emerald-700/60",
-  },
-  {
-    key: "response",
-    label: "Avg respons",
-    value: fmtSec(stats.value.avgResponse),
-    hint: "masuk → terima",
-    shell: "bg-violet-50/80 border-violet-100",
-    labelCls: "text-violet-700/80",
-    valueCls: "text-violet-900",
-    hintCls: "text-violet-700/60",
-  },
-  {
-    key: "arrival",
-    label: "Avg tiba",
-    value: fmtSec(stats.value.avgArrival),
-    hint: "terima → lokasi",
-    shell: "bg-orange-50/80 border-orange-100",
-    labelCls: "text-orange-700/80",
-    valueCls: "text-orange-900",
-    hintCls: "text-orange-700/60",
-  },
-  {
-    key: "completion",
-    label: "Completion",
-    value: fmtPct(stats.value.completionRate),
-    hint: stats.value.slaLate > 0 ? `${stats.value.slaLate} lewat SLA` : "selesai vs batal",
-    shell:
-      stats.value.slaLate > 0
-        ? "bg-rose-50/80 border-rose-100"
-        : "bg-teal-50/80 border-teal-100",
-    labelCls: stats.value.slaLate > 0 ? "text-rose-700/80" : "text-teal-700/80",
-    valueCls: stats.value.slaLate > 0 ? "text-rose-900" : "text-teal-900",
-    hintCls: stats.value.slaLate > 0 ? "text-rose-700/60" : "text-teal-700/60",
-  },
-]);
+type StatCard = {
+  key: string;
+  label: string;
+  value: string;
+  hint: string;
+  icon: string;
+  iconWrap: string;
+  iconTone: string;
+  valueTone: string;
+};
+
+const items = computed<StatCard[]>(() => {
+  const p = periodStats.value;
+  const l = live.value;
+  return [
+    {
+      key: "pending",
+      label: "Menunggu",
+      value: String(l.pending),
+      hint: l.slaLate > 0 ? `${l.slaLate} lewat SLA` : "Antrian live",
+      icon: "lucide:clock-3",
+      iconWrap: l.slaLate > 0 ? "bg-rose-50" : "bg-amber-50",
+      iconTone: l.slaLate > 0 ? "text-rose-600" : "text-amber-600",
+      valueTone: l.slaLate > 0 ? "text-rose-700" : "text-amber-900",
+    },
+    {
+      key: "active",
+      label: "Berjalan",
+      value: String(l.active),
+      hint: "Diterima / OTW / di lokasi",
+      icon: "lucide:siren",
+      iconWrap: "bg-sky-50",
+      iconTone: "text-sky-600",
+      valueTone: "text-sky-900",
+    },
+    {
+      key: "completed",
+      label: "Selesai",
+      value: String(p.completed),
+      hint: `dari ${p.volume} di periode`,
+      icon: "lucide:check-circle-2",
+      iconWrap: "bg-emerald-50",
+      iconTone: "text-emerald-600",
+      valueTone: "text-emerald-900",
+    },
+    {
+      key: "cancelled",
+      label: "Dibatalkan",
+      value: String(p.cancelled),
+      hint: p.volume > 0 ? `${Math.round((p.cancelled * 100) / p.volume)}% volume` : "Periode aktif",
+      icon: "lucide:x-circle",
+      iconWrap: "bg-neutral-100",
+      iconTone: "text-neutral-500",
+      valueTone: "text-neutral-800",
+    },
+    {
+      key: "response",
+      label: "Avg respons",
+      value: fmtSec(p.avgResponse),
+      hint: "Buat → terima",
+      icon: "lucide:timer",
+      iconWrap: "bg-violet-50",
+      iconTone: "text-violet-600",
+      valueTone: "text-neutral-900",
+    },
+    {
+      key: "arrival",
+      label: "Avg tiba",
+      value: fmtSec(p.avgArrival),
+      hint: "Terima → di lokasi",
+      icon: "lucide:map-pinned",
+      iconWrap: "bg-indigo-50",
+      iconTone: "text-indigo-600",
+      valueTone: "text-neutral-900",
+    },
+    {
+      key: "completion",
+      label: "Completion",
+      value: p.completionRate > 0 ? `${p.completionRate}%` : "—",
+      hint: "Selesai / ditutup",
+      icon: "lucide:percent",
+      iconWrap: "bg-teal-50",
+      iconTone: "text-teal-600",
+      valueTone: "text-neutral-900",
+    },
+  ];
+});
 </script>
 
 <template>
-  <div class="px-4 sm:px-6 pt-3 sm:pt-4 pb-1">
-    <div class="flex items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-3">
-      <div class="min-w-0">
-        <p class="text-sm font-semibold text-neutral-900 truncate">{{ title }}</p>
-        <p class="text-xs text-neutral-400 mt-0.5 truncate">
-          <template v-if="loading">Memuat…</template>
-          <template v-else>{{ stats.volume }} pesanan di periode</template>
-        </p>
-      </div>
-      <div class="inline-flex items-center gap-0.5 rounded-lg bg-neutral-100 p-0.5 shrink-0 overflow-x-auto scrollbar-none max-w-[55%] sm:max-w-none">
-        <button
-          v-for="p in PERIODS"
-          :key="p.id"
-          type="button"
-          :class="[
-            'shrink-0 px-2 py-0.5 sm:px-2.5 sm:py-1 text-xs sm:text-sm font-medium rounded-md transition-colors',
-            period === p.id
-              ? 'bg-white text-primary-700 shadow-sm'
-              : 'text-neutral-500 hover:text-neutral-700',
-          ]"
-          @click="period = p.id"
-        >
-          {{ p.label }}
-        </button>
-      </div>
-    </div>
-
+  <div class="px-4 sm:px-6 pt-3 pb-1">
     <div
       v-if="loading"
-      class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3"
+      class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 gap-2.5"
     >
       <div
-        v-for="i in 6"
+        v-for="i in 7"
         :key="i"
-        class="soft-skel rounded-lg sm:rounded-xl h-12 sm:h-[72px]"
-      />
+        class="rounded-2xl bg-white ring-1 ring-black/[0.04] shadow-sm p-3.5 space-y-2.5"
+      >
+        <div class="soft-skel h-8 w-8 rounded-xl" />
+        <div class="soft-skel h-3 w-16" />
+        <div class="soft-skel h-7 w-12" />
+        <div class="soft-skel h-2.5 w-20" />
+      </div>
     </div>
     <div
       v-else
-      class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3"
+      class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 gap-2.5"
     >
       <div
-        v-for="card in cards"
-        :key="card.key"
-        :class="[
-          'rounded-lg sm:rounded-xl border px-2.5 py-2 sm:px-4 sm:py-3',
-          card.shell,
-        ]"
+        v-for="item in items"
+        :key="item.key"
+        class="rounded-2xl bg-white ring-1 ring-black/[0.04] shadow-sm p-3.5 min-w-0"
       >
-        <p :class="['text-[11px] sm:text-sm font-medium leading-tight', card.labelCls]">
-          {{ card.label }}
+        <div class="flex items-start justify-between gap-2 mb-2.5">
+          <div
+            :class="[
+              'w-8 h-8 rounded-xl flex items-center justify-center shrink-0',
+              item.iconWrap,
+            ]"
+          >
+            <Icon :icon="item.icon" :class="['text-base', item.iconTone]" />
+          </div>
+        </div>
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400 leading-none">
+          {{ item.label }}
         </p>
         <p
           :class="[
-            'text-base sm:text-xl font-semibold tabular-nums mt-0.5 sm:mt-1 leading-none',
-            card.valueCls,
+            'mt-1.5 text-2xl font-bold tabular-nums tracking-tight leading-none',
+            item.valueTone,
           ]"
         >
-          {{ card.value }}
+          {{ item.value }}
         </p>
-        <p
-          :class="[
-            'hidden sm:block text-sm mt-1.5 truncate',
-            card.hintCls,
-          ]"
-        >
-          {{ card.hint }}
+        <p class="mt-1.5 text-[11px] font-medium text-neutral-500 truncate">
+          {{ item.hint }}
         </p>
       </div>
     </div>

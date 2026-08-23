@@ -4,13 +4,17 @@ export function useOrderNotification(
   pendingCount: ComputedRef<number>,
   refresh: () => void | Promise<void>,
   intervalMs = 30_000,
-  options: { sound?: "short" | "none" } = {}
+  options: { sound?: "short" | "none"; browser?: boolean } = {}
 ) {
   const initialized = ref(false);
-  const soundMode = options.sound ?? "short";
+  // Default none: admin uses visual notif; unit layout owns emergency MP3.
+  const soundMode = options.sound ?? "none";
+  /** Unit layout owns OS Notification — set false on unit pages to avoid doubles. */
+  const browserNotify = options.browser !== false;
   const { playShort } = useAlertSound();
 
   function showBrowserNotification(newOrders: number) {
+    if (!browserNotify) return;
     if (!("Notification" in window) || Notification.permission !== "granted") return;
     new Notification("🚨 Pesanan Baru Masuk!", {
       body: `Ada ${newOrders} pesanan baru menunggu respons.`,
@@ -21,6 +25,7 @@ export function useOrderNotification(
   }
 
   async function requestNotificationPermission() {
+    if (!browserNotify) return;
     if ("Notification" in window && Notification.permission === "default") {
       await Notification.requestPermission();
     }

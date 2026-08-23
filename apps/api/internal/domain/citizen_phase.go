@@ -60,10 +60,12 @@ func ResolveCitizenPhase(o OrderTicket) string {
 		if o.ArrivedAt != nil {
 			return CitizenPhaseOnScene
 		}
-		if o.Status == "accepted" {
-			return CitizenPhaseAccepted
+		// Live share / en-route GPS counts as OTW even while status stays "accepted"
+		// until petugas taps Sampai Lokasi.
+		if o.Status == "in_progress" || o.TrackEnabledAt != nil || o.ResponderLat != 0 || o.ResponderLng != 0 {
+			return CitizenPhaseInProgress
 		}
-		return CitizenPhaseInProgress
+		return CitizenPhaseAccepted
 	case "completed":
 		return CitizenPhaseCompleted
 	case "cancelled":

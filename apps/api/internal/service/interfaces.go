@@ -16,6 +16,7 @@ type EmergencyUseCase interface {
 	UpdateOperational(id string, status domain.OperationalStatus) error
 	UpdateFleet(id string, fleet domain.FleetStatus) error
 	UpdateActive(id string, isActive bool) error
+	UpdateWilayah(id string, addr domain.Address) error
 }
 
 // PushUseCase handles Web Push subscriptions and notification delivery.
@@ -70,7 +71,10 @@ type OrderUseCase interface {
 	MarkArrivedByToken(token string) (*domain.OrderTicket, error)
 	// MarkArrived records on-scene from unit/admin dashboard (no track token required).
 	MarkArrived(id string) (*domain.OrderTicket, error)
+	// CompleteByToken marks the ticket completed from the field magic-link page and disables track.
+	CompleteByToken(token, handlerName, notes string) (*domain.OrderTicket, error)
 	SaveIncidentReport(id, reportJSON string) (*domain.OrderTicket, error)
+	SetReferralHospital(id, hospitalID, hospitalName string) error
 }
 
 // UnitAuthUseCase is the interface handlers use for unit authentication.
@@ -84,6 +88,8 @@ type UnitAuthUseCase interface {
 type AnalyticsUseCase interface {
 	GetAnalytics(periodDays int) (domain.Analytics, error)
 	GetHeatmap(periodDays int) ([]domain.HeatmapPoint, error)
+	GetPublicUnitStats(emergencyUUID string, periodDays int) (*domain.PublicUnitStats, error)
+	GetUnitOwnStats(emergencyUUID string, periodDays int) (*domain.PublicUnitStats, error)
 }
 
 // RegionUseCase is the interface handlers use for available region operations.

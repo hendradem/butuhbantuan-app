@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { toast } from "vue3-hot-toast";
+import { toast } from "~/utils/appToast";
 
 definePageMeta({ layout: "unit", title: "Pengaturan", keepalive: true });
 
@@ -57,6 +57,126 @@ async function saveFleet() {
     toast.error(err?.data?.message ?? "Gagal menyimpan armada");
   } finally {
     updatingFleet.value = false;
+  }
+}
+
+// ── Wilayah operasional ───────────────────────────────────────────────────────
+const { get } = useApi();
+const provinces = ref<{ id: string; name: string }[]>([]);
+const regencies = ref<{ id: string; name: string }[]>([]);
+const wilayah = reactive({
+  province_id: "",
+  province_name: "",
+  regency_id: "",
+  regency_name: "",
+});
+const savingWilayah = ref(false);
+const wilayahSaved = ref(false);
+
+const provinceOptions = computed(() => [
+  { value: "", label: "Pilih provinsi" },
+  ...provinces.value.map((p) => ({ value: p.id, label: p.name })),
+]);
+
+const regencyOptions = computed(() => [
+  { value: "", label: wilayah.province_id ? "Pilih kabupaten" : "Pilih provinsi dulu" },
+  ...regencies.value.map((r) => ({ value: r.id, label: r.name })),
+]);
+
+watch(
+  () => profile.value,
+  (p) => {
+    if (!p) return;
+    wilayah.province_id = String(p.address?.province_id || p.province_id || "");
+    wilayah.province_name = String(p.address?.province || "");
+    wilayah.regency_id = String(p.address?.regency_id || p.regency_id || "");
+    wilayah.regency_name = String(p.address?.regency || "");
+  },
+  { immediate: true },
+);
+
+onMounted(async () => {
+  try {
+    const res = await get<{ data: any[] }>("/api/v1/service/province");
+    provinces.value = (res.data ?? []).map((p: any) => ({ id: String(p.id), name: p.name }));
+  } catch {
+    provinces.value = [];
+  }
+  if (wilayah.province_id) await loadRegencies(wilayah.province_id);
+});
+
+async function loadRegencies(provinceId: string) {
+  if (!provinceId) {
+    regencies.value = [];
+    return;
+  }
+  try {
+    const res = await get<{ data: any[] }>(`/api/v1/service/regency?province_id=${provinceId}`);
+    regencies.value = (res.data ?? []).map((r: any) => ({ id: String(r.id), name: r.name }));
+  } catch {
+    regencies.value = [];
+  }
+}
+
+watch(
+  () => wilayah.province_id,
+  async (id, prev) => {
+    if (id === prev) return;
+    const p = provinces.value.find((x) => x.id === id);
+    wilayah.province_name = p?.name || wilayah.province_name;
+    if (prev !== undefined && prev !== "") {
+      wilayah.regency_id = "";
+      wilayah.regency_name = "";
+    }
+    await loadRegencies(id);
+  },
+);
+
+watch(
+  () => wilayah.regency_id,
+  (id) => {
+    const r = regencies.value.find((x) => x.id === id);
+    if (r) wilayah.regency_name = r.name;
+  },
+);
+
+async function saveWilayah() {
+  if (!wilayah.province_id || !wilayah.regency_id) {
+    toast.error("Pilih provinsi dan kabupaten");
+    return;
+  }
+  // Pastikan nama terisi dari opsi terpilih (jaga-jaga watch belum jalan).
+  const prov = provinces.value.find((p) => p.id === wilayah.province_id);
+  const reg = regencies.value.find((r) => r.id === wilayah.regency_id);
+  if (prov) wilayah.province_name = prov.name;
+  if (reg) wilayah.regency_name = reg.name;
+
+  savingWilayah.value = true;
+  try {
+    await $fetch(`${baseUrl}/api/v1/unit/wilayah`, {
+      method: "PATCH",
+      headers: { ...unitHeaders(), "Content-Type": "application/json" },
+      body: {
+        province_id: wilayah.province_id,
+        province_name: wilayah.province_name,
+        regency_id: wilayah.regency_id,
+        regency_name: wilayah.regency_name,
+      },
+    });
+    wilayahSaved.value = true;
+    setTimeout(() => { wilayahSaved.value = false; }, 2500);
+    await refresh();
+    toast.success("Wilayah operasional disimpan");
+  } catch (err: any) {
+    const msg =
+      err?.data?.message ||
+      err?.data?.error ||
+      err?.statusMessage ||
+      err?.message ||
+      "Gagal menyimpan wilayah";
+    toast.error(msg);
+  } finally {
+    savingWilayah.value = false;
   }
 }
 </script>
@@ -169,11 +289,76 @@ async function saveFleet() {
       </UiCard>
 
       <UiCard
+        title="Wilayah Operasional"
+        description="Kabupaten tempat unit beroperasi — dipakai untuk import RS & cakupan dispatch"
+      >
+        <div v-if="showProfileSkeleton" class="space-y-3">
+          <div class="soft-skel h-10 rounded-lg" />
+          <div class="soft-skel h-10 rounded-lg" />
+        </div>
+        <template v-else>
+          <div class="space-y-3">
+            <UiFormField label="Provinsi" required>
+              <UiSelect
+                v-model="wilayah.province_id"
+                placeholder="Pilih provinsi"
+                searchable
+                :options="provinceOptions"
+              />
+            </UiFormField>
+            <UiFormField label="Kabupaten / Kota" required>
+              <UiSelect
+                v-model="wilayah.regency_id"
+                placeholder="Pilih kabupaten"
+                searchable
+                :disabled="!wilayah.province_id"
+                :options="regencyOptions"
+              />
+            </UiFormField>
+            <p
+              v-if="wilayah.regency_name"
+              class="text-xs text-neutral-500"
+            >
+              Saat ini: <span class="font-medium text-neutral-700">{{ wilayah.regency_name }}</span>
+              <template v-if="wilayah.province_name">, {{ wilayah.province_name }}</template>
+            </p>
+          </div>
+          <UiButton class="w-full mt-4" :loading="savingWilayah" @click="saveWilayah">
+            <Icon v-if="wilayahSaved" icon="lucide:check-circle" class="text-sm" />
+            <Icon v-else icon="lucide:map-pin" class="text-sm" />
+            {{ wilayahSaved ? "Tersimpan!" : "Simpan Wilayah" }}
+          </UiButton>
+        </template>
+      </UiCard>
+
+      <UiCard
         title="Arsip"
         description="Feedback & laporan biasanya dari detail pesanan. Arsip untuk lihat semua."
         padding="none"
       >
         <div class="divide-y divide-neutral-200">
+          <NuxtLink
+            to="/unit/hospitals"
+            class="flex items-center gap-3 px-4 sm:px-6 py-3.5 hover:bg-neutral-50 transition-colors"
+          >
+            <Icon icon="lucide:hospital" class="text-neutral-500 text-base shrink-0" />
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-neutral-900">Import RS wilayah</p>
+              <p class="text-sm text-neutral-500 mt-0.5">Sync & import rumah sakit per kabupaten</p>
+            </div>
+            <Icon icon="lucide:chevron-right" class="text-neutral-400 text-sm" />
+          </NuxtLink>
+          <NuxtLink
+            to="/unit/stats"
+            class="flex items-center gap-3 px-4 sm:px-6 py-3.5 hover:bg-neutral-50 transition-colors"
+          >
+            <Icon icon="lucide:bar-chart-2" class="text-neutral-500 text-base shrink-0" />
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-neutral-900">Statistik & bagikan link</p>
+              <p class="text-sm text-neutral-500 mt-0.5">Performa unit + link publik</p>
+            </div>
+            <Icon icon="lucide:chevron-right" class="text-neutral-400 text-sm" />
+          </NuxtLink>
           <NuxtLink
             to="/unit/feedback"
             class="flex items-center gap-3 px-4 sm:px-6 py-3.5 hover:bg-neutral-50 transition-colors"

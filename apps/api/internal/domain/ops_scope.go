@@ -1,5 +1,7 @@
 package domain
 
+import "strings"
+
 // OpsScope describes the wilayah a dispatcher unit is allowed to supervise.
 // Never trust client-supplied scope — always derive from the authenticated emergency.
 type OpsScope struct {
@@ -50,4 +52,20 @@ func OpsScopeFromEmergency(e Emergency) (OpsScope, bool) {
 		return OpsScope{}, false
 	}
 	return scope, true
+}
+
+// MayAcceptOnBehalf reports whether this unit may accept a pending offer that
+// is currently assigned to another unit (ops "Terima" on behalf).
+// Only true PSC partners and province command — not every is_dispatcher field
+// unit (e.g. PMI Sleman must not accept a PSC SES SLA offer).
+func MayAcceptOnBehalf(e Emergency) bool {
+	if e.IsProvinceDispatcher {
+		return true
+	}
+	if strings.EqualFold(strings.TrimSpace(e.PartnerTier), PartnerTierPSC) {
+		return true
+	}
+	blob := strings.ToLower(strings.TrimSpace(e.Name + " " + e.OrganizationName))
+	return strings.Contains(blob, "psc") || strings.Contains(blob, "spgdt") ||
+		strings.Contains(blob, "119")
 }

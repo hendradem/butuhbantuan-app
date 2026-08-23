@@ -3,7 +3,7 @@ import { Icon } from "@iconify/vue";
 
 /**
  * Always-open incident detail card (Info | Riwayat | Selesai).
- * Matches labs/order-steps mock right column.
+ * Matches order-detail right column layout.
  */
 const props = defineProps<{
   order: any;
@@ -75,6 +75,18 @@ const hasValidCoords = computed(() => {
   const lat = Number(props.order?.requester_lat);
   const lng = Number(props.order?.requester_lng);
   return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+});
+
+const hasFieldGps = computed(() => {
+  const lat = Number(props.order?.responder_lat);
+  const lng = Number(props.order?.responder_lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+});
+
+const showFieldLiveMap = computed(() => {
+  const s = props.order?.status;
+  if (s !== "accepted" && s !== "in_progress") return false;
+  return hasFieldGps.value;
 });
 
 const mapsUrl = computed(() => {
@@ -227,7 +239,17 @@ const metaRows = computed(() => {
             </a>
           </div>
 
-          <div v-if="hasValidCoords" class="mt-3">
+          <div v-if="showFieldLiveMap" class="mt-3">
+            <OrderFieldLiveMap
+              :requester-lat="order.requester_lat"
+              :requester-lng="order.requester_lng"
+              :responder-lat="order.responder_lat"
+              :responder-lng="order.responder_lng"
+              :updated-at="order.responder_updated_at"
+              :arrived-at="order.arrived_at"
+            />
+          </div>
+          <div v-else-if="hasValidCoords" class="mt-3">
             <OrderLocationMap
               :lat="Number(order.requester_lat)"
               :lng="Number(order.requester_lng)"
@@ -275,9 +297,9 @@ const metaRows = computed(() => {
           </dl>
         </div>
 
-        <!-- Handler notes -->
+        <!-- Handler notes + referral -->
         <div
-          v-if="order.handler_name || order.handling_notes"
+          v-if="order.handler_name || order.handling_notes || order.referral_hospital_name"
           class="pt-4 space-y-3"
         >
           <div v-if="order.handler_name">
@@ -287,6 +309,13 @@ const metaRows = computed(() => {
           <div v-if="order.handling_notes">
             <p class="text-xs font-medium text-neutral-400">Catatan penanganan</p>
             <p class="mt-0.5 text-sm text-neutral-700 leading-relaxed">{{ order.handling_notes }}</p>
+          </div>
+          <div v-if="order.referral_hospital_name">
+            <p class="text-xs font-medium text-neutral-400">RS Rujukan</p>
+            <p class="mt-0.5 text-sm font-medium text-neutral-900 flex items-center gap-1.5">
+              <Icon icon="lucide:hospital" class="text-neutral-400 shrink-0" />
+              {{ order.referral_hospital_name }}
+            </p>
           </div>
         </div>
       </div>

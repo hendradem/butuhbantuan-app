@@ -34,3 +34,8 @@ func haversineKm(lat1, lng1, lat2, lng2 float64) float64 {
 		math.Cos(toRad(lat1))*math.Cos(toRad(lat2))*math.Sin(dLng/2)*math.Sin(dLng/2)
 	return 2 * earthRadiusKm * math.Asin(math.Min(1, math.Sqrt(a)))
 }
+
+// DistanceKm is the public haversine distance helper.
+func DistanceKm(lat1, lng1, lat2, lng2 float64) float64 {
+	return haversineKm(lat1, lng1, lat2, lng2)
+}

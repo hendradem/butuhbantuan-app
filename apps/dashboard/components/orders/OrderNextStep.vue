@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
 import { placeAnchoredMenu } from "~/utils/placeAnchoredMenu";
+import { canAcceptTicket, type UnitProfile } from "~/composables/useUnitOps";
 
 export type NextStepAction =
   | "accept"
@@ -27,6 +28,18 @@ const emit = defineEmits<{
   action: [NextStepAction];
   refreshed: [];
 }>();
+
+const { emergencyUUID } = useUnitAuth();
+const { data: unitProfile } = useNuxtData<UnitProfile>("unit-profile");
+
+const canAcceptOffer = computed(() => {
+  if (props.mode === "admin") return true;
+  const profile: UnitProfile = {
+    ...(unitProfile.value || {}),
+    emergency_uuid: unitProfile.value?.emergency_uuid || emergencyUUID.value || undefined,
+  };
+  return canAcceptTicket(profile, props.order);
+});
 
 const moreOpen = ref(false);
 const morePos = ref({ top: 0, right: 0, openUp: false });
@@ -75,7 +88,14 @@ const checklist = computed(() => {
   const accepted = !!o?.accepted_at || ["accepted", "in_progress", "completed"].includes(status);
   const arrived = !!o?.arrived_at;
   const completed = status === "completed";
-  const trackDone = trackActive.value || !!o?.track_enabled_at;
+  // Soft-close clears live expiry but keeps token/enabled_at; also treat arrived/completed
+  // as past the share step so checklist never soft-locks on step 2.
+  const trackDone =
+    completed ||
+    arrived ||
+    trackActive.value ||
+    !!o?.track_enabled_at ||
+    !!o?.track_token;
   const unit = o?.unit_name ? ` · ${o.unit_name}` : "";
 
   return [
@@ -90,17 +110,22 @@ const checklist = computed(() => {
       label: "Link lokasi petugas",
       meta: trackDone
         ? trackActive.value
-          ? "Link aktif"
+          ? "Live · petugas berbagi lokasi"
           : "Link dibuat"
         : "Wajib sebelum berangkat",
       done: trackDone,
+      live: trackActive.value,
     },
     {
       key: "arrived",
       label: "Tiba di lokasi",
       meta: arrived
-        ? `Terkonfirmasi${clockLabel(o?.arrived_at) ? ` ${clockLabel(o.arrived_at)}` : ""}`
-        : "Konfirmasi saat sampai",
+        ? trackActive.value
+          ? `Di lokasi · GPS live${clockLabel(o?.arrived_at) ? ` · ${clockLabel(o.arrived_at)}` : ""}`
+          : `Terkonfirmasi${clockLabel(o?.arrived_at) ? ` ${clockLabel(o.arrived_at)}` : ""}`
+        : trackActive.value
+          ? "Petugas dalam perjalanan"
+          : "Konfirmasi saat sampai",
       done: arrived,
     },
     {
@@ -121,7 +146,10 @@ type Phase = {
   title: string;
   hint: string;
   primary?: { action: NextStepAction; label: string; icon: string };
+  /** Full share controls — only while creating the link. */
   showShare?: boolean;
+  /** Compact Live status once link already exists. */
+  showTrackStatus?: boolean;
   secondary: { action: NextStepAction; label: string }[];
 };
 
@@ -156,7 +184,7 @@ const phase = computed<Phase>(() => {
   }
 
   if (status === "pending") {
-    if (isUnit) {
+    if (isUnit && canAcceptOffer.value) {
       return {
         key: "accept",
         title: "Ambil pesanan ini?",
@@ -165,6 +193,17 @@ const phase = computed<Phase>(() => {
         secondary: [
           { action: "reject", label: "Tidak bisa · cari unit lain" },
           { action: "reassign", label: "Pilih unit manual" },
+        ],
+      };
+    }
+    if (isUnit) {
+      return {
+        key: "ops-pending-other",
+        title: `Menunggu ${o?.unit_name || "unit ditawarkan"}`,
+        hint: "Offer ini bukan untuk unit Anda. Alihkan atau tolak supaya cascade lanjut.",
+        primary: { action: "reassign", label: "Alihkan", icon: "lucide:git-branch" },
+        secondary: [
+          { action: "reject", label: "Tolak & alihkan" },
         ],
       };
     }
@@ -182,19 +221,29 @@ const phase = computed<Phase>(() => {
     };
   }
 
+  // Reassign only while pending/accepted — API rejects in_progress+.
+  const canReassign = status === "pending" || status === "accepted";
+  const reassignSecondary = canReassign
+    ? ([{ action: "reassign" as const, label: isUnit ? "Alihkan ke unit lain" : "Alihkan unit" }])
+    : [];
+
   if (!o?.arrived_at) {
     const needsShare = !trackActive.value;
-    // Match mock: share step = only share UI; arrive step = arrive CTA
+    // Share step only — full link controls live here, not on arrive.
     if (needsShare && (status === "accepted" || status === "in_progress")) {
       return {
         key: "share",
         title: "Bagikan lokasi petugas",
         hint: "Buat link GPS untuk HP lapangan. Pelapor melihat posisi di e-tiket.",
         showShare: true,
+        // Allow arrive without share so list/ops aren't soft-locked if GPS link skipped.
+        primary: isUnit
+          ? { action: "arrive", label: "Sudah Sampai", icon: "lucide:map-pin-check" }
+          : undefined,
         secondary: isUnit
-          ? [{ action: "reassign", label: "Alihkan ke unit lain" }]
+          ? reassignSecondary
           : [
-              { action: "reassign", label: "Alihkan unit" },
+              ...reassignSecondary,
               { action: "cancel", label: "Batalkan kejadian" },
             ],
       };
@@ -202,25 +251,30 @@ const phase = computed<Phase>(() => {
     if (status === "accepted" && isUnit) {
       return {
         key: "dispatch",
-        title: "Tunggu tiba",
-        hint: "Link aktif. Konfirmasi saat sampai di lokasi.",
+        title: "Petugas menuju lokasi",
+        hint: "Salin / kirim link ke HP lapangan, lalu konfirmasi saat sampai.",
         primary: { action: "arrive", label: "Sudah Sampai", icon: "lucide:map-pin-check" },
+        // Keep copy/WA after create — previously jumped away and hid the link.
         showShare: true,
-        secondary: [{ action: "reassign", label: "Alihkan ke unit lain" }],
+        showTrackStatus: trackActive.value,
+        secondary: reassignSecondary,
       };
     }
     return {
       key: "enroute",
-      title: "Menunggu tiba",
+      title: "Petugas menuju lokasi",
       hint: isUnit
-        ? "Tekan Sudah Sampai saat di lokasi."
+        ? "Link aktif di bawah. Tekan Sudah Sampai saat di lokasi."
         : "Pantau unit. Alihkan jika macet.",
       primary: isUnit
         ? { action: "arrive", label: "Sudah Sampai", icon: "lucide:map-pin-check" }
-        : { action: "reassign", label: "Alihkan unit", icon: "lucide:git-branch" },
-      showShare: true,
+        : canReassign
+          ? { action: "reassign", label: "Alihkan unit", icon: "lucide:git-branch" }
+          : { action: "arrive", label: "Tandai sudah sampai", icon: "lucide:map-pin-check" },
+      showShare: trackActive.value || !!o?.track_enabled_at || !!o?.track_token,
+      showTrackStatus: trackActive.value,
       secondary: isUnit
-        ? [{ action: "reassign", label: "Alihkan ke unit lain" }]
+        ? reassignSecondary
         : [
             { action: "arrive", label: "Tandai sudah sampai" },
             { action: "cancel", label: "Batalkan kejadian" },
@@ -232,12 +286,14 @@ const phase = computed<Phase>(() => {
     key: "onsite",
     title: "Selesaikan",
     hint: isUnit
-      ? "Isi catatan singkat, lalu tandai selesai."
-      : "Unit di lokasi. Pantau hingga selesai.",
+      ? "GPS petugas tetap live. Selesaikan di sini atau dari link lapangan."
+      : "Unit di lokasi — pantau GPS hingga selesai (atau petugas tekan Selesai di link).",
     primary: isUnit
       ? { action: "complete", label: "Tandai Selesai", icon: "lucide:check-circle" }
-      : { action: "reassign", label: "Alihkan (jika perlu)", icon: "lucide:git-branch" },
-    showShare: true,
+      : canReassign
+        ? { action: "reassign", label: "Alihkan (jika perlu)", icon: "lucide:git-branch" }
+        : undefined,
+    showTrackStatus: trackActive.value,
     secondary: isUnit ? [] : [{ action: "cancel", label: "Batalkan kejadian" }],
   };
 });
@@ -252,6 +308,10 @@ const progress = computed(() =>
 
 /** First incomplete checklist item; when all done keep last step expandable if phase still has actions. */
 const activeStepKey = computed(() => {
+  const status = props.order?.status || "";
+  if (status === "completed") {
+    return "completed";
+  }
   const first = checklist.value.find((c) => !c.done);
   if (first) return first.key;
   if (phase.value.primary) {
@@ -270,8 +330,16 @@ const steps = computed(() =>
 );
 
 const showFieldActions = computed(() => {
+  // Maps / WA / Tel only while en-route to the scene — not on complete/report.
+  if (props.order?.arrived_at) return false;
   const s = props.order?.status;
   return s === "accepted" || s === "in_progress";
+});
+
+const hasFieldGps = computed(() => {
+  const lat = Number(props.order?.responder_lat);
+  const lng = Number(props.order?.responder_lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
 });
 
 const mapsUrl = computed(() => {
@@ -415,9 +483,18 @@ function onSecondary(action: NextStepAction) {
           <div class="px-3 py-2.5">
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
-                <p class="text-sm font-semibold text-neutral-900 leading-snug">
-                  {{ step.label }}
-                </p>
+                <div class="flex items-center gap-2 min-w-0 flex-wrap">
+                  <p class="text-sm font-semibold text-neutral-900 leading-snug">
+                    {{ step.label }}
+                  </p>
+                  <span
+                    v-if="step.key === 'track' && step.live"
+                    class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700"
+                  >
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Live
+                  </span>
+                </div>
                 <p v-if="step.meta" class="text-xs text-neutral-500 mt-0.5 leading-snug">
                   {{ step.meta }}
                 </p>
@@ -446,7 +523,7 @@ function onSecondary(action: NextStepAction) {
                   type="button"
                   class="w-full h-11 rounded-lg bg-neutral-900 text-white text-sm font-semibold hover:bg-neutral-800 active:scale-[0.99] transition disabled:opacity-50 inline-flex items-center justify-center gap-2"
                   :class="{
-                    '!bg-emerald-600 hover:!bg-emerald-700': ['accept', 'arrive', 'complete'].includes(phase.primary.action),
+                    '!bg-emergency-600 hover:!bg-emergency-700': ['accept', 'arrive', 'complete'].includes(phase.primary.action),
                   }"
                   :disabled="busy"
                   @click="onPrimary"
@@ -497,8 +574,18 @@ function onSecondary(action: NextStepAction) {
                 </a>
               </div>
 
+              <!-- Share / copy link while creating OR after link is live (until arrived) -->
               <div v-if="phase.showShare">
                 <ShareTrackLink :order="order" :mode="mode" @refreshed="emit('refreshed')" />
+              </div>
+              <div
+                v-else-if="phase.showTrackStatus && !hasFieldGps"
+                class="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2 flex items-center gap-2"
+              >
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <p class="text-[11px] font-medium text-emerald-800 leading-snug">
+                  Menunggu GPS lapangan…
+                </p>
               </div>
             </div>
           </div>

@@ -1,9 +1,11 @@
 import { getNearestDataWithEstimation } from "~/utils/turf";
 import { formatGeoAddress } from "~/utils/geo";
 import { appToast } from "~/utils/appToast";
+import { compareUnitsSmart } from "~/utils/rankUnits";
 
 const MAX_MATRIX_BATCH = 24; // Mapbox Matrix: max 25 coords total (1 origin + 24 destinations)
-const MAX_TRAVEL_MINUTES = 15;
+/** Road ETA cut for citizen list — cross-kab units stay if within this window. */
+const MAX_TRAVEL_MINUTES = 20;
 
 // Module-level counter — shared across all composable instances.
 // Incremented on every loadEmergencyData call; stale calls check this before mutating state.
@@ -13,6 +15,7 @@ export function useEmergencyApi() {
   const config = useRuntimeConfig();
   const emergencyStore = useEmergencyStore();
   const userLocation = useUserLocationStore();
+  const leaflet = useLeafletStore();
   const toast = appToast();
   const {
     saveEmergencySnapshot,
@@ -42,6 +45,24 @@ export function useEmergencyApi() {
 
   async function fetchEmergencyByProvince(provinceId: string) {
     return $fetch<{ data: any[] }>(`${baseUrl}/api/v1/emergency/province/${provinceId}`);
+  }
+
+  /** Resolve covered kab by exact available-region name match only. */
+  async function resolveCoverageCity(
+    regionName: string,
+    _lat: number,
+    _lng: number,
+  ): Promise<{ city: any; label: string } | null> {
+    try {
+      const cityRes = await $fetch<{ data: any[] }>(
+        `${baseUrl}/api/v1/service/available-region/${encodeURIComponent(regionName)}`,
+      );
+      const city = cityRes?.data?.[0];
+      if (city) return { city, label: regionName };
+    } catch {
+      // not in coverage list
+    }
+    return null;
   }
 
   // Calls Mapbox Distance Matrix for accurate road-based durations/distances.
@@ -84,15 +105,43 @@ export function useEmergencyApi() {
   }
 
   /**
-   * @param skipLoadingToast — caller already showed the shared loading toast (e.g. map click debounce)
+   * @param opts.keepLoadingMessage — reuse existing loader text (map click already showed it)
    */
-  async function loadEmergencyData(lat: number, lng: number, skipLoadingToast = false) {
+  async function loadEmergencyData(
+    lat: number,
+    lng: number,
+    opts: boolean | { keepLoadingMessage?: string } = false,
+  ) {
+    const keepMsg =
+      typeof opts === "object"
+        ? opts.keepLoadingMessage
+        : opts
+          ? "Mencari layanan di area ini..."
+          : undefined;
     const myEpoch = ++fetchEpoch;
+
+    const applyUncovered = (regionName: string, message: string) => {
+      emergencyStore.setCoverage(false);
+      emergencyStore.setLastRegionName(regionName);
+      emergencyStore.setFilteredEmergency([]);
+      leaflet.resetLeafletRouting();
+      markFromCache(false);
+      saveEmergencySnapshot({
+        savedAt: new Date().toISOString(),
+        lat,
+        lng,
+        regionName,
+        isCovered: false,
+        emergencies: [],
+      });
+      toast.error(message, { duration: 4000 });
+    };
 
     userLocation.setAddressLoading(true);
     emergencyStore.setLoading(true);
     try {
-      if (!skipLoadingToast) toast.loading("Mencari layanan...");
+      // Always (re)show loader so it survives debounce + long matrix fetch.
+      toast.loading(keepMsg || "Mencari layanan...");
 
       const geoWrapper = await $fetch<any>(
         `${baseUrl}/api/v1/geocoding/reverse?latitude=${lat}&longitude=${lng}`
@@ -109,62 +158,47 @@ export function useEmergencyApi() {
       userLocation.updateFullAddress(formattedAddress || userLocation.fullAddress);
       userLocation.setAddressLoading(false);
 
-      const regionName = geoRes?.address?.county || geoRes?.address?.city;
+      const regionName =
+        geoRes?.address?.county ||
+        geoRes?.address?.city ||
+        geoRes?.address?.state_district ||
+        "";
 
       if (!regionName) {
-        emergencyStore.setCoverage(false);
-        emergencyStore.setLastRegionName("");
-        toast.error("Layanan belum tersedia di area ini");
-        emergencyStore.setFilteredEmergency([]);
-        markFromCache(false);
-        saveEmergencySnapshot({
-          savedAt: new Date().toISOString(),
-          lat,
-          lng,
-          regionName: "",
-          isCovered: false,
-          emergencies: [],
-        });
+        applyUncovered("", "Lokasi ini belum tercover");
         return;
       }
 
       emergencyStore.setLastRegionName(regionName);
 
-      const cityRes = await $fetch<{ data: any[] }>(
-        `${baseUrl}/api/v1/service/available-region/${encodeURIComponent(regionName)}`
-      );
+      const covered = await resolveCoverageCity(regionName, lat, lng);
 
       if (myEpoch !== fetchEpoch) {
         return;
       }
 
-      const city = cityRes?.data?.[0];
-      if (!city) {
-        emergencyStore.setCoverage(false);
-        toast.error(`Di luar wilayah layanan: ${regionName}`);
-        emergencyStore.setFilteredEmergency([]);
-        markFromCache(false);
-        saveEmergencySnapshot({
-          savedAt: new Date().toISOString(),
-          lat,
-          lng,
-          regionName,
-          isCovered: false,
-          emergencies: [],
-        });
+      if (!covered) {
+        applyUncovered(regionName, `${regionName} belum tercover`);
         return;
       }
 
+      const city = covered.city;
       emergencyStore.setCoverage(true);
       userLocation.setCurrentRegion({
-        regency: { id: city?.regency_id ?? "", name: regionName },
-        province: { id: city?.regency_id?.slice(0, 2) ?? "", name: "" },
+        regency: {
+          id: city?.regency_id ?? "",
+          name: covered.label || regionName,
+        },
+        province: {
+          id: city?.province_id || city?.regency_id?.slice(0, 2) || "",
+          name: city?.province || "",
+        },
       });
 
       const regencyId = city?.regency_id;
-      const provinceId = regencyId?.slice(0, 2);
+      const provinceId = city?.province_id || regencyId?.slice(0, 2);
       const res = await fetchEmergencyByProvince(provinceId);
-      const emergencyList: any[] = res.data;
+      const emergencyList: any[] = res.data ?? [];
 
       const userLoc: [number, number] = [lng, lat];
 
@@ -181,17 +215,20 @@ export function useEmergencyApi() {
         return getNearestDataWithEstimation([e], userLoc)[0];
       });
 
-      // Keep services within 15 min.
-      // Regency dispatchers (is_dispatcher) always shown in their regency regardless of response time.
-      // Province dispatchers (is_province_dispatcher) always shown province-wide regardless of response time.
+      // Keep services within ETA window (cross-kab OK — distance/ETA first).
+      // Home kab + province dispatchers always kept as fallback anchors.
       const withinRange = calculated.filter((item: any) => {
-        if (item.trip.duration <= MAX_TRAVEL_MINUTES) return true;
-        if (item.emergencyData?.is_dispatcher && item.emergencyData?.address?.regency_id === regencyId) return true;
+        if (item?.trip?.duration != null && item.trip.duration <= MAX_TRAVEL_MINUTES) return true;
+        if (item.emergencyData?.is_dispatcher && item.emergencyData?.address?.regency_id === regencyId) {
+          return true;
+        }
         if (item.emergencyData?.is_province_dispatcher) return true;
         return false;
       });
-      const toShow = withinRange.length > 0 ? withinRange : calculated.slice(0, 5);
-      toShow.sort((a: any, b: any) => a.trip.duration - b.trip.duration);
+      const toShow = withinRange.length > 0 ? withinRange : calculated.slice(0, 8);
+      // Always distance/ETA ascending — closer Bantul can outrank farther Sleman.
+      // Smart default: open + ETA + partner tier + distance
+      toShow.sort(compareUnitsSmart);
 
       emergencyStore.setFilteredEmergency(toShow);
       markFromCache(false);
@@ -199,11 +236,11 @@ export function useEmergencyApi() {
         savedAt: new Date().toISOString(),
         lat,
         lng,
-        regionName,
+        regionName: covered.label || regionName,
         isCovered: true,
         emergencies: toShow,
       });
-      toast.success(`Layanan tersedia di ${regionName}`);
+      toast.success(`Layanan tersedia di ${covered.label || regionName}`);
     } catch (err) {
       if (myEpoch !== fetchEpoch) return;
       console.error(err);

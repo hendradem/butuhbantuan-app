@@ -29,7 +29,7 @@ const { data: ticketFallback } = await useAsyncData(
     const fromList = allOrders.value.find((o: any) => o.ticket_number === ticketNumber.value);
     if (fromList?.id) return fromList;
     try {
-      const res = await get<{ data: any }>(`/api/v1/order/ticket/${ticketNumber.value}`);
+      const res = await authGet<{ data: any }>(`/api/v1/admin/orders/by-ticket/${ticketNumber.value}`);
       return res?.data ?? null;
     } catch {
       return null;

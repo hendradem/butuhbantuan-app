@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"strconv"
 	"strings"
 
 	"github.com/butuhbantuan/api/internal/domain"
@@ -18,7 +19,9 @@ type UnitHandler struct {
 	orderSvc     service.OrderUseCase
 	emergencySvc service.EmergencyUseCase
 	feedbackSvc  service.FeedbackUseCase
+	analyticsSvc service.AnalyticsUseCase
 	dispatchSvc  service.DispatchUseCase
+	wilayah      *service.WilayahResolver
 }
 
 func NewUnitHandler(authSvc service.UnitAuthUseCase, orderSvc service.OrderUseCase, emergencySvc service.EmergencyUseCase, feedbackSvc service.FeedbackUseCase) *UnitHandler {
@@ -27,6 +30,16 @@ func NewUnitHandler(authSvc service.UnitAuthUseCase, orderSvc service.OrderUseCa
 
 func (h *UnitHandler) WithDispatch(dispatchSvc service.DispatchUseCase) *UnitHandler {
 	h.dispatchSvc = dispatchSvc
+	return h
+}
+
+func (h *UnitHandler) WithWilayah(w *service.WilayahResolver) *UnitHandler {
+	h.wilayah = w
+	return h
+}
+
+func (h *UnitHandler) WithAnalytics(a service.AnalyticsUseCase) *UnitHandler {
+	h.analyticsSvc = a
 	return h
 }
 
@@ -105,6 +118,33 @@ func (h *UnitHandler) GetProfile(c *fiber.Ctx) error {
 	return response.OK(c, "success", profile)
 }
 
+// GetStats GET /api/v1/unit/stats?period=30 — own-unit dashboard stats (no public sample gate).
+func (h *UnitHandler) GetStats(c *fiber.Ctx) error {
+	if h.analyticsSvc == nil {
+		return response.NotImplemented(c)
+	}
+	emergencyUUID := c.Locals("emergency_uuid").(string)
+	period := 30
+	if p := c.Query("period"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil {
+			period = n
+		}
+	}
+	switch period {
+	case 7, 30, 90:
+	default:
+		period = 30
+	}
+	data, err := h.analyticsSvc.GetUnitOwnStats(emergencyUUID, period)
+	if err != nil {
+		if errors.Is(err, service.ErrPublicUnitNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "unit tidak ditemukan")
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "gagal memuat statistik")
+	}
+	return response.OK(c, "success", data)
+}
+
 func (h *UnitHandler) GetAllOrders(c *fiber.Ctx) error {
 	orders, err := h.orderSvc.GetAll()
 	if err != nil {
@@ -171,6 +211,8 @@ func (h *UnitHandler) CreateOrder(c *fiber.Ctx) error {
 		RequesterLng:   body.RequesterLng,
 		Source:         "manual",
 		DispatchStatus: "assigned",
+		// Hint for OrderService.Create: auto-accept walk-in (no pending offer alert).
+		Status: "accepted",
 	}
 
 	if h.emergencySvc != nil {
@@ -183,6 +225,13 @@ func (h *UnitHandler) CreateOrder(c *fiber.Ctx) error {
 			order.RegencyID = u.Address.RegencyID
 			order.ProvinceID = u.Address.ProvinceID
 		}
+	}
+	if h.wilayah != nil {
+		order.RegencyID, order.ProvinceID = h.wilayah.Resolve(
+			order.RequesterLat, order.RequesterLng,
+			order.EmergencyUUID,
+			order.RegencyID, order.ProvinceID,
+		)
 	}
 
 	result, err := h.orderSvc.Create(order)
@@ -252,13 +301,56 @@ func (h *UnitHandler) UpdateAvailability(c *fiber.Ctx) error {
 	return response.OK(c, "availability updated", fiber.Map{"is_active": body.IsActive})
 }
 
+func (h *UnitHandler) UpdateWilayah(c *fiber.Ctx) error {
+	emergencyUUID := c.Locals("emergency_uuid").(string)
+	var body struct {
+		ProvinceID   string `json:"province_id"`
+		ProvinceName string `json:"province_name"`
+		RegencyID    string `json:"regency_id"`
+		RegencyName  string `json:"regency_name"`
+		FullAddress  string `json:"full_address"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+	body.ProvinceID = strings.TrimSpace(body.ProvinceID)
+	body.RegencyID = strings.TrimSpace(body.RegencyID)
+	if body.ProvinceID == "" || body.RegencyID == "" {
+		return response.Error(c, fiber.StatusBadRequest, "province_id dan regency_id wajib")
+	}
+	addr := domain.Address{
+		ProvinceID:  body.ProvinceID,
+		Province:    strings.TrimSpace(body.ProvinceName),
+		RegencyID:   body.RegencyID,
+		Regency:     strings.TrimSpace(body.RegencyName),
+		FullAddress: strings.TrimSpace(body.FullAddress),
+	}
+	if err := h.emergencySvc.UpdateWilayah(emergencyUUID, addr); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "unit tidak ditemukan")
+		}
+		if errors.Is(err, repository.ErrNotSupported) {
+			return response.NotImplemented(c)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "gagal menyimpan wilayah: "+err.Error())
+	}
+	return response.OK(c, "wilayah updated", fiber.Map{
+		"province_id": body.ProvinceID,
+		"regency_id":  body.RegencyID,
+		"province":    body.ProvinceName,
+		"regency":     body.RegencyName,
+	})
+}
+
 func (h *UnitHandler) UpdateOrder(c *fiber.Ctx) error {
 	id := c.Params("id")
 	emergencyUUID, _ := c.Locals("emergency_uuid").(string)
 	var body struct {
-		Status        string `json:"status"`
-		HandlerName   string `json:"handler_name"`
-		HandlingNotes string `json:"handling_notes"`
+		Status               string `json:"status"`
+		HandlerName          string `json:"handler_name"`
+		HandlingNotes        string `json:"handling_notes"`
+		ReferralHospitalID   string `json:"referral_hospital_id"`
+		ReferralHospitalName string `json:"referral_hospital_name"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
@@ -274,8 +366,11 @@ func (h *UnitHandler) UpdateOrder(c *fiber.Ctx) error {
 		}
 		return response.Error(c, fiber.StatusInternalServerError, "failed to get order")
 	}
-	if existing.EmergencyUUID != "" && emergencyUUID != "" && existing.EmergencyUUID != emergencyUUID {
-		return response.Error(c, fiber.StatusForbidden, "order is assigned to another unit")
+	// Same ownership as arrive/track: assignee or wilayah ops (PSC / province).
+	if emergencyUUID != "" && existing.EmergencyUUID != "" && existing.EmergencyUUID != emergencyUUID {
+		if !h.unitMayAccessOrder(id, emergencyUUID) {
+			return response.Error(c, fiber.StatusForbidden, "order is assigned to another unit")
+		}
 	}
 
 	// Prefer reject→reassign path instead of cancelling the citizen ticket.
@@ -304,11 +399,22 @@ func (h *UnitHandler) UpdateOrder(c *fiber.Ctx) error {
 		}
 		return response.Error(c, fiber.StatusInternalServerError, "failed to update order")
 	}
+	if body.Status == "completed" && (body.ReferralHospitalID != "" || body.ReferralHospitalName != "") {
+		_ = h.orderSvc.SetReferralHospital(id, body.ReferralHospitalID, body.ReferralHospitalName)
+		result.ReferralHospitalID = body.ReferralHospitalID
+		result.ReferralHospitalName = body.ReferralHospitalName
+	}
 	return response.OK(c, "order updated", result)
 }
 
 func (h *UnitHandler) GetOrderHistory(c *fiber.Ctx) error {
 	id := c.Params("id")
+	// Unit routes set emergency_uuid; admin routes do not (adminAuth already applied).
+	if actorUUID, ok := c.Locals("emergency_uuid").(string); ok && actorUUID != "" {
+		if !h.unitMayAccessOrder(id, actorUUID) {
+			return response.Error(c, fiber.StatusForbidden, "not allowed to view this order history")
+		}
+	}
 	events, err := h.orderSvc.GetHistory(id)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -317,6 +423,37 @@ func (h *UnitHandler) GetOrderHistory(c *fiber.Ctx) error {
 		return response.Error(c, fiber.StatusInternalServerError, "failed to get history")
 	}
 	return response.OK(c, "success", events)
+}
+
+// GetOrderByTicketNumber returns the full ticket for an authorized unit (assigned or wilayah ops).
+func (h *UnitHandler) GetOrderByTicketNumber(c *fiber.Ctx) error {
+	number := c.Params("number")
+	order, err := h.orderSvc.GetByTicketNumber(number)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "order not found")
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "failed to get order")
+	}
+	actorUUID, _ := c.Locals("emergency_uuid").(string)
+	if actorUUID == "" || !h.unitMayAccessOrder(order.ID, actorUUID) {
+		return response.Error(c, fiber.StatusForbidden, "not allowed to view this order")
+	}
+	// Ops/dashboard need track token omitted on shared links — keep for assignee tools.
+	return response.OK(c, "success", order)
+}
+
+// AdminGetOrderByTicketNumber returns the full ticket for admin dashboards.
+func (h *UnitHandler) AdminGetOrderByTicketNumber(c *fiber.Ctx) error {
+	number := c.Params("number")
+	order, err := h.orderSvc.GetByTicketNumber(number)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "order not found")
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "failed to get order")
+	}
+	return response.OK(c, "success", order)
 }
 
 func (h *UnitHandler) EnableTrack(c *fiber.Ctx) error {
