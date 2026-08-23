@@ -7,7 +7,7 @@ const config = useRuntimeConfig();
 const baseUrl = config.public.apiBaseUrl as string;
 const route = useRoute();
 const { setPendingOrders, setSlaBreachCount, pushNotification, slaBreachCount } = useOpsAlerts();
-const { startLoudLoop, stopLoop, unlock, enableAlarm, armFromGesture, lastPlayOk } = useAlertSound();
+const { startLoudLoop, stopLoop, unlock, enableAlarm, armFromGesture, lastPlayOk, playShort } = useAlertSound();
 const soundNeedsTap = ref(false);
 
 const profileOpen = ref(false);
@@ -45,6 +45,22 @@ const { data: profile } = await useAsyncData(
 const isDispatcher = computed(() =>
   !!(profile.value?.is_dispatcher || profile.value?.is_province_dispatcher || profile.value?.ops_scope),
 );
+
+// Chirp + browser notif when dispatcher's SLA watchlist grows (skip initial load).
+const _slaInit = ref(false);
+watch(slaBreachCount, (now, before) => {
+  if (!_slaInit.value) { _slaInit.value = true; return; }
+  if (!isDispatcher.value) return;
+  if (now > (before ?? 0)) {
+    playShort();
+    if (import.meta.client && "Notification" in window && Notification.permission === "granted") {
+      new Notification("SLA Breach", {
+        body: `${now} tiket di antrian Anda mendekati batas waktu.`,
+        tag: "sla-breach",
+      });
+    }
+  }
+});
 
 const unitCoords = computed(() => {
   const p = profile.value;

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import type { HospitalOption } from "~/components/orders/HospitalPicker.vue";
 
 const props = defineProps<{
   unitName?: string;
@@ -82,7 +83,7 @@ const femaleCount = ref("");
 // ── RS Rujukan ─────────────────────────────────────────────────────────────────
 const referralHospitalId = ref("");
 const referralHospitalName = ref("");
-const hospitalOptions = ref<{ id: string; name: string; class?: string }[]>([]);
+const hospitalOptions = ref<HospitalOption[]>([]);
 const loadingHospitals = ref(false);
 
 async function fetchHospitals() {
@@ -98,17 +99,19 @@ async function fetchHospitals() {
     hospitalOptions.value = (res?.data ?? []).map((h: any) => ({
       id: h.id,
       name: h.name,
-      class: h.class,
+      class: h.class || undefined,
+      address: h.address || undefined,
+      phone: h.phone || undefined,
+      ownership: h.ownership || undefined,
     }));
   } finally {
     loadingHospitals.value = false;
   }
 }
 
-function onHospitalSelect(id: string) {
-  referralHospitalId.value = id;
+watch(referralHospitalId, (id) => {
   referralHospitalName.value = hospitalOptions.value.find((h) => h.id === id)?.name ?? "";
-}
+});
 
 watch(
   () => props.ticket?.regency_id,
@@ -612,23 +615,11 @@ const prefillHint = computed(() => {
             RS Rujukan
             <span class="text-neutral-400 font-normal">(opsional)</span>
           </label>
-          <div v-if="loadingHospitals" class="h-9 soft-skel rounded-lg" />
-          <select
-            v-else
-            class="w-full h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-800 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
-            :value="referralHospitalId"
-            @change="onHospitalSelect(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">— Tidak dirujuk —</option>
-            <option
-              v-for="h in hospitalOptions"
-              :key="h.id"
-              :value="h.id"
-            >{{ h.name }}{{ h.class ? ` · Kelas ${h.class}` : "" }}</option>
-          </select>
-          <p v-if="!hospitalOptions.length && !loadingHospitals && props.ticket?.regency_id" class="mt-1 text-xs text-neutral-400">
-            Belum ada data RS — sync dulu di halaman Rumah Sakit.
-          </p>
+          <HospitalPicker
+            v-model="referralHospitalId"
+            :options="hospitalOptions"
+            :loading="loadingHospitals"
+          />
         </div>
       </div>
 

@@ -191,6 +191,7 @@ let heat: ReturnType<typeof simpleheat> | null = null
 let routeLine: any = null
 let routeCasing: any = null
 let routeToken = 0
+let _markersRaf: number | null = null
 const config = useRuntimeConfig()
 const apiBase = config.public.apiBaseUrl as string
 
@@ -271,9 +272,6 @@ function withStablePageScroll(run: () => void) {
   }
   restore()
   requestAnimationFrame(restore)
-  setTimeout(restore, 0)
-  setTimeout(restore, 320)
-  setTimeout(restore, 800)
 }
 
 /** Pin selected card to the top of the aside list (with breathing room). */
@@ -299,7 +297,7 @@ function mapSetView(lat: number, lng: number, zoom: number, animate = true) {
   if (!map) return
   withStablePageScroll(() => {
     if (animate && typeof map.flyTo === "function") {
-      map.flyTo([lat, lng], zoom, { duration: 0.55, animate: true })
+      map.flyTo([lat, lng], zoom, { duration: 0.4, animate: true, easeLinearity: 0.35 })
     } else {
       map.setView([lat, lng], zoom, { animate: false })
     }
@@ -309,7 +307,7 @@ function mapSetView(lat: number, lng: number, zoom: number, animate = true) {
 function mapFitBounds(bounds: any, opts?: Record<string, unknown>) {
   if (!map || !bounds) return
   withStablePageScroll(() => {
-    map.fitBounds(bounds, { animate: true, duration: 0.55, ...(opts || {}) })
+    map.fitBounds(bounds, { animate: true, duration: 0.4, ...(opts || {}) })
   })
 }
 
@@ -325,54 +323,58 @@ function hasUnitGps() {
 }
 
 function drawMarkers() {
-  if (!map || !L || !layer) return
-  layer.clearLayers()
+  if (_markersRaf !== null) cancelAnimationFrame(_markersRaf)
+  _markersRaf = requestAnimationFrame(() => {
+    _markersRaf = null
+    if (!map || !L || !layer) return
+    layer.clearLayers()
 
-  if (hasUnitGps()) {
-    L.marker([Number(props.unitLat), Number(props.unitLng)], {
-      icon: poskoIcon(),
-      zIndexOffset: 800,
-      interactive: false,
-    }).addTo(layer)
-  }
+    if (hasUnitGps()) {
+      L.marker([Number(props.unitLat), Number(props.unitLng)], {
+        icon: poskoIcon(),
+        zIndexOffset: 800,
+        interactive: false,
+      }).addTo(layer)
+    }
 
-  withGPS.value.forEach(p => {
-    const isSel = selected.value === p.ticket_number || props.focusTicket === p.ticket_number
-    const fresh = isFresh(p.ticket_number)
-    const color = fresh ? "#ef4444" : sColor(p.status ?? "")
-    L.marker([p.lat, p.lng], {
-      icon: pinIcon(color, shortLabel(p.status), {
-        pulse: fresh,
-        large: isSel || fresh,
-        active: isSel,
-        kind: fresh ? "siren" : "ticket",
-      }),
-      zIndexOffset: isSel || fresh ? 900 : 400,
-    })
-      .on("click", (e: any) => {
-        L.DomEvent.stopPropagation(e)
-        selected.value = p.ticket_number ?? null
-      })
-      .addTo(layer)
-  })
-
-  // Incoming offer may be outside current filters — still show its pin
-  if (props.focusTicket && !withGPS.value.some((p) => p.ticket_number === props.focusTicket)) {
-    const fp = props.points.find(
-      (p) => p.ticket_number === props.focusTicket && p.lat !== 0 && p.lng !== 0,
-    )
-    if (fp) {
-      L.marker([fp.lat, fp.lng], {
-        icon: pinIcon("#ef4444", "Baru", { pulse: true, large: true, active: true, kind: "siren" }),
-        zIndexOffset: 950,
+    withGPS.value.forEach(p => {
+      const isSel = selected.value === p.ticket_number || props.focusTicket === p.ticket_number
+      const fresh = isFresh(p.ticket_number)
+      const color = fresh ? "#ef4444" : sColor(p.status ?? "")
+      L.marker([p.lat, p.lng], {
+        icon: pinIcon(color, shortLabel(p.status), {
+          pulse: fresh,
+          large: isSel || fresh,
+          active: isSel,
+          kind: fresh ? "siren" : "ticket",
+        }),
+        zIndexOffset: isSel || fresh ? 900 : 400,
       })
         .on("click", (e: any) => {
           L.DomEvent.stopPropagation(e)
-          selected.value = fp.ticket_number ?? null
+          selected.value = p.ticket_number ?? null
         })
         .addTo(layer)
+    })
+
+    // Incoming offer may be outside current filters — still show its pin
+    if (props.focusTicket && !withGPS.value.some((p) => p.ticket_number === props.focusTicket)) {
+      const fp = props.points.find(
+        (p) => p.ticket_number === props.focusTicket && p.lat !== 0 && p.lng !== 0,
+      )
+      if (fp) {
+        L.marker([fp.lat, fp.lng], {
+          icon: pinIcon("#ef4444", "Baru", { pulse: true, large: true, active: true, kind: "siren" }),
+          zIndexOffset: 950,
+        })
+          .on("click", (e: any) => {
+            L.DomEvent.stopPropagation(e)
+            selected.value = fp.ticket_number ?? null
+          })
+          .addTo(layer)
+      }
     }
-  }
+  })
 }
 
 async function drawFocusRoute() {
@@ -611,8 +613,6 @@ const tableRows = computed(() =>
 function onCardClick(p: HeatPoint) {
   selected.value = p.ticket_number ?? null
   if (viewMode.value === "map" && p.lat !== 0 && p.lng !== 0 && map) {
-    // Enlarge + bounce marker (via redraw) then pan map only — page stays put
-    drawMarkers()
     mapSetView(p.lat, p.lng, Math.max(map.getZoom(), 14), true)
   }
 }
@@ -835,7 +835,7 @@ onBeforeUnmount(() => {
     >
 
       <!-- Map -->
-      <div class="flex-1 relative overflow-hidden min-w-0 isolate">
+      <div class="flex-1 relative overflow-hidden min-w-0 isolate" style="contain: layout paint">
         <div ref="mapEl" class="w-full h-full" style="background: #e5e3df" />
 
         <!-- Loading -->

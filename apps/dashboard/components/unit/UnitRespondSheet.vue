@@ -382,7 +382,7 @@ onBeforeUnmount(() => {
     <div class="absolute inset-0 bg-neutral-950/20" aria-hidden="true" />
 
     <div
-      class="pointer-events-auto absolute left-3 right-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:left-auto sm:right-5 sm:bottom-5 sm:w-[380px] bg-white rounded-2xl shadow-2xl ring-1 ring-black/10 overflow-hidden flex flex-col max-h-[min(78vh,640px)]"
+      class="pointer-events-auto absolute left-3 right-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] max-h-[82vh] sm:left-auto sm:right-5 sm:bottom-5 sm:h-[580px] sm:max-h-none sm:w-72 xl:w-[22rem] bg-white rounded-2xl shadow-xl ring-1 ring-black/[0.06] overflow-hidden flex flex-col"
     >
       <!-- Compact header -->
       <div

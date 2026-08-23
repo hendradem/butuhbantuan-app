@@ -224,6 +224,11 @@ html[data-color-mode="dark"] .divide-neutral-200 > :not([hidden]) ~ :not([hidden
   color: var(--bb-danger);
 }
 
+.ui-icon-well--safe {
+  background: #d1fae5;
+  color: #065f46;
+}
+
 .ui-chip {
   display: inline-flex;
   align-items: center;

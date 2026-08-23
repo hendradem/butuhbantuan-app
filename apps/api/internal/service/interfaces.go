@@ -73,6 +73,9 @@ type OrderUseCase interface {
 	MarkArrived(id string) (*domain.OrderTicket, error)
 	// CompleteByToken marks the ticket completed from the field magic-link page and disables track.
 	CompleteByToken(token, handlerName, notes string) (*domain.OrderTicket, error)
+	// GetOfferByToken returns a session for the WA dispatch respond page.
+	// Unlike GetByTrackToken, this also allows pending (unaccepted) orders.
+	GetOfferByToken(token string) (*domain.OrderTicket, error)
 	SaveIncidentReport(id, reportJSON string) (*domain.OrderTicket, error)
 	SetReferralHospital(id, hospitalID, hospitalName string) error
 }

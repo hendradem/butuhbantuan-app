@@ -1,0 +1,139 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  GO_VERSION: '1.23'
+  NODE_VERSION: '20'
+
+jobs:
+  # ── 1. Test ──────────────────────────────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: apps/api/go.sum
+
+      - name: Go tests
+        run: go test ./...
+        working-directory: apps/api
+
+  # ── 2. Build ─────────────────────────────────────────────────────────────────
+  build:
+    name: Build
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Go — cross-compile for linux/amd64
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: apps/api/go.sum
+
+      - name: Build API binary
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: '0'
+        run: go build -ldflags="-s -w" -o server ./cmd/main.go
+        working-directory: apps/api
+
+      # Node — build Nuxt apps
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Dashboard (SSR)
+        run: pnpm nuxt build
+        working-directory: apps/dashboard
+        env:
+          NUXT_PUBLIC_API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          NUXT_PUBLIC_WEB_APP_URL: ${{ secrets.WEB_APP_URL }}
+
+      - name: Generate Web-app (static)
+        run: pnpm nuxt generate
+        working-directory: apps/web-app
+        env:
+          NUXT_PUBLIC_API_BASE_URL: ${{ secrets.API_BASE_URL }}
+
+      # Upload artifacts to pass between jobs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deploy-artifacts
+          retention-days: 1
+          path: |
+            apps/api/server
+            apps/dashboard/.output
+            apps/web-app/.output/public
+            scripts/deploy.sh
+
+  # ── 3. Deploy ────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to VPS
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: deploy-artifacts
+
+      # Setup SSH
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      # Prepare and transfer artifacts
+      - name: Upload artifacts to VPS
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "rm -rf /tmp/bb-deploy && mkdir -p /tmp/bb-deploy/{dashboard-output,webapp-dist}"
+
+          scp -i ~/.ssh/deploy_key \
+            apps/api/server \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bb-deploy/server
+
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key" \
+            apps/dashboard/.output/ \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bb-deploy/dashboard-output/
+
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key" \
+            apps/web-app/.output/public/ \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bb-deploy/webapp-dist/
+
+          scp -i ~/.ssh/deploy_key \
+            scripts/deploy.sh \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/bb-deploy/deploy.sh
+
+      # Run deploy script on VPS
+      - name: Run deploy script
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "bash /tmp/bb-deploy/deploy.sh"
+
+      - name: Notify success
+        if: success()
+        run: echo "✅ Deploy berhasil — $(date '+%H:%M %Z')"
+
+      - name: Notify failure
+        if: failure()
+        run: echo "❌ Deploy gagal — cek logs di Actions"

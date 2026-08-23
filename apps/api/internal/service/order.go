@@ -393,12 +393,13 @@ func synthesizeHistory(ticket *domain.OrderTicket, attempts repository.DispatchA
 const trackLinkTTL = 12 * time.Hour
 
 // EnableTrack creates/refreshes a magic link so field staff can share GPS without dashboard login.
+// Also allowed for pending orders so dispatchers can pre-generate a respond link for WA delivery.
 func (s *OrderService) EnableTrack(id, actor string) (*domain.OrderTicket, error) {
 	ticket, err := s.repo.FindByID(id)
 	if err != nil {
 		return nil, err
 	}
-	if ticket.Status != "accepted" && ticket.Status != "in_progress" {
+	if ticket.Status == "completed" || ticket.Status == "cancelled" {
 		return nil, repository.ErrConflict
 	}
 	token := uuid.New().String()
@@ -432,6 +433,24 @@ func (s *OrderService) DisableTrack(id, actor string) (*domain.OrderTicket, erro
 	})
 	s.pub.PublishScoped(updated.EmergencyUUID, updated.RegencyID, updated.ProvinceID, hub.Event{Type: "order_updated", Payload: updated})
 	return updated, nil
+}
+
+// GetOfferByToken returns session data for the WA dispatch respond page.
+// Unlike GetByTrackToken, this also allows pending (unaccepted) orders so a unit
+// can see the offer and accept/reject without opening the dashboard.
+func (s *OrderService) GetOfferByToken(token string) (*domain.OrderTicket, error) {
+	ticket, err := s.repo.FindByTrackToken(token)
+	if err != nil {
+		return nil, err
+	}
+	if ticket.Status == "cancelled" {
+		return nil, repository.ErrConflict
+	}
+	// Expired check only applies to active/pending; completed is always readable.
+	if ticket.Status != "completed" && ticket.TrackExpiresAt != nil && time.Now().After(*ticket.TrackExpiresAt) {
+		return nil, repository.ErrConflict
+	}
+	return ticket, nil
 }
 
 // GetByTrackToken returns a session for the field tracking page.
@@ -617,6 +636,9 @@ func (s *NoopOrderService) DisableTrack(_, _ string) (*domain.OrderTicket, error
 	return nil, errOrderNotSupported
 }
 func (s *NoopOrderService) GetByTrackToken(_ string) (*domain.OrderTicket, error) {
+	return nil, errOrderNotSupported
+}
+func (s *NoopOrderService) GetOfferByToken(_ string) (*domain.OrderTicket, error) {
 	return nil, errOrderNotSupported
 }
 func (s *NoopOrderService) PingTrackLocation(_ string, _, _ float64) (*domain.OrderTicket, error) {

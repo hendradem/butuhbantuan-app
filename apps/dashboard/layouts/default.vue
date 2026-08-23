@@ -2,7 +2,23 @@
 import { Icon } from "@iconify/vue";
 
 const mobileOpen = ref(false);
-const { setPendingOrders, setPendingSos, setSlaBreachCount, pushNotification } = useOpsAlerts();
+const { setPendingOrders, setPendingSos, setSlaBreachCount, pushNotification, slaBreachCount } = useOpsAlerts();
+const { playShort } = useAlertSound();
+
+// Alert dispatcher when SLA breach count rises (skip first load).
+const _slaInit = ref(false);
+watch(slaBreachCount, (now, before) => {
+  if (!_slaInit.value) { _slaInit.value = true; return; }
+  if (now > (before ?? 0)) {
+    playShort();
+    if (import.meta.client && "Notification" in window && Notification.permission === "granted") {
+      new Notification("SLA Breach", {
+        body: `${now} tiket mendekati atau melebihi batas waktu respons.`,
+        tag: "sla-breach",
+      });
+    }
+  }
+});
 
 function closeMobile() { mobileOpen.value = false; }
 

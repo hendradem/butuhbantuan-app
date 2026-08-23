@@ -322,6 +322,95 @@ func (h *OrderHandler) CompleteByToken(c *fiber.Ctx) error {
 	})
 }
 
+// GetOfferSession returns order info for the WA dispatch respond page (no auth — token only).
+// Unlike GetTrackSession, this also allows pending (unaccepted) orders so the unit can
+// see the offer and tap Accept / Reject without opening the dashboard.
+func (h *OrderHandler) GetOfferSession(c *fiber.Ctx) error {
+	order, err := h.svc.GetOfferByToken(c.Params("token"))
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "link tidak ditemukan atau sudah tidak aktif")
+		}
+		return response.Error(c, fiber.StatusGone, "link sudah kedaluwarsa")
+	}
+	return response.OK(c, "offer session", fiber.Map{
+		"ticket_number":    order.TicketNumber,
+		"unit_name":        order.UnitName,
+		"status":           order.Status,
+		"dispatch_status":  order.DispatchStatus,
+		"is_offer":         order.Status == "pending",
+		"can_share":        order.Status == "accepted" || order.Status == "in_progress",
+		"requester_name":   order.RequesterName,
+		"location":         order.Location,
+		"condition":        order.Condition,
+		"photo_url":        order.PhotoURL,
+		"requester_lat":    order.RequesterLat,
+		"requester_lng":    order.RequesterLng,
+		"arrived_at":       order.ArrivedAt,
+		"accepted_at":      order.AcceptedAt,
+		"track_expires_at": order.TrackExpiresAt,
+	})
+}
+
+// AcceptByToken accepts a dispatch offer via the WA magic-link page (no dashboard login).
+func (h *OrderHandler) AcceptByToken(c *fiber.Ctx) error {
+	offer, err := h.svc.GetOfferByToken(c.Params("token"))
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "link tidak ditemukan")
+		}
+		return response.Error(c, fiber.StatusGone, "link sudah tidak aktif")
+	}
+	if offer.Status != "pending" {
+		return response.Error(c, fiber.StatusConflict, "pesanan sudah diproses sebelumnya")
+	}
+	if h.dispatch == nil {
+		return response.Error(c, fiber.StatusServiceUnavailable, "dispatch service tidak aktif")
+	}
+	updated, err := h.dispatch.Accept(offer.ID, offer.EmergencyUUID, false)
+	if err != nil {
+		if errors.Is(err, repository.ErrConflict) {
+			return response.Error(c, fiber.StatusConflict, "tidak dapat menerima pesanan ini")
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "gagal menerima pesanan")
+	}
+	return response.OK(c, "diterima", fiber.Map{
+		"status":        updated.Status,
+		"ticket_number": updated.TicketNumber,
+		"can_share":     true,
+	})
+}
+
+// RejectByToken rejects a dispatch offer via the WA magic-link page.
+func (h *OrderHandler) RejectByToken(c *fiber.Ctx) error {
+	offer, err := h.svc.GetOfferByToken(c.Params("token"))
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "link tidak ditemukan")
+		}
+		return response.Error(c, fiber.StatusGone, "link sudah tidak aktif")
+	}
+	if offer.Status != "pending" {
+		return response.Error(c, fiber.StatusConflict, "pesanan sudah diproses sebelumnya")
+	}
+	if h.dispatch == nil {
+		return response.Error(c, fiber.StatusServiceUnavailable, "dispatch service tidak aktif")
+	}
+	var body struct {
+		Reason string `json:"reason"`
+		Note   string `json:"note"`
+	}
+	_ = c.BodyParser(&body)
+	if body.Reason == "" {
+		body.Reason = "tidak_tersedia"
+	}
+	_, err = h.dispatch.Reject(offer.ID, offer.EmergencyUUID, false, body.Reason, body.Note)
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "gagal menolak pesanan")
+	}
+	return response.OK(c, "ditolak", nil)
+}
+
 func (h *OrderHandler) enrichUnitContact(order *domain.OrderTicket) {
 	if order == nil || order.EmergencyUUID == "" || h.emergencySvc == nil {
 		return

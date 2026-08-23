@@ -129,6 +129,9 @@ func Register(
 	ord.Get("/ticket/:number", orderH.GetByTicketNumber)
 
 	track := v1.Group("/track")
+	track.Get("/:token/offer", orderH.GetOfferSession)
+	track.Post("/:token/accept", orderH.AcceptByToken)
+	track.Post("/:token/reject", orderH.RejectByToken)
 	track.Post("/:token/arrive", orderH.MarkArrived)
 	track.Post("/:token/complete", orderH.CompleteByToken)
 	track.Get("/:token", orderH.GetTrackSession)
