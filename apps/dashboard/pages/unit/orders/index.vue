@@ -530,25 +530,30 @@ function sendFollowUpWA(order: any) {
           <UiButton
             variant="secondary"
             class="flex-1 sm:flex-none justify-center"
-            :title="showOpsStats ? 'Sembunyikan statistik' : 'Tampilkan statistik'"
-            :aria-pressed="showOpsStats"
-            @click="toggleOpsStats()"
-          >
-            <Icon
-              :icon="showOpsStats ? 'lucide:panel-top-close' : 'lucide:panel-top'"
-              class="text-sm"
-            />
-            <span class="hidden md:inline">{{ showOpsStats ? "Sembunyikan" : "Statistik" }}</span>
-          </UiButton>
-          <UiButton
-            variant="secondary"
-            class="flex-1 sm:flex-none justify-center"
             :disabled="pending && !!data"
             @click="refresh()"
           >
             <Icon icon="lucide:refresh-cw" class="text-sm" :class="{ 'animate-spin': pending }" />
             Refresh
           </UiButton>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="text-xs font-medium hidden md:inline" :class="showOpsStats ? 'text-neutral-700' : 'text-neutral-400'">Statistik</span>
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="showOpsStats"
+              :title="showOpsStats ? 'Sembunyikan statistik' : 'Tampilkan statistik'"
+              class="relative inline-flex h-5 w-9 shrink-0 items-center cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/50"
+              :class="showOpsStats ? 'bg-neutral-700' : 'bg-neutral-300'"
+              @click="toggleOpsStats()"
+            >
+              <span
+                aria-hidden="true"
+                class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition-transform duration-200"
+                :class="showOpsStats ? 'translate-x-4' : 'translate-x-0'"
+              />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -614,20 +619,6 @@ function sendFollowUpWA(order: any) {
             </option>
           </UiSelect>
 
-          <button
-            v-if="viewMode === 'map'"
-            type="button"
-            class="inline-flex items-center gap-1.5 h-9 px-2.5 text-xs font-medium rounded-lg border transition-colors shrink-0"
-            :class="showHeat
-              ? 'bg-emergency-50 text-emergency-700 border-emergency-200'
-              : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900'"
-            title="Toggle heatmap"
-            @click="showHeat = !showHeat"
-          >
-            <Icon icon="lucide:flame" class="text-sm" />
-            <span class="hidden lg:inline">Heatmap</span>
-          </button>
-
           <div ref="filterMenuRef" class="relative shrink-0">
             <button
               type="button"
@@ -692,6 +683,25 @@ function sendFollowUpWA(order: any) {
                 Reset semua filter
               </button>
             </div>
+          </div>
+
+          <div v-if="viewMode === 'map'" class="flex items-center gap-2 shrink-0">
+            <span class="text-xs font-medium hidden lg:inline" :class="showHeat ? 'text-neutral-700' : 'text-neutral-400'">Heatmap</span>
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="showHeat"
+              :title="showHeat ? 'Sembunyikan heatmap' : 'Tampilkan heatmap'"
+              class="relative inline-flex h-5 w-9 shrink-0 items-center cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/50"
+              :class="showHeat ? 'bg-neutral-700' : 'bg-neutral-300'"
+              @click="showHeat = !showHeat"
+            >
+              <span
+                aria-hidden="true"
+                class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition-transform duration-200"
+                :class="showHeat ? 'translate-x-4' : 'translate-x-0'"
+              />
+            </button>
           </div>
         </template>
 

@@ -87,6 +87,9 @@ onMounted(async () => {
     maxBounds: indonesiaBounds,
     maxBoundsViscosity: 1.0,
     minZoom: 5,
+    zoomAnimation: true,
+    markerZoomAnimation: true,
+    easeLinearity: 0.2,
   });
 
   // Same-origin tile proxy — provider from mapAppearance + color mode.
@@ -135,7 +138,25 @@ onMounted(async () => {
     if (mapClickTimer) clearTimeout(mapClickTimer);
 
     const { lat, lng } = e.latlng;
-    placeManualPin(L, lat, lng);
+
+    // skipReset=true so the marker renders at the tap position first,
+    // then we apply the view adjustment ourselves below.
+    placeManualPin(L, lat, lng, true);
+
+    // Determine if a sheet (open now, or about to reopen) needs the marker centred above it.
+    const willReopenExplore = detailSheet.isOpen && detailSheet.fromExploreList;
+    if (exploreSheet.isOpen || willReopenExplore) {
+      // Apply sheet-aware positioning immediately — avoids animation conflict with
+      // the async watcher that reopens the explore sheet.
+      const H = window.innerHeight;
+      const offset = Math.round(H * 0.25) + 60;
+      const userPx = (map as any).project([lat, lng], DEFAULT_ZOOM);
+      const centrePx = userPx.add([0, offset]);
+      const centreLatLng = (map as any).unproject(centrePx, DEFAULT_ZOOM);
+      (map as any).setView(centreLatLng, DEFAULT_ZOOM, { animate: true, duration: 0.45, easeLinearity: 0.2 });
+    } else {
+      resetToDefaultView(L, lat, lng);
+    }
 
     toast.loading("Mencari layanan di area ini...");
     emergencyStore.setLoading(true);
@@ -327,8 +348,9 @@ onUnmounted(() => {
   }
 });
 
-/** Move blue pin to an explicit lat/lng (map click / drag). Stops GPS from yanking it back. */
-function placeManualPin(L: any, lat: number, lng: number) {
+/** Move blue pin to an explicit lat/lng (map click / drag). Stops GPS from yanking it back.
+ *  skipReset=true: skip resetToDefaultView so the map stays put and the pin appears at the tap position. */
+function placeManualPin(L: any, lat: number, lng: number, skipReset = false) {
   userLocationStore.setManualLocation(true);
   userLocationStore.updateCoordinate(lat, lng);
   // Drop stale GPS accuracy so the circle doesn't linger after a manual place
@@ -342,8 +364,9 @@ function placeManualPin(L: any, lat: number, lng: number) {
     accuracyCircle = null;
   }
   renderCurrentLocation(L, lat, lng, false, 0);
-  // Always snap zoom back to default kab/kota view (zoom in or out as needed)
-  resetToDefaultView(L, lat, lng);
+  if (!skipReset) {
+    resetToDefaultView(L, lat, lng);
+  }
 }
 
 /** Force smart default view after locate / map click / search. */
@@ -463,6 +486,7 @@ function renderCurrentLocation(
             width:22px;height:22px;border-radius:9999px;
             background:#2563eb;border:3px solid #fff;
             box-shadow:0 1px 6px rgba(0,0,0,.4);cursor:grab;
+            transition:width 0.2s ease,height 0.2s ease;
           "></div>`,
       iconSize: usePin ? [44, 44] : [22, 22],
       iconAnchor: usePin ? [22, 22] : [11, 11],
@@ -653,7 +677,12 @@ function onMarkerClick(item: any) {
     emergencyType: item.emergencyData.emergency_type,
     emergency: item,
   });
-  detailSheet.onOpen();
+  if (exploreSheet.isOpen) {
+    exploreSheet.onClose();
+    detailSheet.onOpenFromExplore();
+  } else {
+    detailSheet.onOpen();
+  }
 
   const coords = item.emergencyData?.coordinates;
   if (coords) {
@@ -961,13 +990,10 @@ function fitRouteInView(L: any, latlngs: [number, number][]) {
   map.fitBounds(L.latLngBounds(latlngs), routeFitOptions());
 }
 
-/** Fit now, then once more after sheet layout settles. */
+/** Fit route in view once, then nudge once more after sheet layout settles. */
 function fitRouteInViewSoon(L: any, latlngs: [number, number][]) {
   fitRouteInView(L, latlngs);
-  requestAnimationFrame(() => {
-    fitRouteInView(L, latlngs);
-    window.setTimeout(() => fitRouteInView(L, latlngs), 280);
-  });
+  window.setTimeout(() => fitRouteInView(L, latlngs), 220);
 }
 
 async function renderRoute(L: any, endPoint: { lat: number; lng: number }) {
@@ -1008,7 +1034,6 @@ async function renderRoute(L: any, endPoint: { lat: number; lng: number }) {
       };
       const color = routeLineColorFromTravel(etaOpts);
 
-      fitRouteInViewSoon(L, latlngs);
       await animateRouteDraw(L, latlngs, token, color);
       if (token !== routeRenderToken) {
         toast.dismiss();
@@ -1017,12 +1042,8 @@ async function renderRoute(L: any, endPoint: { lat: number; lng: number }) {
 
       leafletStore.setRouteTravel(etaOpts);
       showRouteEtaBubble(L, latlngs, etaOpts);
+      // Single fit after route + ETA bubble are ready — no pre-draw fit to avoid double pan.
       fitRouteInViewSoon(L, latlngs);
-      // Nudge anchor after zoom settles — setLatLng only (no second pop).
-      window.setTimeout(() => {
-        if (token !== routeRenderToken) return;
-        showRouteEtaBubble(L, latlngs, etaOpts);
-      }, 320);
       toast.dismiss();
       return;
     }

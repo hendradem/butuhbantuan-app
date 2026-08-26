@@ -734,9 +734,9 @@ const { supported: pushSupported, subscribed: pushSubscribed, loading: pushLoadi
                   </div>
                   <div class="min-w-0 flex-1 text-right">
                     <p class="text-[10px] uppercase tracking-[0.12em] text-neutral-400 font-medium">
-                      {{ toParty.title }}
+                      {{ toParty.title }} 
                     </p>
-                    <p class="mt-1 text-sm font-medium text-neutral-800 leading-snug line-clamp-3">
+                    <p class="mt-1 text-sm font-medium text-neutral-800 leading-snug line-clamp-3 truncate">
                       {{ toParty.detail }}
                     </p>
                   </div>
@@ -812,10 +812,10 @@ const { supported: pushSupported, subscribed: pushSubscribed, loading: pushLoadi
                   <Icon icon="lucide:map-pin" class="text-base text-neutral-400 shrink-0" />
                   <div class="min-w-0">
                     <p class="text-[10px] uppercase tracking-wide text-neutral-400 font-medium">
-                      Peta live
+                      Live Location
                     </p>
                     <p class="text-xs text-neutral-600 leading-snug">
-                      {{ hasLiveResponder ? "Posisi petugas tersedia" : "Lokasi permintaan" }}
+                      {{ hasLiveResponder ? "Live location petugas" : "Lokasi permintaan" }}
                     </p>
                   </div>
                 </div>

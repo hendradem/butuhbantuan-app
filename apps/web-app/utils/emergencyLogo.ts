@@ -13,7 +13,9 @@ export function emergencyLogoSrc(emergency: any): string {
   const logo = String(emergency?.organization_logo || "").trim();
   if (logo) return logo;
   const typeName = String(emergency?.emergency_type?.name || "").trim();
-  return TYPE_LOGO[typeName] || DEFAULT_LOGO;
+  if (TYPE_LOGO[typeName]) return TYPE_LOGO[typeName];
+  if (emergency?.organization_type === "rumah_sakit") return TYPE_LOGO["Rumah Sakit"];
+  return DEFAULT_LOGO;
 }
 
 export function onEmergencyLogoError(event: Event, emergency?: any) {

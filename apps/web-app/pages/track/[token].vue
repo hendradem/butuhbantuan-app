@@ -65,9 +65,9 @@ const isCompleted = computed(() => session.value?.status === "completed");
 const hasArrived = computed(() => !!session.value?.arrived_at);
 
 const phaseLabel = computed(() => {
-  if (isCompleted.value) return "Selesai";
-  if (hasArrived.value) return "Penanganan berlangsung";
-  if (sharing.value) return "Menuju lokasi";
+  if (isCompleted.value) return "Penanganan Selesai";
+  if (hasArrived.value) return "Penanganan sedang berlangsung";
+  if (sharing.value) return "Sedang menuju lokasi";
   if (canShare.value) return "Siap berbagi";
   return "Tidak aktif";
 });
@@ -87,7 +87,7 @@ const phaseHint = computed(() => {
 const travelBadge = computed(() => {
   if (!hasArrived.value) return null;
   const label = formatTravel(session.value?.travel_sec);
-  return label ? `Tempuh ${label}` : null;
+  return label ? `Response time ${label}` : null;
 });
 
 /** First load only — refresh must not flash skeleton. */

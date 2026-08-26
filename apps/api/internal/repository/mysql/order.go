@@ -670,3 +670,41 @@ func (r *UnitCredentialRepo) FindByUsername(username string) (*domain.UnitCreden
 		AccessToken:   row.AccessToken,
 	}, nil
 }
+
+func (r *UnitCredentialRepo) FindByEmergencyUUID(emergencyUUID string) (*domain.UnitCredential, error) {
+	var row UnitCredentialEntity
+	if err := r.db.Where("emergency_uuid = ?", emergencyUUID).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repository.ErrNotFound
+		}
+		return nil, err
+	}
+	return &domain.UnitCredential{
+		EmergencyUUID: row.EmergencyUUID,
+		UnitName:      row.UnitName,
+		Username:      row.Username,
+	}, nil
+}
+
+func (r *UnitCredentialRepo) ListAll() ([]domain.UnitCredential, error) {
+	var rows []UnitCredentialEntity
+	if err := r.db.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]domain.UnitCredential, len(rows))
+	for i, row := range rows {
+		out[i] = domain.UnitCredential{EmergencyUUID: row.EmergencyUUID, UnitName: row.UnitName, Username: row.Username}
+	}
+	return out, nil
+}
+
+func (r *UnitCredentialRepo) Delete(emergencyUUID string) error {
+	res := r.db.Where("emergency_uuid = ?", emergencyUUID).Delete(&UnitCredentialEntity{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return repository.ErrNotFound
+	}
+	return nil
+}

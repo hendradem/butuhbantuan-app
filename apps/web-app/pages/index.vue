@@ -89,6 +89,7 @@ async function goToSavedPlace(place: SavedPlace) {
   userLocation.updateFullAddress(place.address);
   leaflet.resetLeafletRouting();
   leaflet.requestDefaultView();
+  detailSheet.clearExploreReturn();
   detailSheet.onClose();
   exploreSheet.onClose();
   await loadEmergencyData(place.lat, place.lng);

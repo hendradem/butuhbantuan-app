@@ -16,6 +16,8 @@ var (
 
 type EmergencyRepository interface {
 	FindAll() ([]domain.Emergency, error)
+	FindAllActive() ([]domain.Emergency, error)
+	FindByID(id string) (*domain.Emergency, error)
 	FindByProvince(provinceID string) ([]domain.Emergency, error)
 	FindByRegency(regencyID string) ([]domain.Emergency, error)
 	FindDispatchers(regencyID, provinceID string) ([]domain.Emergency, error)
@@ -108,6 +110,9 @@ type UnitCredentialRepository interface {
 	Set(cred domain.UnitCredential) error
 	FindByToken(token string) (*domain.UnitCredential, error)
 	FindByUsername(username string) (*domain.UnitCredential, error)
+	FindByEmergencyUUID(emergencyUUID string) (*domain.UnitCredential, error)
+	ListAll() ([]domain.UnitCredential, error)
+	Delete(emergencyUUID string) error
 }
 
 // NoopUnitCredentialRepository satisfies UnitCredentialRepository when running in json storage mode.
@@ -120,6 +125,13 @@ func (r *NoopUnitCredentialRepository) FindByToken(_ string) (*domain.UnitCreden
 func (r *NoopUnitCredentialRepository) FindByUsername(_ string) (*domain.UnitCredential, error) {
 	return nil, ErrNotFound
 }
+func (r *NoopUnitCredentialRepository) FindByEmergencyUUID(_ string) (*domain.UnitCredential, error) {
+	return nil, ErrNotFound
+}
+func (r *NoopUnitCredentialRepository) ListAll() ([]domain.UnitCredential, error) {
+	return nil, nil
+}
+func (r *NoopUnitCredentialRepository) Delete(_ string) error { return ErrNotSupported }
 
 type AnalyticsRepository interface {
 	GetAnalytics(periodDays int) (domain.Analytics, error)

@@ -43,6 +43,51 @@ func (h *UnitHandler) WithAnalytics(a service.AnalyticsUseCase) *UnitHandler {
 	return h
 }
 
+func (h *UnitHandler) ListCredentials(c *fiber.Ctx) error {
+	creds, err := h.authSvc.ListAllCredentials()
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "failed to list credentials")
+	}
+	type item struct {
+		EmergencyUUID string `json:"emergency_uuid"`
+		Username      string `json:"username"`
+	}
+	out := make([]item, len(creds))
+	for i, c := range creds {
+		out[i] = item{EmergencyUUID: c.EmergencyUUID, Username: c.Username}
+	}
+	return response.OK(c, "success", out)
+}
+
+func (h *UnitHandler) GetCredential(c *fiber.Ctx) error {
+	uuid := c.Params("uuid")
+	cred, err := h.authSvc.GetCredential(uuid)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "no credential found")
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "failed to get credential")
+	}
+	return response.OK(c, "success", fiber.Map{
+		"username":       cred.Username,
+		"has_credential": true,
+	})
+}
+
+func (h *UnitHandler) DeleteCredentials(c *fiber.Ctx) error {
+	uuid := c.Params("uuid")
+	if err := h.authSvc.DeleteCredentials(uuid); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "no credential found")
+		}
+		if errors.Is(err, repository.ErrNotSupported) {
+			return response.NotImplemented(c)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "failed to delete credential")
+	}
+	return response.OK(c, "credential removed", nil)
+}
+
 func (h *UnitHandler) SetCredentials(c *fiber.Ctx) error {
 	uuid := c.Params("uuid")
 	var body struct {

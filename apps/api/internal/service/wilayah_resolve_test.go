@@ -34,12 +34,16 @@ func (s *stubRegionRepo) FindCoveredProvinces() ([]domain.Province, error) { ret
 func (s *stubRegionRepo) FindCoveredRegenciesByProvince(string) ([]domain.Regency, error) {
 	return nil, nil
 }
+func (s *stubRegionRepo) FindProvince(string) (*domain.Province, error) { return nil, nil }
+func (s *stubRegionRepo) FindRegency(string) (*domain.Regency, error)   { return nil, nil }
 
 type stubEmergencyRepo struct {
 	byProvince map[string][]domain.Emergency
 }
 
-func (s *stubEmergencyRepo) FindAll() ([]domain.Emergency, error) { return nil, nil }
+func (s *stubEmergencyRepo) FindAll() ([]domain.Emergency, error)       { return nil, nil }
+func (s *stubEmergencyRepo) FindAllActive() ([]domain.Emergency, error) { return nil, nil }
+func (s *stubEmergencyRepo) FindByID(string) (*domain.Emergency, error) { return nil, nil }
 func (s *stubEmergencyRepo) FindByProvince(provinceID string) ([]domain.Emergency, error) {
 	return s.byProvince[provinceID], nil
 }
@@ -60,7 +64,8 @@ func (s *stubEmergencyRepo) UpdateOperational(string, domain.OperationalStatus) 
 	return nil
 }
 func (s *stubEmergencyRepo) UpdateFleet(string, domain.FleetStatus) error { return nil }
-func (s *stubEmergencyRepo) UpdateActive(string, bool) error               { return nil }
+func (s *stubEmergencyRepo) UpdateActive(string, bool) error                      { return nil }
+func (s *stubEmergencyRepo) UpdateWilayah(string, domain.Address) error           { return nil }
 
 func TestWilayahResolver_prefersNearestGPS(t *testing.T) {
 	repo := &stubRegionRepo{regions: []domain.AvailableRegion{

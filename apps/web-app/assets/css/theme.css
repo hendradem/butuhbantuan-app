@@ -292,6 +292,33 @@ html[data-ui-theme="legacy"] .ui-list-card {
   padding: 0.7rem 0.8rem;
 }
 
+/* Ranked card: coloured outer frame, white inner area */
+.ui-list-card--ranked {
+  padding: 0.3rem;
+}
+
+/* White inner content area for ranked cards */
+.ui-list-card__inner {
+  background: var(--bb-bg-surface);
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  box-shadow: var(--bb-shadow-xs);
+}
+
+/* Rank label strip sits below the white inner card */
+.ui-list-card__rank-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  margin-top: 0.25rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
 /* Row layout: icon + content (previous structure) */
 .ui-list-card__row {
   display: flex;
@@ -368,7 +395,7 @@ html[data-ui-theme="legacy"] .ui-list-card {
 /* Secondary: medium weight, dark slate, slightly smaller */
 .ui-list-card__desc {
   margin: 0.15rem 0 0;
-  font-size: 0.875rem; /* 14px */
+  font-size: 12px; /* 14px */
   font-weight: 500;
   line-height: 1.35;
   color: var(--bb-text-secondary);

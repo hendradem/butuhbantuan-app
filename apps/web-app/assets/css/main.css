@@ -65,6 +65,21 @@ html[data-ui-theme="soft"] h4 {
   display: none !important;
 }
 
+/* Smooth marker movement when Leaflet repositions icons via transform */
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+/* Don't animate during drag — Leaflet adds this class while dragging */
+.leaflet-dragging .leaflet-marker-icon,
+.leaflet-dragging .leaflet-marker-shadow {
+  transition: none !important;
+}
+/* Smooth tile fade-in */
+.leaflet-tile {
+  transition: opacity 0.15s ease;
+}
+
 @layer base {
   *:focus {
     @apply outline-none ring-0;
@@ -605,9 +620,13 @@ html[data-ui-theme="soft"] h4 {
 }
 
 /* Sheet slide transitions */
-.sheet-enter-active,
+.sheet-enter-active {
+  transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
 .sheet-leave-active {
-  transition: transform 0.3s ease-out;
+  transition: transform 0.26s cubic-bezier(0.55, 0, 1, 1);
+  will-change: transform;
 }
 .sheet-enter-from,
 .sheet-leave-to {
@@ -617,7 +636,7 @@ html[data-ui-theme="soft"] h4 {
 /* Overlay fade transitions */
 .overlay-enter-active,
 .overlay-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.25s ease;
 }
 .overlay-enter-from,
 .overlay-leave-to {

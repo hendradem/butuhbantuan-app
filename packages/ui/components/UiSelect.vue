@@ -146,10 +146,13 @@ const isPlaceholder = computed(() => {
 
 function applyMenuStyle(rect: DOMRect, top: number, flip: boolean) {
   openUp.value = flip;
+  const left = rect.left;
+  const maxRight = (typeof window !== "undefined" ? window.innerWidth : 1200) - 8;
   menuStyle.value = {
     top: `${top}px`,
-    left: `${rect.left}px`,
-    width: `${rect.width}px`,
+    left: `${left}px`,
+    minWidth: `${rect.width}px`,
+    maxWidth: `${Math.max(rect.width, maxRight - left)}px`,
     transform: flip ? "translateY(-100%)" : "",
     pointerEvents: "auto",
   };
@@ -288,8 +291,8 @@ onUnmounted(() => {
       'group relative block w-full',
       open ? 'z-[70]' : 'focus-within:z-30',
       'before:pointer-events-none before:absolute before:inset-px before:rounded-[calc(0.5rem-1px)] before:bg-white before:shadow-sm',
-      'after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:ring-inset after:ring-transparent',
-      open ? 'after:ring-2 after:ring-primary-500' : 'after:has-[:focus]:ring-2 after:has-[:focus]:ring-primary-500',
+      'after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:ring-inset after:ring-transparent after:transition-shadow after:duration-150',
+      open ? 'after:ring-2 after:ring-primary-500/40' : '',
       disabled ? 'opacity-50' : '',
       $attrs.class,
     ]"
@@ -305,9 +308,12 @@ onUnmounted(() => {
         'py-[calc(0.375rem-1px)] pl-[calc(0.75rem-1px)] pr-8',
         'text-sm/6',
         isPlaceholder ? 'text-neutral-400' : 'text-neutral-950',
-        'border border-neutral-950/10 hover:border-neutral-950/20',
-        'focus:outline-none',
-        invalid ? 'border-emergency-500 hover:border-emergency-500' : '',
+        open
+          ? 'border border-primary-400'
+          : invalid
+            ? 'border border-emergency-500 hover:border-emergency-500'
+            : 'border border-neutral-950/10 hover:border-neutral-950/20',
+        'focus:outline-none transition-colors',
         'disabled:border-neutral-950/20 disabled:cursor-not-allowed',
       ]"
       @click.stop="toggle"
@@ -317,7 +323,7 @@ onUnmounted(() => {
 
     <span class="pointer-events-none absolute inset-y-0 right-0 z-[2] flex items-center pr-2">
       <svg
-        class="size-4 stroke-neutral-500 transition-transform"
+        class="size-4 stroke-neutral-500 transition-transform duration-200 ease-in-out"
         :class="open ? 'rotate-180' : ''"
         viewBox="0 0 16 16"
         fill="none"

@@ -3,6 +3,7 @@ import { Icon } from "@iconify/vue";
 import { displayEtaMinutes } from "~/utils/rankUnits";
 
 const detailSheet = useDetailSheetStore();
+const exploreSheet = useExploreSheetStore();
 const leaflet = useLeafletStore();
 const userLocation = useUserLocationStore();
 
@@ -32,9 +33,6 @@ function handleClose() {
   menuOpen.value = false;
   detailSheet.onClose();
   leaflet.resetLeafletRouting();
-  if (leaflet.mapInstance && userLocation.lat && userLocation.long) {
-    leaflet.mapInstance.setView([userLocation.lat, userLocation.long], 13, { animate: true });
-  }
 }
 
 function onStatsNavigate() {
@@ -53,7 +51,13 @@ function onDocPointer(e: Event) {
 watch(
   () => detailSheet.isOpen,
   (open) => {
-    if (!open) menuOpen.value = false;
+    if (!open) {
+      menuOpen.value = false;
+      if (detailSheet.fromExploreList) {
+        detailSheet.clearExploreReturn();
+        exploreSheet.onOpen();
+      }
+    }
   },
 );
 

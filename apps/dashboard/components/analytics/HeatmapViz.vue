@@ -192,6 +192,7 @@ let routeLine: any = null
 let routeCasing: any = null
 let routeToken = 0
 let _markersRaf: number | null = null
+let _heatMoveRaf: number | null = null
 const config = useRuntimeConfig()
 const apiBase = config.public.apiBaseUrl as string
 
@@ -493,8 +494,35 @@ function setupHeatLayer() {
     1.0: "#ef4444",
   })
 
-  map.on("moveend zoomend resize viewreset", drawHeat)
+  // Smooth fade during pan/zoom — reposition canvas on each move frame
+  // so content doesn't visually slide, then full redraw on end.
+  heatCanvas.style.transition = "opacity 0.12s ease-out"
+
+  map.on("movestart zoomstart", () => {
+    if (heatCanvas) heatCanvas.style.opacity = "0"
+  })
+
+  map.on("move", () => {
+    if (!heatCanvas || !map || !L) return
+    if (_heatMoveRaf !== null) cancelAnimationFrame(_heatMoveRaf)
+    _heatMoveRaf = requestAnimationFrame(() => {
+      _heatMoveRaf = null
+      if (!heatCanvas || !map || !L) return
+      L.DomUtil.setPosition(heatCanvas, map.containerPointToLayerPoint([0, 0]))
+    })
+  })
+
+  map.on("moveend zoomend resize viewreset", () => {
+    drawHeat()
+    requestAnimationFrame(() => {
+      if (heatCanvas && heatCanvas.style.display !== "none") {
+        heatCanvas.style.opacity = "0.7"
+      }
+    })
+  })
+
   drawHeat()
+  heatCanvas.style.opacity = "0.7"
 }
 
 function fitMap() {
@@ -652,10 +680,10 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   if (freshClearTimer) clearTimeout(freshClearTimer)
+  if (_heatMoveRaf !== null) { cancelAnimationFrame(_heatMoveRaf); _heatMoveRaf = null }
   routeToken++
   clearRoute()
   if (map) {
-    map.off("moveend zoomend resize viewreset", drawHeat)
     map.remove()
     map = null
   }
@@ -676,82 +704,90 @@ onBeforeUnmount(() => {
     <!-- Filter bar -->
     <div
       v-if="!hideToolbar"
-      class="relative z-10 px-4 py-3 flex flex-wrap items-center gap-2 bg-white"
+      class="relative z-10 px-4 py-3 flex items-center gap-2 bg-white"
       :class="embedded ? 'border-b border-neutral-100' : 'border-b border-neutral-100 rounded-t-xl'"
     >
-      <UiSelect v-if="!hideRegionFilters" v-model="fProv" class="!w-auto">
-        <option value="">Semua Provinsi</option>
-        <option v-for="p in provinces" :key="p" :value="p">{{ p }}</option>
-      </UiSelect>
-
-      <UiSelect v-if="!hideRegionFilters" v-model="fReg" class="!w-auto">
-        <option value="">Semua Kab/Kota</option>
-        <option v-for="r in regencies" :key="r" :value="r">{{ r }}</option>
-      </UiSelect>
-
-      <UiSelect v-if="!hideRegionFilters" v-model="fType" class="!w-auto">
-        <option value="">Semua Jenis</option>
-        <option v-for="t in types" :key="t" :value="t">{{ t }}</option>
-      </UiSelect>
-
-      <button
-        v-if="!hideRegionFilters && (fProv || fReg || fType)"
-        class="text-xs text-neutral-400 hover:text-neutral-700 flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-neutral-100"
-        @click="fProv = ''; fReg = ''; fType = ''"
-      >
-        <Icon icon="lucide:x" />
-        Reset
-      </button>
-
-      <button
-        v-if="viewMode === 'map'"
-        type="button"
-        class="text-xs font-medium flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors"
-        :class="showHeat
-          ? 'bg-emergency-50 text-emergency-700 border-emergency-200'
-          : 'bg-white text-neutral-500 border-neutral-200 hover:text-neutral-700'"
-        :title="showHeat ? 'Sembunyikan densitas' : 'Tampilkan densitas'"
-        @click="showHeat = !showHeat"
-      >
-        <Icon icon="lucide:flame" class="text-sm" />
-        Heatmap
-      </button>
-
-      <div v-if="!hideViewToggle" class="flex items-center gap-1 bg-neutral-100 rounded-lg p-0.5">
+      <!-- Left: region filters -->
+      <div v-if="!hideRegionFilters" class="flex flex-wrap items-center gap-2 min-w-0">
+        <UiSelect v-model="fProv" class="!w-auto">
+          <option value="">Semua Provinsi</option>
+          <option v-for="p in provinces" :key="p" :value="p">{{ p }}</option>
+        </UiSelect>
+        <UiSelect v-model="fReg" class="!w-auto">
+          <option value="">Semua Kab/Kota</option>
+          <option v-for="r in regencies" :key="r" :value="r">{{ r }}</option>
+        </UiSelect>
+        <UiSelect v-model="fType" class="!w-auto">
+          <option value="">Semua Jenis</option>
+          <option v-for="t in types" :key="t" :value="t">{{ t }}</option>
+        </UiSelect>
         <button
-          type="button"
-          class="text-xs font-medium flex items-center gap-1 px-2.5 py-1.5 rounded-md transition-colors"
-          :class="viewMode === 'map' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'"
-          @click="viewMode = 'map'"
+          v-if="fProv || fReg || fType"
+          class="text-xs text-neutral-400 hover:text-neutral-700 flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-neutral-100 shrink-0"
+          @click="fProv = ''; fReg = ''; fType = ''"
         >
-          <Icon icon="lucide:map" class="text-sm" />
-          Peta
-        </button>
-        <button
-          type="button"
-          class="text-xs font-medium flex items-center gap-1 px-2.5 py-1.5 rounded-md transition-colors"
-          :class="viewMode === 'table' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'"
-          @click="viewMode = 'table'"
-        >
-          <Icon icon="lucide:table" class="text-sm" />
-          Tabel
+          <Icon icon="lucide:x" />
+          Reset
         </button>
       </div>
 
-      <span
-        v-if="live"
-        class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full"
-      >
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-        Live
-      </span>
+      <!-- Right: view controls -->
+      <div class="flex items-center gap-2 ml-auto shrink-0">
+        <div v-if="!hideViewToggle" class="flex items-center gap-1 bg-neutral-100 rounded-lg p-0.5">
+          <button
+            type="button"
+            class="text-xs font-medium flex items-center gap-1 px-2.5 py-1.5 rounded-md transition-colors"
+            :class="viewMode === 'map' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'"
+            @click="viewMode = 'map'"
+          >
+            <Icon icon="lucide:map" class="text-sm" />
+            Peta
+          </button>
+          <button
+            type="button"
+            class="text-xs font-medium flex items-center gap-1 px-2.5 py-1.5 rounded-md transition-colors"
+            :class="viewMode === 'table' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'"
+            @click="viewMode = 'table'"
+          >
+            <Icon icon="lucide:table" class="text-sm" />
+            Tabel
+          </button>
+        </div>
 
-      <span class="ml-auto text-xs text-neutral-400">
-        {{ filtered.length }} pesanan
-        <template v-if="viewMode === 'map' && withGPS.length !== filtered.length">
-          · {{ withGPS.length }} di peta
-        </template>
-      </span>
+        <span
+          v-if="live"
+          class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Live
+        </span>
+
+        <span class="text-xs text-neutral-400">
+          {{ filtered.length }} pesanan
+          <template v-if="viewMode === 'map' && withGPS.length !== filtered.length">
+            · {{ withGPS.length }} di peta
+          </template>
+        </span>
+
+        <div v-if="viewMode === 'map' && props.showHeat === undefined" class="flex items-center gap-2">
+          <span class="text-xs font-medium" :class="showHeat ? 'text-emergency-700' : 'text-neutral-400'">Heatmap</span>
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="showHeat"
+            :title="showHeat ? 'Sembunyikan densitas' : 'Tampilkan densitas'"
+            class="relative inline-flex h-5 w-9 shrink-0 items-center cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/50"
+            :class="showHeat ? 'bg-emergency-500' : 'bg-neutral-300'"
+            @click="showHeat = !showHeat"
+          >
+            <span
+              aria-hidden="true"
+              class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition-transform duration-200"
+              :class="showHeat ? 'translate-x-4' : 'translate-x-0'"
+            />
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Table view -->

@@ -5,6 +5,8 @@ import "github.com/butuhbantuan/api/internal/domain"
 // EmergencyUseCase is the interface handlers use for emergency data operations.
 type EmergencyUseCase interface {
 	GetAll() ([]domain.Emergency, error)
+	GetAllAdmin() ([]domain.Emergency, error)
+	GetByID(id string) (*domain.Emergency, error)
 	GetByProvince(provinceID string) ([]domain.Emergency, error)
 	GetByRegency(regencyID string) ([]domain.Emergency, error)
 	GetDispatchers(regencyID, provinceID string) ([]domain.Emergency, error)
@@ -85,6 +87,9 @@ type UnitAuthUseCase interface {
 	SetCredentials(emergencyUUID, unitName, username, password string) error
 	Login(username, password string) (*domain.UnitCredential, error)
 	GetByToken(token string) (*domain.UnitCredential, error)
+	GetCredential(emergencyUUID string) (*domain.UnitCredential, error)
+	ListAllCredentials() ([]domain.UnitCredential, error)
+	DeleteCredentials(emergencyUUID string) error
 }
 
 // AnalyticsUseCase aggregates order/feedback/unit data for reporting.

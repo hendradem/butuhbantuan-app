@@ -29,6 +29,25 @@ func (h *EmergencyHandler) GetAll(c *fiber.Ctx) error {
 	return response.OK(c, "success", data)
 }
 
+func (h *EmergencyHandler) GetAllAdmin(c *fiber.Ctx) error {
+	data, err := h.emergencySvc.GetAllAdmin()
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "failed to get emergency data")
+	}
+	return response.OK(c, "success", data)
+}
+
+func (h *EmergencyHandler) GetByID(c *fiber.Ctx) error {
+	e, err := h.emergencySvc.GetByID(c.Params("id"))
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "emergency not found")
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "failed to get emergency")
+	}
+	return response.OK(c, "success", e)
+}
+
 func (h *EmergencyHandler) GetByProvince(c *fiber.Ctx) error {
 	data, err := h.emergencySvc.GetByProvince(c.Params("provinceID"))
 	if err != nil {
@@ -66,6 +85,8 @@ func (h *EmergencyHandler) Create(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
 	}
+	// Newly created units are active by default; hospital import sets IsActive=false explicitly.
+	req.Operational.IsActive = true
 	created, err := h.emergencySvc.Create(req)
 	if err != nil {
 		log.Printf("emergency create error: %v | body: name=%q type_id=%d regency=%q province=%q", err, req.Name, req.EmergencyType.ID, req.Address.RegencyID, req.Address.ProvinceID)

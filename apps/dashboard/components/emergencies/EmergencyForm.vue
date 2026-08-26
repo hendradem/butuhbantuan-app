@@ -226,6 +226,18 @@ function selectAddress(item: any) {
 <template>
   <div class="space-y-5 pr-1">
 
+    <!-- Status Aktif (quick toggle) -->
+    <label class="flex items-center gap-3 cursor-pointer w-fit">
+      <div class="relative">
+        <input v-model="form.is_active" type="checkbox" class="sr-only peer" />
+        <div class="w-10 h-6 rounded-full transition-colors peer-checked:bg-green-500 bg-neutral-300" />
+        <div class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4" />
+      </div>
+      <span :class="['text-sm font-medium', form.is_active ? 'text-green-700' : 'text-neutral-500']">
+        {{ form.is_active ? 'Layanan Aktif' : 'Layanan Nonaktif' }}
+      </span>
+    </label>
+
     <!-- Basic Info -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <UiFormField label="Nama Layanan" required>
@@ -509,17 +521,6 @@ function selectAddress(item: any) {
     <div class="border-t border-neutral-100 pt-4">
       <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">Status Operasional</p>
       <div class="space-y-3">
-        <label class="flex items-center gap-2.5 cursor-pointer">
-          <input
-            v-model="form.is_active"
-            type="checkbox"
-            class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
-          />
-          <span class="text-sm text-neutral-700">Layanan aktif</span>
-          <span
-            :class="['text-xs px-1.5 py-0.5 rounded-full font-medium', form.is_active ? 'bg-green-100 text-green-700' : 'bg-neutral-100 text-neutral-500']"
-          >{{ form.is_active ? 'Aktif' : 'Nonaktif' }}</span>
-        </label>
         <label class="flex items-center gap-2.5 cursor-pointer">
           <input
             v-model="form.is_24_hours"

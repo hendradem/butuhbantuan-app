@@ -143,6 +143,11 @@ async function refreshWeather() {
 type AsidePanel = "members" | "ht" | "assign" | "marker" | "measure" | "history" | "settings" | "share" | null;
 type SarBasemap = "osm" | "topo" | "imagery" | "offline";
 
+// ── Confirm dialogs ───────────────────────────────────────────────────────────
+const confirmDeletePosition = ref<{ open: boolean; target: SarPosition | null }>({ open: false, target: null });
+const confirmRemoveSru = ref<{ open: boolean; target: string }>({ open: false, target: "" });
+const confirmDeleteMarker = ref<{ open: boolean; target: SarMarker | null }>({ open: false, target: null });
+
 const missions = ref<Awaited<ReturnType<typeof listMissions>>>([]);
 const missionId = ref("");
 const selectedDay = ref("");
@@ -623,7 +628,13 @@ async function removePosition(p: SarPosition) {
     toast.error("Misi arsip bersifat baca saja");
     return;
   }
-  if (!window.confirm(`Hapus jejak ${p.callsign || "SRU"}?`)) return;
+  confirmDeletePosition.value = { open: true, target: p };
+}
+
+async function doRemovePosition() {
+  const p = confirmDeletePosition.value.target;
+  if (!p || !missionId.value) return;
+  confirmDeletePosition.value.open = false;
   try {
     await deletePosition(missionId.value, p.id);
     if (editingPositionId.value === p.id) cancelEditPosition();
@@ -758,9 +769,15 @@ async function onAddSru() {
   }
 }
 
-async function onRemoveSru(sru: string) {
+function onRemoveSru(sru: string) {
   if (!missionId.value || !canEditMission.value) return;
-  if (!window.confirm(`Hapus ${sru} dari shift ini? Jejak historis tetap ada.`)) return;
+  confirmRemoveSru.value = { open: true, target: sru };
+}
+
+async function doRemoveSru() {
+  const sru = confirmRemoveSru.value.target;
+  if (!sru || !missionId.value) return;
+  confirmRemoveSru.value.open = false;
   sruSaving.value = true;
   try {
     await removeTeam(missionId.value, sru, bundle.value?.shift?.id);
@@ -885,7 +902,13 @@ async function removeMarker(m: SarMarker) {
     toast.error("Misi arsip bersifat baca saja");
     return;
   }
-  if (!window.confirm(`Hapus marker "${m.label}"?`)) return;
+  confirmDeleteMarker.value = { open: true, target: m };
+}
+
+async function doRemoveMarker() {
+  const m = confirmDeleteMarker.value.target;
+  if (!m || !missionId.value) return;
+  confirmDeleteMarker.value.open = false;
   try {
     await deleteMarker(missionId.value, m.id);
     if (editingMarkerId.value === m.id) cancelEditMarker();
@@ -2434,6 +2457,45 @@ onMounted(async () => {
     </div>
     </template>
   </div>
+
+  <!-- Confirm: hapus jejak posisi -->
+  <UiModal v-model:open="confirmDeletePosition.open" size="sm" title="Hapus jejak posisi?" :description="`Jejak ${confirmDeletePosition.target?.callsign || 'SRU'} akan dihapus permanen.`">
+    <template #featured>
+      <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+        <Icon icon="lucide:map-pin-x" class="text-red-600 text-lg" />
+      </div>
+    </template>
+    <template #footer>
+      <UiButton variant="secondary" size="sm" @click="confirmDeletePosition.open = false">Batal</UiButton>
+      <UiButton variant="danger" size="sm" @click="doRemovePosition">Hapus</UiButton>
+    </template>
+  </UiModal>
+
+  <!-- Confirm: hapus SRU dari shift -->
+  <UiModal v-model:open="confirmRemoveSru.open" size="sm" title="Hapus SRU dari shift?" :description="`${confirmRemoveSru.target} akan dihapus dari shift ini. Jejak historis tetap ada.`">
+    <template #featured>
+      <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+        <Icon icon="lucide:user-x" class="text-red-600 text-lg" />
+      </div>
+    </template>
+    <template #footer>
+      <UiButton variant="secondary" size="sm" @click="confirmRemoveSru.open = false">Batal</UiButton>
+      <UiButton variant="danger" size="sm" :loading="sruSaving" @click="doRemoveSru">Hapus</UiButton>
+    </template>
+  </UiModal>
+
+  <!-- Confirm: hapus marker -->
+  <UiModal v-model:open="confirmDeleteMarker.open" size="sm" title="Hapus marker?" :description="`Marker &quot;${confirmDeleteMarker.target?.label}&quot; akan dihapus permanen.`">
+    <template #featured>
+      <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+        <Icon icon="lucide:trash-2" class="text-red-600 text-lg" />
+      </div>
+    </template>
+    <template #footer>
+      <UiButton variant="secondary" size="sm" @click="confirmDeleteMarker.open = false">Batal</UiButton>
+      <UiButton variant="danger" size="sm" @click="doRemoveMarker">Hapus</UiButton>
+    </template>
+  </UiModal>
 </template>
 
 <style scoped>

@@ -677,6 +677,15 @@ func (s *NoopUnitAuthService) Login(_, _ string) (*domain.UnitCredential, error)
 func (s *NoopUnitAuthService) GetByToken(_ string) (*domain.UnitCredential, error) {
 	return nil, errOrderNotSupported
 }
+func (s *NoopUnitAuthService) GetCredential(_ string) (*domain.UnitCredential, error) {
+	return nil, repository.ErrNotFound
+}
+func (s *NoopUnitAuthService) ListAllCredentials() ([]domain.UnitCredential, error) {
+	return nil, nil
+}
+func (s *NoopUnitAuthService) DeleteCredentials(_ string) error {
+	return repository.ErrNotSupported
+}
 
 // ── UnitAuthService ───────────────────────────────────────────────────────────
 
@@ -716,4 +725,16 @@ func (s *UnitAuthService) Login(username, password string) (*domain.UnitCredenti
 
 func (s *UnitAuthService) GetByToken(token string) (*domain.UnitCredential, error) {
 	return s.repo.FindByToken(token)
+}
+
+func (s *UnitAuthService) GetCredential(emergencyUUID string) (*domain.UnitCredential, error) {
+	return s.repo.FindByEmergencyUUID(emergencyUUID)
+}
+
+func (s *UnitAuthService) ListAllCredentials() ([]domain.UnitCredential, error) {
+	return s.repo.ListAll()
+}
+
+func (s *UnitAuthService) DeleteCredentials(emergencyUUID string) error {
+	return s.repo.Delete(emergencyUUID)
 }

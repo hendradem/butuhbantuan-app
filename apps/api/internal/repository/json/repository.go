@@ -66,6 +66,25 @@ func (r *Repo) FindAll() ([]domain.Emergency, error) {
 	return r.emergencies, nil
 }
 
+func (r *Repo) FindAllActive() ([]domain.Emergency, error) {
+	var out []domain.Emergency
+	for _, e := range r.emergencies {
+		if e.Operational.IsActive {
+			out = append(out, e)
+		}
+	}
+	return out, nil
+}
+
+func (r *Repo) FindByID(id string) (*domain.Emergency, error) {
+	for _, e := range r.emergencies {
+		if e.ID == id {
+			return &e, nil
+		}
+	}
+	return nil, repository.ErrNotFound
+}
+
 func (r *Repo) FindByProvince(provinceID string) ([]domain.Emergency, error) {
 	var out []domain.Emergency
 	for _, e := range r.emergencies {

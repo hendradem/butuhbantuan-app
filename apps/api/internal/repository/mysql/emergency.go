@@ -28,10 +28,30 @@ func (r *EmergencyRepo) preload() *gorm.DB {
 
 func (r *EmergencyRepo) FindAll() ([]domain.Emergency, error) {
 	var rows []EmergencyEntity
+	if err := r.preload().Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return mapManyEmergencies(rows), nil
+}
+
+func (r *EmergencyRepo) FindAllActive() ([]domain.Emergency, error) {
+	var rows []EmergencyEntity
 	if err := r.preload().Where("is_active = ?", true).Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	return mapManyEmergencies(rows), nil
+}
+
+func (r *EmergencyRepo) FindByID(id string) (*domain.Emergency, error) {
+	var row EmergencyEntity
+	if err := r.preload().Where("uuid = ?", id).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repository.ErrNotFound
+		}
+		return nil, err
+	}
+	e := mapEmergency(row)
+	return &e, nil
 }
 
 func (r *EmergencyRepo) FindByProvince(provinceID string) ([]domain.Emergency, error) {
@@ -99,7 +119,7 @@ func (r *EmergencyRepo) buildEntity(e domain.Emergency) EmergencyEntity {
 		HasOxygen:            e.Readiness.HasOxygen,
 		HasStretcher:         e.Readiness.HasStretcher,
 		EquipmentNotes:       e.Readiness.EquipmentNotes,
-		IsActive:             true,
+		IsActive:             e.Operational.IsActive,
 		Is24Hours:            e.Operational.Is24Hours,
 		OpenTime:             e.Operational.OpenTime,
 		CloseTime:            e.Operational.CloseTime,

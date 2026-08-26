@@ -7,8 +7,14 @@ const orderSheet = useOrderSheetStore();
 const { rememberFromEmergency } = useRecentUnits();
 
 const emergencyData = computed(() => props.data?.emergencyData);
+const isHospital = computed(() => emergencyData.value?.organization_type === "rumah_sakit");
 
 function onHubungi() {
+  // Hospitals don't use the dispatch/order flow — call IGD directly.
+  if (isHospital.value) {
+    onTelepon();
+    return;
+  }
   rememberFromEmergency(props.data, "whatsapp");
   const wa =
     emergencyData.value?.contact?.whatsapp ||

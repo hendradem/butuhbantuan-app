@@ -96,8 +96,9 @@ const description = computed(() => {
   return d;
 });
 
-/** Secondary line under title — org, else service/type. */
+/** Secondary line under title — org, else service/type (hospitals never show service type). */
 const subtitle = computed(() => {
+  if (isHospital.value) return orgLabel.value || "Rumah Sakit";
   return orgLabel.value || serviceLabel.value || "Unit layanan darurat";
 });
 
@@ -120,6 +121,13 @@ const detailFacts = computed(() => {
     rows.push({ icon: "lucide:info", label: "Info", value: description.value });
   }
   return rows;
+});
+
+const isHospital = computed(() => data.value?.organization_type === "rumah_sakit");
+
+const igdPhone = computed(() => {
+  const c = data.value?.contact;
+  return c?.phone || c?.whatsapp || "";
 });
 
 const emergencyId = computed(
@@ -155,102 +163,80 @@ function distanceBadgeClass(meters: number | null) {
 </script>
 
 <template>
-  <article class="ui-list-card" :class="{ 'ui-list-card--detail': actions }">
-    <div class="ui-list-card__row">
-      <div class="ui-list-card__icon">
-        <SkeletonImage
-          v-if="data"
-          :src="emergencyLogoSrc(data)"
-          :alt="data?.name || 'unit'"
-          wrapper-class="w-full h-full"
-          img-class="w-full h-full object-contain"
-          @error="onEmergencyLogoError($event, data)"
-        />
-        <Icon v-else icon="lucide:folder" class="text-sm ui-text-secondary" />
-      </div>
-
-      <div class="ui-list-card__content">
-        <div class="ui-list-card__title-row">
-          <h3 class="ui-list-card__title">{{ data?.name }}</h3>
-          <span v-if="locationLabel" class="ui-list-card__location">
-            <Icon icon="mingcute:location-fill" class="ui-list-card__meta-icon" />
-            {{ locationLabel }}
-          </span>
-        </div>
-
-        <p class="ui-list-card__desc">{{ subtitle }}</p>
-
-        <div class="ui-list-card__badges" @click.stop @touchstart.stop>
-          <span
-            v-if="rankHint"
-            :class="[SOFT_LABEL, softLabelTone.blue]"
-          >
-            #{{ rankHint.rank }} · {{ rankHint.label }}
-          </span>
-          <span :class="[SOFT_LABEL, partnerTierBadgeClass(tier)]">
-            {{ partnerTierLabel(tier) }}
-          </span>
-          <span
-            v-if="etaMinutes != null"
-            :class="[SOFT_LABEL, etaBadgeClass(etaMinutes)]"
-          >
-            <Icon icon="heroicons:clock" />
-            {{ etaMinutes }} min
-          </span>
-          <span
-            v-if="distanceLabel"
-            :class="[SOFT_LABEL, distanceBadgeClass(distanceMeters)]"
-          >
-            <Icon icon="mingcute:route-fill" />
-            {{ distanceLabel }}
-          </span>
-        </div>
-
-        <p
-          v-if="actions && openLabel && !detailFacts.length"
-          class="ui-list-card__open"
+  <!--
+    Ranked: article = coloured outer frame, ui-list-card__inner = white card inside.
+    Unranked / detail: article is the card itself (no inner wrapper needed).
+  -->
+  <article
+    class="ui-list-card"
+    :class="{
+      'ui-list-card--detail': actions,
+      'ui-list-card--ranked': !!rankHint && !actions && !isHospital,
+      'bg-emerald-50 border-emerald-100': rankHint?.tone === 'good' && !actions && !isHospital,
+      'bg-blue-50 border-blue-100': rankHint?.tone === 'info' && !actions && !isHospital,
+      'bg-neutral-100 border-neutral-200': rankHint?.tone === 'muted' && !actions && !isHospital,
+    }"
+  >
+    <!-- White content area (inner wrapper only for ranked non-hospital cards) -->
+    <div :class="{ 'ui-list-card__inner': !!rankHint && !actions && !isHospital }">
+      <div class="ui-list-card__row">
+        <div
+          class="ui-list-card__icon"
+          :class="isHospital && !data?.organization_logo ? 'bg-neutral-50 !border-neutral-100' : ''"
         >
-          {{ openLabel }}
-        </p>
-      </div>
-    </div>
-
-    <div v-if="detailFacts.length" class="ui-list-card__facts-wrap">
-      <ul class="ui-list-card__facts">
-        <li
-          v-for="row in previewFacts"
-          :key="row.label"
-          class="ui-list-card__fact"
-          :class="{ 'ui-list-card__fact--wide': row.label === 'Info' }"
-        >
-          <Icon :icon="row.icon" class="ui-list-card__fact-icon" />
-          <div class="ui-list-card__fact-body">
-            <p class="ui-list-card__fact-label">{{ row.label }}</p>
-            <p class="ui-list-card__fact-value">{{ row.value }}</p>
-          </div>
-        </li>
-      </ul>
-
-      <div v-if="canToggleFacts" class="ui-list-card__collapse">
-        <button
-          type="button"
-          class="ui-list-card__collapse-trigger"
-          :aria-expanded="factsExpanded"
-          @click.stop="factsExpanded = !factsExpanded"
-        >
-          <span>{{ factsExpanded ? "Sembunyikan detail" : "Detail lainnya" }}</span>
-          <Icon
-            icon="lucide:chevron-down"
-            class="ui-list-card__collapse-chevron"
-            :class="{ 'ui-list-card__collapse-chevron--open': factsExpanded }"
+          <template v-if="isHospital && !data?.organization_logo">
+            <Icon icon="lucide:hospital" class="w-6 h-6 text-neutral-400" />
+          </template>
+          <SkeletonImage
+            v-else-if="data"
+            :src="emergencyLogoSrc(data)"
+            :alt="data?.name || 'unit'"
+            wrapper-class="w-full h-full"
+            img-class="w-full h-full object-contain"
+            @error="onEmergencyLogoError($event, data)"
           />
-        </button>
-        <ul
-          v-show="factsExpanded"
-          class="ui-list-card__facts ui-list-card__facts--extra"
-        >
+          <Icon v-else icon="lucide:folder" class="text-sm ui-text-secondary" />
+        </div>
+
+        <div class="ui-list-card__content">
+          <div class="ui-list-card__title-row">
+            <h3 class="ui-list-card__title">{{ data?.name }}</h3>
+            <span v-if="locationLabel" class="ui-list-card__location">
+              <Icon icon="mingcute:location-fill" class="ui-list-card__meta-icon" />
+              {{ locationLabel }}
+            </span>
+          </div>
+
+          <p class="ui-list-card__desc">{{ subtitle }}</p> 
+
+          <div class="ui-list-card__badges" @click.stop @touchstart.stop>
+            <span v-if="isHospital" :class="[SOFT_LABEL, softLabelTone.violet]">
+              <Icon icon="lucide:hospital" />
+              IGD
+            </span>
+            <span v-else :class="[SOFT_LABEL, partnerTierBadgeClass(tier)]">
+              {{ partnerTierLabel(tier) }}
+            </span>
+            <span v-if="etaMinutes != null" :class="[SOFT_LABEL, etaBadgeClass(etaMinutes)]">
+              <Icon icon="heroicons:clock" />
+              {{ etaMinutes }} min
+            </span>
+            <span v-if="distanceLabel" :class="[SOFT_LABEL, distanceBadgeClass(distanceMeters)]">
+              <Icon icon="mingcute:route-fill" />
+              {{ distanceLabel }}
+            </span>
+          </div>
+
+          <p v-if="actions && openLabel && !detailFacts.length" class="ui-list-card__open">
+            {{ openLabel }}
+          </p>
+        </div>
+      </div>
+
+      <div v-if="detailFacts.length" class="ui-list-card__facts-wrap">
+        <ul class="ui-list-card__facts">
           <li
-            v-for="row in extraFacts"
+            v-for="row in previewFacts"
             :key="row.label"
             class="ui-list-card__fact"
             :class="{ 'ui-list-card__fact--wide': row.label === 'Info' }"
@@ -262,24 +248,85 @@ function distanceBadgeClass(meters: number | null) {
             </div>
           </li>
         </ul>
+
+        <div v-if="canToggleFacts" class="ui-list-card__collapse">
+          <button
+            type="button"
+            class="ui-list-card__collapse-trigger"
+            :aria-expanded="factsExpanded"
+            @click.stop="factsExpanded = !factsExpanded"
+          >
+            <span>{{ factsExpanded ? "Sembunyikan detail" : "Detail lainnya" }}</span>
+            <Icon
+              icon="lucide:chevron-down"
+              class="ui-list-card__collapse-chevron"
+              :class="{ 'ui-list-card__collapse-chevron--open': factsExpanded }"
+            />
+          </button>
+          <ul v-show="factsExpanded" class="ui-list-card__facts ui-list-card__facts--extra">
+            <li
+              v-for="row in extraFacts"
+              :key="row.label"
+              class="ui-list-card__fact"
+              :class="{ 'ui-list-card__fact--wide': row.label === 'Info' }"
+            >
+              <Icon :icon="row.icon" class="ui-list-card__fact-icon" />
+              <div class="ui-list-card__fact-body">
+                <p class="ui-list-card__fact-label">{{ row.label }}</p>
+                <p class="ui-list-card__fact-value">{{ row.value }}</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div v-if="actions" class="ui-list-card__actions" @click.stop>
+        <template v-if="isHospital">
+          <button
+            type="button"
+            class="btn-call text-sm !mb-0 flex-1"
+            :disabled="!igdPhone"
+            :class="!igdPhone ? 'opacity-80 cursor-not-allowed' : ''"
+            @click="emit('telepon')"
+          >
+            <Icon icon="lucide:phone" class="w-4 h-4 mr-1.5" />
+            Hubungi IGD
+          </button>
+        </template>
+        <template v-else>
+          <button type="button" class="btn-whatsapp text-sm !mb-0 flex-1" @click="emit('hubungi')">
+            <Icon icon="mingcute:chat-1-fill" class="w-4 h-4 mr-1.5" />
+            Hubungi
+          </button>
+          <button
+            type="button"
+            class="btn-call text-sm !mb-0 flex-1"
+            :disabled="!data?.contact?.phone"
+            :class="!data?.contact?.phone ? 'opacity-80 cursor-not-allowed' : ''"
+            @click="emit('telepon')"
+          >
+            <Icon icon="mdi:phone" class="w-4 h-4 mr-1.5" />
+            Telepon
+          </button>
+        </template>
       </div>
     </div>
 
-    <div v-if="actions" class="ui-list-card__actions" @click.stop>
-      <button type="button" class="btn-whatsapp text-sm !mb-0 flex-1" @click="emit('hubungi')">
-        <Icon icon="mingcute:chat-1-fill" class="w-4 h-4 mr-1.5" />
-        Hubungi
-      </button>
-      <button
-        type="button"
-        class="btn-call text-sm !mb-0 flex-1"
-        :disabled="!data?.contact?.phone"
-        :class="!data?.contact?.phone ? 'opacity-80 cursor-not-allowed' : ''"
-        @click="emit('telepon')"
-      >
-        <Icon icon="mdi:phone" class="w-4 h-4 mr-1.5" />
-        Telepon
-      </button>
+    <!-- Rank label: sits on coloured outer area below white inner card -->
+    <div
+      v-if="rankHint && !actions && !isHospital"
+      class="ui-list-card__rank-strip"
+      :class="{
+        'text-emerald-600': rankHint.tone === 'good',
+        'text-blue-600': rankHint.tone === 'info',
+        'text-neutral-500': rankHint.tone === 'muted',
+      }"
+    >
+      <Icon
+        :icon="rankHint.tone === 'good' ? 'lucide:star' : rankHint.tone === 'info' ? 'lucide:zap' : 'lucide:shield'"
+        class="w-2.5 h-2.5 shrink-0"
+      />
+      #{{ rankHint.rank }} · {{ rankHint.label }}
     </div>
   </article>
 </template>

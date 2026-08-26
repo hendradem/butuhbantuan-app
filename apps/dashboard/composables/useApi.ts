@@ -12,8 +12,8 @@ export function useApi() {
     get<T>(path: string) {
       return $fetch<T>(`${baseUrl}${path}`);
     },
-    authGet<T>(path: string) {
-      return $fetch<T>(`${baseUrl}${path}`, { headers: adminHeaders() });
+    authGet<T>(path: string, params?: Record<string, unknown>) {
+      return $fetch<T>(`${baseUrl}${path}`, { headers: adminHeaders(), params });
     },
     post<T>(path: string, body: Record<string, unknown>) {
       return $fetch<T>(`${baseUrl}${path}`, {
@@ -25,6 +25,13 @@ export function useApi() {
     put<T>(path: string, body: Record<string, unknown>) {
       return $fetch<T>(`${baseUrl}${path}`, {
         method: "PUT",
+        body,
+        headers: adminHeaders(),
+      });
+    },
+    patch<T>(path: string, body: Record<string, unknown>) {
+      return $fetch<T>(`${baseUrl}${path}`, {
+        method: "PATCH",
         body,
         headers: adminHeaders(),
       });

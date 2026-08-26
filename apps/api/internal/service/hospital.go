@@ -184,9 +184,6 @@ func (s *hospitalService) Import(req domain.HospitalImportRequest) (*domain.Hosp
 		}
 		_ = s.master.MarkImported(row.ID, created.ID)
 		_ = s.master.LinkEmergencyHospitalMaster(created.ID, row.ID)
-		if !active {
-			_ = s.emerg.UpdateActive(created.ID, false)
-		}
 		result.Imported++
 		result.IDs = append(result.IDs, created.ID)
 	}

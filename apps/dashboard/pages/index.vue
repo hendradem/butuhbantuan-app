@@ -117,6 +117,7 @@ watch(
 
 const summary = computed(() => analytics.value?.summary ?? {});
 const heatmapPoints = computed(() => hmRaw.value ?? lastHeatmap.value);
+const showHm = ref(true);
 
 const inventoryStats = computed(() => [
   {
@@ -676,26 +677,50 @@ const slaOptions = computed(() => ({
               Lokasi pemohon + densitas — filter wilayah/jenis, klik marker atau card untuk detail
             </p>
           </div>
-          <div class="flex items-center gap-1 bg-neutral-100 rounded-xl p-1">
-            <button
-              v-for="opt in hmPeriodOptions"
-              :key="opt.value"
-              type="button"
-              :class="[
-                'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
-                hmPeriod === opt.value ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700',
-              ]"
-              @click="setHmPeriod(opt.value)"
-            >
-              {{ opt.label }}
-            </button>
+          <div class="flex items-center gap-3 ml-auto">
+            <!-- Heatmap layer toggle -->
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-medium" :class="showHm ? 'text-neutral-700' : 'text-neutral-400'">Heatmap</span>
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="showHm"
+                :title="showHm ? 'Sembunyikan densitas' : 'Tampilkan densitas'"
+                class="relative inline-flex h-5 w-9 shrink-0 items-center cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/50"
+                :class="showHm ? 'bg-emergency-500' : 'bg-neutral-300'"
+                @click="showHm = !showHm"
+              >
+                <span
+                  aria-hidden="true"
+                  class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition-transform duration-200"
+                  :class="showHm ? 'translate-x-4' : 'translate-x-0'"
+                />
+              </button>
+            </div>
+            <!-- Period selector -->
+            <div class="flex items-center gap-1 bg-neutral-100 rounded-xl p-1">
+              <button
+                v-for="opt in hmPeriodOptions"
+                :key="opt.value"
+                type="button"
+                :class="[
+                  'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
+                  hmPeriod === opt.value ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700',
+                ]"
+                @click="setHmPeriod(opt.value)"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
           </div>
         </div>
         <ClientOnly>
           <HeatmapViz
             :points="heatmapPoints"
             :loading="hmPending && lastHeatmap.length === 0"
+            :show-heat="showHm"
             live
+            @update:show-heat="showHm = $event"
           />
           <template #fallback>
             <div class="rounded-xl border border-neutral-200 overflow-hidden">

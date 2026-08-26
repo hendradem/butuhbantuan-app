@@ -67,10 +67,30 @@ watch(
   }
 );
 
+function centerUserAboveSheet() {
+  if (!import.meta.client || !leaflet.mapInstance || !userLocation.lat || !userLocation.long) return;
+  const map = leaflet.mapInstance as any;
+  const zoom = map.getZoom();
+  const H = window.innerHeight;
+  // Sheet is 50vh → visible map is top 50%.
+  // We want user at H*0.25 from top (centre of visible area) with 60px extra breathing room.
+  const offset = Math.round(H * 0.25) + 60;
+  // Project user coords to pixel space, shift the desired centre south by offset px, unproject back.
+  // This gives a single smooth setView call that places user correctly without a conflicting panBy.
+  const userPx = map.project([userLocation.lat, userLocation.long], zoom);
+  const centrePx = userPx.add([0, offset]);
+  const centreLatLng = map.unproject(centrePx, zoom);
+  map.setView(centreLatLng, zoom, { animate: true, duration: 0.45, easeLinearity: 0.2 });
+}
+
 watch(
   () => exploreSheet.isOpen,
   (open) => {
-    if (!open) filterOpen.value = false;
+    if (!open) {
+      filterOpen.value = false;
+      return;
+    }
+    centerUserAboveSheet();
   }
 );
 
@@ -146,7 +166,8 @@ async function handleSelect(item: any) {
     emergencyType: item.emergencyData?.emergency_type ?? sheetData.value?.emergencyType,
     emergency: item,
   });
-  detailSheet.onOpen();
+  exploreSheet.onClose();
+  detailSheet.onOpenFromExplore();
 
   const coords = item.emergencyData?.coordinates;
   if (coords) {
@@ -194,6 +215,7 @@ function scrollSelectedCardToTop(idx: number) {
 function handleClose() {
   filterOpen.value = false;
   leaflet.resetLeafletRouting();
+  detailSheet.clearExploreReturn();
   detailSheet.onClose();
   exploreSheet.onClose();
 }
@@ -217,7 +239,7 @@ function chipClass(active: boolean) {
 </script>
 
 <template>
-  <CoreSheet :is-open="exploreSheet.isOpen" :snap-points="[300, 0]" scrollable @close="handleClose()">
+  <CoreSheet :is-open="exploreSheet.isOpen" :snap-points="[0.5, 0]" scrollable @close="handleClose()">
     <template #header>
       <div
         v-if="sheetData?.emergencyType"
@@ -418,22 +440,75 @@ function chipClass(active: boolean) {
     </template>
 
     <div ref="scrollContainer" class="pb-20" style="background: #fafafa">
-      <div v-if="isLoading" class="ui-list-stack">
-        <div v-for="i in 3" :key="i" class="ui-list-card animate-pulse">
-          <div class="ui-list-card__row">
-            <div class="w-11 h-11 rounded-[0.7rem] soft-skel shrink-0" />
-            <div class="min-w-0 flex-1">
-              <div class="flex items-start justify-between gap-2">
-                <div class="h-4 w-3/5 soft-skel" />
-                <div class="h-3 w-14 soft-skel shrink-0" />
-              </div>
-              <div class="h-3.5 w-2/5 soft-skel mt-1.5" />
-              <div class="mt-2.5 flex flex-wrap gap-1.5">
-                <div class="h-5 w-16 rounded-full soft-skel" />
-                <div class="h-5 w-14 rounded-full soft-skel" />
-                <div class="h-5 w-16 rounded-full soft-skel" />
+      <div v-if="isLoading" class="ui-list-stack animate-pulse">
+        <!-- Ranked card skeleton: tone 1 = emerald (best) -->
+        <div class="ui-list-card ui-list-card--ranked bg-emerald-50 border-emerald-100">
+          <div class="ui-list-card__inner">
+            <div class="ui-list-card__row">
+              <div class="w-11 h-11 rounded-[0.7rem] soft-skel shrink-0" />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="h-4 w-3/5 soft-skel rounded" />
+                  <div class="h-3 w-14 soft-skel rounded shrink-0" />
+                </div>
+                <div class="h-3 w-2/5 soft-skel rounded mt-1.5" />
+                <div class="mt-2.5 flex flex-wrap gap-1.5">
+                  <div class="h-5 w-10 rounded-full soft-skel" />
+                  <div class="h-5 w-14 rounded-full soft-skel" />
+                  <div class="h-5 w-16 rounded-full soft-skel" />
+                </div>
               </div>
             </div>
+          </div>
+          <div class="ui-list-card__rank-strip">
+            <div class="h-2 w-20 soft-skel rounded" />
+          </div>
+        </div>
+
+        <!-- Ranked card skeleton: tone 2 = blue (alternative) -->
+        <div class="ui-list-card ui-list-card--ranked bg-blue-50 border-blue-100">
+          <div class="ui-list-card__inner">
+            <div class="ui-list-card__row">
+              <div class="w-11 h-11 rounded-[0.7rem] soft-skel shrink-0" />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="h-4 w-1/2 soft-skel rounded" />
+                  <div class="h-3 w-12 soft-skel rounded shrink-0" />
+                </div>
+                <div class="h-3 w-1/3 soft-skel rounded mt-1.5" />
+                <div class="mt-2.5 flex flex-wrap gap-1.5">
+                  <div class="h-5 w-10 rounded-full soft-skel" />
+                  <div class="h-5 w-16 rounded-full soft-skel" />
+                  <div class="h-5 w-14 rounded-full soft-skel" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ui-list-card__rank-strip">
+            <div class="h-2 w-24 soft-skel rounded" />
+          </div>
+        </div>
+
+        <!-- Ranked card skeleton: tone 3 = neutral (other) -->
+        <div class="ui-list-card ui-list-card--ranked bg-neutral-100 border-neutral-200">
+          <div class="ui-list-card__inner">
+            <div class="ui-list-card__row">
+              <div class="w-11 h-11 rounded-[0.7rem] soft-skel shrink-0" />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="h-4 w-2/3 soft-skel rounded" />
+                  <div class="h-3 w-16 soft-skel rounded shrink-0" />
+                </div>
+                <div class="h-3 w-2/5 soft-skel rounded mt-1.5" />
+                <div class="mt-2.5 flex flex-wrap gap-1.5">
+                  <div class="h-5 w-10 rounded-full soft-skel" />
+                  <div class="h-5 w-14 rounded-full soft-skel" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ui-list-card__rank-strip">
+            <div class="h-2 w-16 soft-skel rounded" />
           </div>
         </div>
       </div>
