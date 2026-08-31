@@ -49,7 +49,7 @@ func backfillOrderPublicTokens(db *gorm.DB) {
 func backfillUnitTokenExpiry(db *gorm.DB) {
 	_ = db.Exec(
 		`UPDATE unit_credential_entity SET expires_at = DATE_ADD(updated_at, INTERVAL 30 DAY)
-		 WHERE expires_at = '0001-01-01 00:00:00' OR expires_at IS NULL`,
+		 WHERE expires_at <= '1000-01-01 00:00:00' OR expires_at IS NULL`,
 	).Error
 }
 
