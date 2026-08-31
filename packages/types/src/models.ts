@@ -172,10 +172,10 @@ export interface AvailableRegion {
 }
 
 export interface OrderEvent {
-  id?: string;
-  order_id?: string;
-  ticket_number?: string;
-  type?: string;
+  id: string;
+  order_id: string;
+  ticket_number: string;
+  type: string;
   message: string;
   actor?: string;
   from_unit?: string;
