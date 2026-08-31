@@ -33,12 +33,45 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 	backfillOrderPublicTokens(db)
+	backfillUnitTokenExpiry(db)
+	addCompoundIndexes(db)
 	return nil
 }
 
 func backfillOrderPublicTokens(db *gorm.DB) {
 	_ = db.Exec(
 		`UPDATE order_ticket_entity SET public_token = UUID() WHERE public_token IS NULL OR public_token = ''`,
+	).Error
+}
+
+// backfillUnitTokenExpiry sets expires_at = updated_at + 30 days for any
+// existing rows that have the zero-time default after the column is added.
+func backfillUnitTokenExpiry(db *gorm.DB) {
+	_ = db.Exec(
+		`UPDATE unit_credential_entity SET expires_at = DATE_ADD(updated_at, INTERVAL 30 DAY)
+		 WHERE expires_at = '0001-01-01 00:00:00' OR expires_at IS NULL`,
+	).Error
+}
+
+// addCompoundIndexes adds composite indexes and uniqueness constraints that
+// GORM AutoMigrate cannot express via struct tags alone.
+func addCompoundIndexes(db *gorm.DB) {
+	type idx struct{ table, name, cols string }
+	indexes := []idx{
+		{"order_ticket_entity", "idx_unit_status", "(emergency_uuid, status)"},
+		{"dispatch_attempt_entity", "idx_order_status", "(order_id, status)"},
+		{"order_event_entity", "idx_order_time", "(order_id, created_at)"},
+	}
+	for _, ix := range indexes {
+		_ = db.Exec(
+			`CREATE INDEX IF NOT EXISTS ` + ix.name + ` ON ` + ix.table + ` ` + ix.cols,
+		).Error
+	}
+	_ = db.Exec(
+		`CREATE UNIQUE INDEX IF NOT EXISTS ux_push_endpoint ON push_subscription_entity (endpoint(500))`,
+	).Error
+	_ = db.Exec(
+		`CREATE UNIQUE INDEX IF NOT EXISTS ux_indicator_tpl_code ON assessment_indicator_entity (template_id, code)`,
 	).Error
 }
 

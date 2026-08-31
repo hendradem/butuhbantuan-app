@@ -688,6 +688,7 @@ func (r *UnitCredentialRepo) Set(cred domain.UnitCredential) error {
 			Username:      cred.Username,
 			PasswordHash:  string(hash),
 			AccessToken:   newToken,
+			ExpiresAt:     time.Now().Add(30 * 24 * time.Hour),
 		}).Error)
 	}
 
@@ -701,9 +702,17 @@ func (r *UnitCredentialRepo) Set(cred domain.UnitCredential) error {
 
 func (r *UnitCredentialRepo) FindByToken(token string) (*domain.UnitCredential, error) {
 	var row UnitCredentialEntity
-	if err := r.db.Where("access_token = ?", token).First(&row).Error; err != nil {
+	err := r.db.
+		Where("access_token = ? AND expires_at > ?", token, time.Now()).
+		First(&row).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repository.ErrNotFound
+		}
 		return nil, err
 	}
+	// Extend TTL on each successful use (rolling 30-day window).
+	_ = r.db.Model(&row).Update("expires_at", time.Now().Add(30*24*time.Hour))
 	return &domain.UnitCredential{EmergencyUUID: row.EmergencyUUID, UnitName: row.UnitName, Username: row.Username, AccessToken: row.AccessToken}, nil
 }
 
