@@ -187,7 +187,7 @@ useOrderNotification(
 // Emergency MP3 only on unit layout; admin uses toast / notification center.
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
-type SortCol = 'ticket_number' | 'requester_name' | 'unit_name' | 'created_at' | 'status';
+type SortCol = 'ticket_number' | 'requester_name' | 'unit_name' | 'created_at' | 'status' | 'assessment_acuity';
 const sortCol = ref<SortCol>('created_at');
 const sortDir = ref<'asc' | 'desc'>('desc');
 

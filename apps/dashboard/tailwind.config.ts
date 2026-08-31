@@ -7,7 +7,7 @@ import { resolve } from "path";
  * Remaps `primary-*` so sidebar tabs, buttons, and focus rings match
  * the soft-red chrome already used for badges & logo.
  */
-const softRed = {
+const softRed: Record<string, string> = {
   50: "#fff1f2",
   100: "#ffe4e6",
   200: "#fecdd3",
@@ -19,7 +19,7 @@ const softRed = {
   800: "#9f1239",
   900: "#881337",
   950: "#4c0519",
-} as const;
+};
 
 export default {
   ...baseConfig,

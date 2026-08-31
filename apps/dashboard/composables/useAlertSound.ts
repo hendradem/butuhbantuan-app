@@ -43,7 +43,7 @@ function getAlertAudio(): HTMLAudioElement | null {
   if (!alertAudio) {
     alertAudio = new Audio();
     alertAudio.preload = "auto";
-    alertAudio.playsInline = true;
+    (alertAudio as any).playsInline = true;
     alertAudio.src = soundUrl();
   }
   return alertAudio;

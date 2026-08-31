@@ -114,7 +114,7 @@ function formatDate(d: string) {
 <template>
   <div>
     <!-- Header -->
-    <div class="page-subheader shrink-0">
+    <div class="page-subheader shrink-0"> 
       <div class="flex items-center justify-between gap-3 min-w-0 w-full">
         <div class="flex items-center gap-3 min-w-0">
           <NuxtLink
@@ -283,7 +283,7 @@ function formatDate(d: string) {
       :unit-name="unitName"
       :org-name="orgName"
       :regency="regency"
-      :emergency-uuid="emergencyUUID"
+      :emergency-uuid="emergencyUUID ?? undefined"
       :storage-key="storageKey"
       :ticket="selectedTicket"
       mode="unit"

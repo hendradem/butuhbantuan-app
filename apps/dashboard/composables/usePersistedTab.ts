@@ -51,7 +51,7 @@ export function usePersistedTab<T extends string>(
     if (current === value) return;
 
     const nextQuery: Record<string, string | string[] | undefined | null> = {
-      ...route.query,
+      ...(route.query as Record<string, string | string[] | null | undefined>),
     };
     if (value === defaultValue) delete nextQuery[queryKey];
     else nextQuery[queryKey] = value;
@@ -170,7 +170,7 @@ export function usePersistedQueryParam(
       const current = readQuery();
       if (current === v) return;
       const nextQuery: Record<string, string | string[] | undefined | null> = {
-        ...route.query,
+        ...(route.query as Record<string, string | string[] | null | undefined>),
       };
       if (!v) delete nextQuery[queryKey];
       else nextQuery[queryKey] = v;

@@ -158,8 +158,8 @@ async function uploadPhoto(code: string, e: Event) {
   try {
     const fd = new FormData();
     fd.append("file", file);
-    const headers = props.unitMode
-      ? { ...unitHeaders(), ...(authToken.value ? {} : {}) }
+    const headers: Record<string, string> = props.unitMode
+      ? { ...unitHeaders() }
       : authToken.value
         ? { "X-Admin-Key": authToken.value }
         : {};

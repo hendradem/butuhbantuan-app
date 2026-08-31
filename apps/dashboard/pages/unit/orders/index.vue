@@ -161,7 +161,7 @@ const filtered = computed(() => {
   );
 });
 
-type UnitSortCol = "ticket_number" | "requester_name" | "created_at" | "status" | "assessment_acuity";
+type UnitSortCol = "ticket_number" | "requester_name" | "unit_name" | "created_at" | "status" | "assessment_acuity";
 const sortCol = ref<UnitSortCol>("created_at");
 const sortDir = ref<"asc" | "desc">("desc");
 

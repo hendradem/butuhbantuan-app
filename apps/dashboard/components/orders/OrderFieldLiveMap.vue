@@ -111,7 +111,7 @@ async function drawRoute(from: [number, number], to: [number, number]) {
         opacity: 0.9,
       }).addTo(map);
       lastRouteKey = key;
-      map.fitBounds(routeLine.getBounds(), { padding: [24, 24], maxZoom: 15 });
+      map.fitBounds(routeLine!.getBounds(), { padding: [24, 24], maxZoom: 15 });
       return;
     }
   } catch {

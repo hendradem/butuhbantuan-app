@@ -459,7 +459,7 @@ function drawHeat() {
   L.DomUtil.setPosition(heatCanvas, topLeft)
   heatCanvas.width = size.x
   heatCanvas.height = size.y
-  heat.resize()
+  ;(heat as any).resize()
 
   const data: [number, number, number][] = []
   let max = 1

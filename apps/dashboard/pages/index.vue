@@ -683,7 +683,7 @@ const slaOptions = computed(() => ({
                 <p class="text-xs font-medium text-neutral-700">{{ stage.label }}</p>
                 <p class="text-[10px] text-neutral-400 tabular-nums">
                   <template v-if="idx === 0">total periode</template>
-                  <template v-else>{{ funnelPct(stage.count, funnelStages[idx - 1]?.count) }} lanjut</template>
+                  <template v-else>{{ funnelPct(stage.count, funnelStages[(idx as number) - 1]?.count) }} lanjut</template>
                 </p>
               </div>
               <div class="flex-1 min-w-0">
@@ -692,7 +692,7 @@ const slaOptions = computed(() => ({
                     class="h-full rounded-lg flex items-center justify-end px-2 min-w-[2rem] transition-all"
                     :style="{
                       width: `${Math.max(8, Math.round((stage.count / funnelMax) * 100))}%`,
-                      background: FUNNEL_COLORS[idx] ?? '#dc2626',
+                      background: FUNNEL_COLORS[idx as number] ?? '#dc2626',
                     }"
                   >
                     <span class="text-xs font-bold text-white tabular-nums drop-shadow-sm">{{ stage.count }}</span>
@@ -943,7 +943,7 @@ const slaOptions = computed(() => ({
               class="px-5 py-3 flex items-center gap-3"
             >
               <span class="w-6 h-6 rounded-full bg-neutral-100 text-xs font-bold text-neutral-500 flex items-center justify-center shrink-0">
-                {{ idx + 1 }}
+                {{ (idx as number) + 1 }}
               </span>
               <div class="min-w-0 flex-1">
                 <p class="text-sm font-medium text-neutral-900 truncate">{{ unit.unit_name || "—" }}</p>
