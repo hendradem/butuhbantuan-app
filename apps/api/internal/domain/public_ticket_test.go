@@ -44,7 +44,7 @@ func TestToPublicTicket_masksAndStrips(t *testing.T) {
 		},
 	}
 	pub := ToPublicTicket(o, false)
-	if pub.EmergencyUUID != "unit-1" {
+	if pub.EmergencyUUID != "" {
 		t.Fatalf("emergency_uuid %q", pub.EmergencyUUID)
 	}
 	if pub.RequesterPhone != "0812****90" {
@@ -53,15 +53,24 @@ func TestToPublicTicket_masksAndStrips(t *testing.T) {
 	if pub.PhoneVerified {
 		t.Fatal("should not be verified")
 	}
-	if len(pub.History) != 1 || pub.History[0].Type != OrderEventAccepted {
+	if len(pub.History) != 0 {
 		t.Fatalf("history %+v", pub.History)
 	}
-	if pub.History[0].Message != "PSC menerima" {
-		t.Fatalf("msg %q", pub.History[0].Message)
+	if pub.TrackToken != "" {
+		t.Fatal("unverified must omit track_token")
+	}
+	if pub.RequesterLat != 0 || pub.Location != "" || pub.EmergencyUUID != "" {
+		t.Fatal("unverified must redact sensitive fields")
+	}
+	if pub.TicketNumber != "BB-****0001" {
+		t.Fatalf("masked ticket %q", pub.TicketNumber)
 	}
 
 	full := ToPublicTicket(o, true)
 	if full.RequesterPhone != "081234567890" || !full.PhoneVerified {
 		t.Fatal("verified phone expected")
+	}
+	if full.TrackToken != "track-secret" {
+		t.Fatalf("verified token %q", full.TrackToken)
 	}
 }

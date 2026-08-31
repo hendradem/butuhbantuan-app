@@ -30,6 +30,10 @@ type EmergencyRepository interface {
 	UpdateFleet(id string, fleet domain.FleetStatus) error
 	UpdateActive(id string, isActive bool) error
 	UpdateWilayah(id string, addr domain.Address) error
+	UpdateCompliance(id string, profile domain.AmbulanceComplianceProfile) (*domain.Emergency, error)
+	GetComplianceProfile(id string) (*domain.AmbulanceComplianceProfile, error)
+	UpdateIncidentReportTemplate(id string, tpl domain.IncidentReportTemplate) (*domain.IncidentReportTemplate, error)
+	GetIncidentReportTemplate(id string) (*domain.IncidentReportTemplate, error)
 }
 
 type PushRepository interface {
@@ -62,6 +66,7 @@ type OrderRepository interface {
 	Create(o domain.OrderTicket) (*domain.OrderTicket, error)
 	FindByID(id string) (*domain.OrderTicket, error)
 	FindByTicketNumber(number string) (*domain.OrderTicket, error)
+	FindByPublicToken(token string) (*domain.OrderTicket, error)
 	FindAll() ([]domain.OrderTicket, error)
 	FindByUnit(emergencyUUID, unitName string) ([]domain.OrderTicket, error)
 	// FindByWilayahScope returns tickets in a dispatcher wilayah.
@@ -80,6 +85,8 @@ type OrderRepository interface {
 	// FindActiveByPhone returns the newest open ticket matching phone (+ optional type).
 	FindActiveByPhone(phone string, typeID uint) (*domain.OrderTicket, error)
 	EnableTrack(id, token string, expiresAt time.Time) (*domain.OrderTicket, error)
+	// ExtendTrackExpiry keeps the same token, only pushes track_expires_at forward.
+	ExtendTrackExpiry(id string, expiresAt time.Time) error
 	FindByTrackToken(token string) (*domain.OrderTicket, error)
 	UpdateResponderLocation(token string, lat, lng float64) (*domain.OrderTicket, error)
 	MarkArrivedByToken(token string) (*domain.OrderTicket, error)
@@ -157,4 +164,23 @@ type RegionRepository interface {
 type MapTileUsageRepository interface {
 	GetMonth(monthKey string) (int64, error)
 	Increment(monthKey string, delta int64) (int64, error)
+}
+
+type AssessmentRepository interface {
+	FindTemplateByCode(code string) (*domain.AssessmentTemplate, error)
+	FindDefaultTemplate() (*domain.AssessmentTemplate, error)
+	FindTemplateForEmergencyType(typeID uint) (*domain.AssessmentTemplate, error)
+	FindTemplateForJenisPelayanan(jenis string) (*domain.AssessmentTemplate, error)
+	EnsureDefaultTemplates() error
+	ListTemplates() ([]domain.AssessmentTemplate, error)
+	FindTemplateByID(id uint) (*domain.AssessmentTemplate, error)
+	CreateTemplate(t domain.AssessmentTemplate) (*domain.AssessmentTemplate, error)
+	UpdateTemplate(t domain.AssessmentTemplate) (*domain.AssessmentTemplate, error)
+	DeleteTemplate(id uint) error
+	ListBindings() ([]domain.AssessmentBinding, error)
+	UpsertBinding(b domain.AssessmentBinding) (*domain.AssessmentBinding, error)
+	DeleteBinding(emergencyTypeID uint) error
+	ListJenisBindings() ([]domain.AssessmentJenisBinding, error)
+	UpsertJenisBinding(b domain.AssessmentJenisBinding) (*domain.AssessmentJenisBinding, error)
+	DeleteJenisBinding(jenisPelayanan string) error
 }

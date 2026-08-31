@@ -199,13 +199,22 @@ useOrderNotification(
         </button>
       </div>
 
-      <UiTableCard>
-        <template #toolbar>
+      <UiTableCard
+        title="Antrian SLA Kritis"
+        :badge="filtered.length"
+        description="Tiket wilayah mendekati atau melewati batas respons"
+      >
+        <template #actions>
           <UiSearchInput
             v-model="q"
-            class="!w-full sm:!w-72"
-            placeholder="Cari tiket, nama, unit…"
+            placeholder="Cari..."
+            class="w-28 sm:w-40 shrink-0"
           />
+          <UiSelect v-model="filter" class="!w-auto shrink-0">
+            <option value="all">Semua</option>
+            <option value="breached">Breach</option>
+            <option value="at_risk">At risk</option>
+          </UiSelect>
         </template>
 
         <div v-if="showSkeleton" class="divide-y divide-neutral-100">

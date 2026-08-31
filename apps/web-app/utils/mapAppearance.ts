@@ -132,11 +132,12 @@ export function pinMarkerModifier(typeName: string): string {
 
 export function emergencyPinIconHtml(
   typeName: string,
-  opts?: { enter?: boolean; delayMs?: number; active?: boolean },
+  opts?: { enter?: boolean; delayMs?: number; active?: boolean; muted?: boolean },
 ): string {
   const mod = pinMarkerModifier(typeName);
   const enter = opts?.enter ? " bb-svc-pin--enter" : "";
   const active = opts?.active ? " bb-svc-pin--active" : "";
+  const muted = opts?.muted && !opts?.active ? " bb-svc-pin--muted" : "";
   const delay =
     opts?.delayMs != null && opts.delayMs > 0
       ? ` style="animation-delay:${opts.delayMs}ms"`
@@ -144,7 +145,7 @@ export function emergencyPinIconHtml(
   const pulse = opts?.active
     ? `<span class="bb-svc-pin__pulse" aria-hidden="true"></span><span class="bb-svc-pin__pulse bb-svc-pin__pulse--delay" aria-hidden="true"></span>`
     : "";
-  return `<div class="bb-svc-pin bb-svc-pin--${mod}${enter}${active}" role="img" aria-label="${typeName || "Layanan"}"${delay}>${pulse}<div class="bb-svc-pin__head"><span class="bb-svc-pin__icon"></span></div></div>`;
+  return `<div class="bb-svc-pin bb-svc-pin--${mod}${enter}${active}${muted}" role="img" aria-label="${typeName || "Layanan"}"${delay}>${pulse}<div class="bb-svc-pin__head"><span class="bb-svc-pin__icon"></span></div></div>`;
 }
 
 export function userLocationIconHtml(): string {

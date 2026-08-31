@@ -2,6 +2,7 @@
 import { Icon } from "@iconify/vue";
 import { Bar, Doughnut, Line } from "vue-chartjs";
 import UnitShareStatsLink from "~/components/unit/UnitShareStatsLink.vue";
+import { buildJenisChartData, jenisPelayananLabel } from "~/utils/jenisPelayanan";
 
 definePageMeta({ layout: "unit", title: "Statistik", keepalive: true });
 
@@ -61,6 +62,7 @@ type UnitStats = {
   by_hour?: { hour: number; count: number }[];
   peak_hour?: { hour: number; count: number } | null;
   referrals?: { hospital_id: string; hospital_name: string; count: number }[];
+  by_jenis_pelayanan?: { code: string; count: number }[];
 };
 
 const { data: statsRaw, pending, refresh: refreshRaw, error } = await useAsyncData(
@@ -91,6 +93,33 @@ const feedback = computed(() => stats.value?.feedback);
 const peakHour = computed(() => stats.value?.peak_hour ?? null);
 
 const referrals = computed(() => stats.value?.referrals ?? []);
+const byJenis = computed(() => stats.value?.by_jenis_pelayanan ?? []);
+
+const topJenis = computed(() => {
+  const list = byJenis.value;
+  if (!list.length) return null;
+  return [...list].sort((a, b) => (b.count ?? 0) - (a.count ?? 0))[0] ?? null;
+});
+
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+};
+
+const jenisData = computed(() => buildJenisChartData(byJenis.value));
+
+const jenisOptions = {
+  ...chartDefaults,
+  plugins: {
+    legend: {
+      display: true,
+      position: "bottom" as const,
+      labels: { font: { size: 11 }, boxWidth: 10 },
+    },
+  },
+  cutout: "62%",
+};
 
 const placeLabel = computed(() => {
   const parts = [unit.value?.regency, unit.value?.province].filter(Boolean);
@@ -139,12 +168,6 @@ const inventoryStats = computed(() => [
     color: "text-sky-600 bg-sky-50",
   },
 ]);
-
-const chartDefaults = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: { display: false } },
-};
 
 const trendData = computed(() => {
   const trend = stats.value?.daily_trend ?? [];
@@ -247,6 +270,45 @@ const hourOptions = computed(() => ({
     y: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } },
   },
 }));
+
+const referralRows = computed(() =>
+  [...referrals.value].sort((a, b) => (b.count ?? 0) - (a.count ?? 0)).slice(0, 10),
+);
+
+const referralData = computed(() => ({
+  labels: referralRows.value.map((r) => r.hospital_name),
+  datasets: [{
+    label: "Rujukan",
+    data: referralRows.value.map((r) => r.count),
+    backgroundColor: "#38bdf8",
+    borderRadius: 4,
+    maxBarThickness: 28,
+  }],
+}));
+
+const referralOptions = computed(() => ({
+  ...chartDefaults,
+  indexAxis: "y" as const,
+  plugins: {
+    ...chartDefaults.plugins,
+    tooltip: { callbacks: { label: (ctx: any) => ` ${ctx.parsed.x} rujukan` } },
+  },
+  scales: {
+    x: {
+      beginAtZero: true,
+      ticks: { precision: 0, font: { size: 10 } },
+      grid: { color: "rgba(0,0,0,0.04)" },
+    },
+    y: {
+      grid: { display: false },
+      ticks: { font: { size: 10 } },
+    },
+  },
+}));
+
+const referralChartHeight = computed(() =>
+  Math.max(160, referralRows.value.length * 36 + 24),
+);
 </script>
 
 <template>
@@ -465,6 +527,22 @@ const hourOptions = computed(() => ({
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <p class="text-sm font-semibold text-neutral-900 mb-1">Jenis Pelayanan</p>
+          <p class="text-xs text-neutral-400 mb-4">{{ period }} hari · {{ topJenis ? jenisPelayananLabel(topJenis.code) : "belum ada data" }}</p>
+          <ClientOnly>
+            <div v-if="byJenis.length" style="height: 200px">
+              <Doughnut :data="jenisData" :options="jenisOptions" />
+            </div>
+            <p v-else class="h-[200px] flex items-center justify-center text-sm text-neutral-400">
+              Belum ada data jenis pelayanan
+            </p>
+            <template #fallback>
+              <div class="soft-skel h-[200px] rounded-lg" />
+            </template>
+          </ClientOnly>
+        </div>
+
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
           <p class="text-sm font-semibold text-neutral-900 mb-1">Peak Hours</p>
           <p class="text-xs text-neutral-400 mb-4">Distribusi 00:00–23:00</p>
           <ClientOnly>
@@ -477,51 +555,21 @@ const hourOptions = computed(() => ({
           </ClientOnly>
         </div>
 
-        <div class="bg-white rounded-xl border border-neutral-200 p-5 flex flex-col">
-          <p class="text-sm font-semibold text-neutral-900 mb-1">Kutipan warga</p>
-          <p class="text-xs text-neutral-400 mb-4">Feedback terbaru di periode ini</p>
-          <ul v-if="feedback?.recent_quotes?.length" class="space-y-2 flex-1">
-            <li
-              v-for="(q, i) in feedback.recent_quotes"
-              :key="i"
-              class="text-sm text-neutral-600 bg-neutral-50 rounded-lg px-3 py-2.5 leading-snug"
-            >
-              “{{ q }}”
-            </li>
-          </ul>
-          <p v-else class="text-sm text-neutral-400 flex-1">Belum ada komentar di periode ini.</p>
-          <NuxtLink
-            to="/unit/feedback"
-            class="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-neutral-800 hover:underline"
-          >
-            Arsip feedback
-            <Icon icon="lucide:arrow-right" class="text-xs" />
-          </NuxtLink>
+        <div class="bg-white rounded-xl border border-neutral-200 p-5 lg:col-span-2">
+          <p class="text-sm font-semibold text-neutral-900 mb-1">RS Rujukan</p>
+          <p class="text-xs text-neutral-400 mb-4">{{ period }} hari · top rumah sakit tujuan rujukan</p>
+          <ClientOnly>
+            <div v-if="referralRows.length" :style="{ height: `${referralChartHeight}px` }">
+              <Bar :data="referralData" :options="referralOptions" />
+            </div>
+            <p v-else class="h-[160px] flex items-center justify-center text-sm text-neutral-400">
+              Belum ada data RS rujukan di periode ini.
+            </p>
+            <template #fallback>
+              <div class="soft-skel h-[160px] rounded-lg" />
+            </template>
+          </ClientOnly>
         </div>
-      </div>
-
-      <!-- RS Rujukan -->
-      <div class="bg-white rounded-xl border border-neutral-200 p-5">
-        <div class="flex items-center gap-2 mb-4">
-          <div class="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
-            <Icon icon="lucide:hospital" />
-          </div>
-          <div>
-            <p class="text-sm font-semibold text-neutral-900">RS Rujukan</p>
-            <p class="text-xs text-neutral-400">{{ period }} hari terakhir</p>
-          </div>
-        </div>
-        <ul v-if="referrals.length" class="space-y-2">
-          <li
-            v-for="r in referrals"
-            :key="r.hospital_id"
-            class="flex items-center gap-3"
-          >
-            <span class="flex-1 text-sm text-neutral-800 truncate">{{ r.hospital_name }}</span>
-            <span class="shrink-0 text-sm font-semibold tabular-nums text-neutral-900">{{ r.count }}×</span>
-          </li>
-        </ul>
-        <p v-else class="text-sm text-neutral-400">Belum ada data RS rujukan di periode ini.</p>
       </div>
 
       <!-- Share -->

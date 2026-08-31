@@ -18,12 +18,6 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    label: "Aplikasi",
-    items: [
-      { label: "SRU Mission Map", to: "/apps/sru", icon: "lucide:radar" },
-    ],
-  },
-  {
     label: "Operasional",
     items: [
       { label: "Pesanan Masuk",    to: "/orders",          icon: "lucide:clipboard-list", badgeKey: "orders" },
@@ -38,8 +32,10 @@ const groups: NavGroup[] = [
     label: "Data",
     items: [
       { label: "Layanan Darurat", to: "/emergencies", icon: "lucide:shield-check" },
+      { label: "Kelengkapan Ambulans", to: "/compliance", icon: "lucide:clipboard-check" },
       { label: "Import RS", to: "/hospitals", icon: "lucide:hospital" },
       { label: "Jenis Layanan", to: "/emergency-types", icon: "lucide:tag" },
+      { label: "Asesmen Awal", to: "/assessment", icon: "lucide:clipboard-list" },
       { label: "Wilayah Tercakup", to: "/regions", icon: "lucide:map-pin" },
     ],
   },
@@ -61,9 +57,6 @@ function isActive(to: string) {
   }
   if (to === "/orders/sla") {
     return route.path === "/orders/sla" || route.path.startsWith("/orders/sla/");
-  }
-  if (to === "/apps/sru") {
-    return route.path === "/apps/sru" || route.path.startsWith("/apps/sru/");
   }
   if (to === "/ops/map") {
     return route.path === "/ops/map" || route.path.startsWith("/ops/map/");
@@ -96,7 +89,7 @@ function onNavClick() {
 <template>
   <aside
     :class="[
-      'flex flex-col h-full bg-white border-r border-neutral-200 transition-all duration-300 shrink-0',
+      'flex flex-col h-full bg-white border-r border-neutral-200 transition-all duration-300 shrink-0 overflow-hidden',
       collapsed ? 'w-[60px]' : 'w-64',
     ]"
   >
@@ -139,7 +132,7 @@ function onNavClick() {
           :to="item.to"
           :title="collapsed ? item.label : undefined"
           :class="[
-            'flex items-center gap-2.5 rounded-lg text-sm font-medium transition-colors duration-150 group relative',
+            'flex items-center gap-2.5 rounded-lg text-sm font-medium transition-colors duration-150 group relative min-w-0',
             collapsed ? 'justify-center px-0 py-2.5 w-full' : 'px-2.5 py-2',
             isActive(item.to)
               ? 'bg-primary-50 text-primary-700'

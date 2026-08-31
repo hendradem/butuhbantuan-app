@@ -2,6 +2,7 @@
 import { Icon } from "@iconify/vue";
 import { Bar, Doughnut, Line } from "vue-chartjs";
 import type { HeatPoint } from "~/components/analytics/HeatmapViz.vue";
+import { buildJenisChartData, jenisPelayananLabel } from "~/utils/jenisPelayanan";
 
 definePageMeta({ title: "Overview", keepalive: true });
 
@@ -199,6 +200,13 @@ const busiestType = computed(() => {
   return [...list].sort((a, b) => (b.count ?? 0) - (a.count ?? 0))[0] ?? null;
 });
 
+const topJenisPelayanan = computed(() => {
+  const list: any[] = analytics.value?.by_jenis_pelayanan ?? [];
+  if (!list.length) return null;
+  const sorted = [...list].sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
+  return sorted[0] ?? null;
+});
+
 function fmtSec(sec: number): string {
   if (!sec || sec <= 0) return "—";
   if (sec < 60) return `${Math.round(sec)}d`;
@@ -316,6 +324,20 @@ const typeOptions = computed(() => ({
   },
 }));
 
+const jenisData = computed(() => buildJenisChartData(analytics.value?.by_jenis_pelayanan));
+
+const jenisOptions = {
+  ...chartDefaults,
+  plugins: {
+    legend: {
+      display: true,
+      position: "bottom" as const,
+      labels: { font: { size: 11 }, boxWidth: 10 },
+    },
+  },
+  cutout: "62%",
+};
+
 const hourData = computed(() => {
   const hours: any[] = analytics.value?.by_hour ?? [];
   const counts = Array(24).fill(0);
@@ -343,6 +365,14 @@ const hourOptions = computed(() => ({
 const funnelStages = computed(() => analytics.value?.dispatch_funnel ?? []);
 const funnelDrops = computed(() => analytics.value?.funnel_drops ?? []);
 const funnelMax = computed(() => Math.max(1, ...funnelStages.value.map((s: any) => s.count ?? 0)));
+const accessChannels = computed(() => analytics.value?.access_channels ?? []);
+
+function gpsCoverage(ch: { track_enabled?: number; gps_pinged?: number }): string {
+  const en = Number(ch.track_enabled) || 0;
+  const ping = Number(ch.gps_pinged) || 0;
+  if (en <= 0) return "—";
+  return `${Math.round((ping / en) * 100)}% GPS`;
+}
 
 function funnelPct(count: number, prev?: number): string {
   if (prev == null || prev <= 0) return count > 0 ? "100%" : "—";
@@ -506,7 +536,7 @@ const slaOptions = computed(() => ({
       </div>
 
       <!-- Insight highlights -->
-      <div v-if="analytics" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div v-if="analytics" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div class="bg-white rounded-xl border border-neutral-200 p-5">
           <div class="flex items-center gap-2 mb-2">
             <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
@@ -533,6 +563,20 @@ const slaOptions = computed(() => ({
           </p>
           <p class="text-sm text-neutral-500 mt-1">
             {{ busiestType ? `${busiestType.count} pesanan` : "Belum ada data" }}
+          </p>
+        </div>
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
+              <Icon icon="lucide:layers" />
+            </div>
+            <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Jenis pelayanan</p>
+          </div>
+          <p class="text-2xl font-bold text-neutral-900 truncate">
+            {{ topJenisPelayanan ? jenisPelayananLabel(topJenisPelayanan.code) : "—" }}
+          </p>
+          <p class="text-sm text-neutral-500 mt-1">
+            {{ topJenisPelayanan ? `${topJenisPelayanan.count} pesanan` : "Belum ada data" }}
           </p>
         </div>
         <div class="bg-white rounded-xl border border-neutral-200 p-5">
@@ -580,9 +624,24 @@ const slaOptions = computed(() => ({
         </div>
       </div>
 
-      <div v-if="analytics" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div v-if="analytics" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
         <div class="bg-white rounded-xl border border-neutral-200 p-5">
-          <p class="text-sm font-semibold text-neutral-900 mb-4">Pesanan per Jenis</p>
+          <p class="text-sm font-semibold text-neutral-900 mb-1">Jenis Pelayanan</p>
+          <p class="text-xs text-neutral-400 mb-4">Darurat · transport · jenazah — {{ period }} hari</p>
+          <ClientOnly>
+            <div v-if="(analytics?.by_jenis_pelayanan?.length ?? 0) > 0" style="height: 200px">
+              <Doughnut :data="jenisData" :options="jenisOptions" />
+            </div>
+            <p v-else class="h-[200px] flex items-center justify-center text-sm text-neutral-400">
+              Belum ada data jenis pelayanan
+            </p>
+            <template #fallback>
+              <div class="soft-skel h-[200px] rounded-lg" />
+            </template>
+          </ClientOnly>
+        </div>
+        <div class="bg-white rounded-xl border border-neutral-200 p-5">
+          <p class="text-sm font-semibold text-neutral-900 mb-4">Pesanan per Jenis Layanan</p>
           <ClientOnly>
             <div :style="{ height: Math.max(140, (analytics?.by_type?.length ?? 1) * 36) + 'px' }">
               <Bar :data="typeData" :options="typeOptions" />
@@ -665,6 +724,61 @@ const slaOptions = computed(() => ({
               <div class="soft-skel h-[220px] rounded-lg" />
             </template>
           </ClientOnly>
+        </div>
+      </div>
+
+      <!-- Access channel: WA-only vs dashboard -->
+      <div class="bg-white rounded-xl border border-neutral-200 p-5">
+        <p class="text-sm font-semibold text-neutral-900 mb-1">Kanal unit</p>
+        <p class="text-xs text-neutral-400 mb-4">
+          {{ period }} hari · WA only vs dashboard login · accept rate &amp; waktu penanganan
+        </p>
+        <div v-if="!accessChannels.length" class="h-24 flex items-center justify-center text-sm text-neutral-400">
+          Belum ada data
+        </div>
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div
+            v-for="ch in accessChannels"
+            :key="ch.key"
+            class="rounded-xl border border-neutral-100 bg-neutral-50/80 p-4 space-y-3"
+          >
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-neutral-900">{{ ch.label }}</p>
+                <p class="text-xs text-neutral-400 mt-0.5 tabular-nums">
+                  {{ ch.orders }} tiket · accept {{ fmtPct(ch.accept_rate) }}
+                </p>
+              </div>
+              <span
+                class="shrink-0 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                :class="ch.key === 'wa_only'
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-sky-100 text-sky-800'"
+              >
+                {{ ch.key === 'wa_only' ? 'WA' : 'Dash' }}
+              </span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center">
+              <div class="rounded-lg bg-white border border-neutral-100 px-2 py-2">
+                <p class="text-[10px] text-neutral-400">Terima</p>
+                <p class="text-sm font-semibold text-neutral-900 tabular-nums">{{ fmtSec(ch.avg_accept_sec) }}</p>
+              </div>
+              <div class="rounded-lg bg-white border border-neutral-100 px-2 py-2">
+                <p class="text-[10px] text-neutral-400">Tiba</p>
+                <p class="text-sm font-semibold text-neutral-900 tabular-nums">{{ fmtSec(ch.avg_arrive_sec) }}</p>
+              </div>
+              <div class="rounded-lg bg-white border border-neutral-100 px-2 py-2">
+                <p class="text-[10px] text-neutral-400">Selesai</p>
+                <p class="text-sm font-semibold text-neutral-900 tabular-nums">{{ fmtSec(ch.avg_complete_sec) }}</p>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-neutral-500 tabular-nums">
+              <span>Diterima {{ ch.accepted }}</span>
+              <span>Tiba {{ ch.arrived }}</span>
+              <span>Selesai {{ ch.completed }}</span>
+              <span>{{ gpsCoverage(ch) }}</span>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import {
+  isAmbulanceServiceType,
+  showJenisPelayananPicker,
+} from "@butuhbantuan/utils";
 import { toast } from "~/utils/appToast";
 
 definePageMeta({ layout: "unit", title: "Pengaturan", keepalive: true });
@@ -179,211 +183,255 @@ async function saveWilayah() {
     savingWilayah.value = false;
   }
 }
+
+const savingJenis = ref(false);
+const jenisSaved = ref(false);
+const jenisPelayanan = ref<string[]>([]);
+
+watch(
+  () => profile.value?.tipe_emergency,
+  (v) => {
+    jenisPelayanan.value = Array.isArray(v) ? [...v] : [];
+  },
+  { immediate: true },
+);
+
+const emergencyTypeName = computed(() => String(profile.value?.emergency_type || ""));
+const showJenisPicker = computed(() => showJenisPelayananPicker(emergencyTypeName.value));
+const isAmbulance = computed(() => isAmbulanceServiceType(emergencyTypeName.value));
+const emergencyId = computed(() => String(profile.value?.emergency_uuid || ""));
+
+async function saveJenisPelayanan() {
+  savingJenis.value = true;
+  try {
+    await $fetch(`${baseUrl}/api/v1/unit/jenis-pelayanan`, {
+      method: "PATCH",
+      headers: { ...unitHeaders(), "Content-Type": "application/json" },
+      body: { tipe_emergency: jenisPelayanan.value },
+    });
+    jenisSaved.value = true;
+    setTimeout(() => { jenisSaved.value = false; }, 2500);
+    await refresh();
+    toast.success("Jenis pelayanan disimpan");
+  } catch (err: any) {
+    toast.error(err?.data?.message ?? "Gagal menyimpan jenis pelayanan");
+  } finally {
+    savingJenis.value = false;
+  }
+}
+
+const archiveLinks = [
+  { to: "/unit/hospitals", icon: "lucide:hospital", label: "Import RS wilayah", desc: "Sync & import rumah sakit per kabupaten" },
+  { to: "/unit/stats", icon: "lucide:bar-chart-2", label: "Statistik & bagikan link", desc: "Performa unit + link publik" },
+  { to: "/unit/feedback", icon: "lucide:message-square", label: "Arsip feedback warga", desc: "Semua penilaian untuk unit Anda" },
+  { to: "/unit/reports", icon: "lucide:file-text", label: "Arsip laporan kejadian", desc: "Daftar laporan per e-tiket" },
+];
 </script>
 
 <template>
   <div>
-    <!-- Header -->
     <div class="page-subheader">
-      <h1 class="page-subheader-title">Pengaturan</h1>
-      <p class="page-subheader-desc">Konfigurasi layanan dan armada unit</p>
+      <div class="flex items-center justify-between gap-4 w-full">
+        <div class="min-w-0">
+          <h1 class="page-subheader-title">Pengaturan</h1>
+          <p class="page-subheader-desc">Konfigurasi layanan dan armada unit</p>
+        </div>
+        <div class="flex items-center gap-2.5 shrink-0">
+          <span
+            class="hidden sm:inline text-xs font-medium"
+            :class="isActive ? 'text-emerald-700' : 'text-neutral-500'"
+          >
+            {{ isActive ? "Layanan aktif" : "Layanan nonaktif" }}
+          </span>
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="isActive"
+            :aria-label="isActive ? 'Nonaktifkan layanan' : 'Aktifkan layanan'"
+            :disabled="toggling || showProfileSkeleton"
+            class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+            :class="isActive ? 'bg-emerald-600' : 'bg-neutral-300'"
+            @click="handleToggle"
+          >
+            <span
+              aria-hidden="true"
+              class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition-transform duration-200"
+              :class="isActive ? 'translate-x-5' : 'translate-x-0.5'"
+            />
+          </button>
+        </div>
+      </div>
     </div>
 
-    <div class="max-w-lg mx-auto px-4 sm:px-6 py-6 space-y-5">
-
-      <UiCard
-        title="Status Layanan"
-        description="Aktifkan agar unit dapat menerima pesanan"
-      >
-        <div v-if="showProfileSkeleton" class="soft-skel h-8 rounded-lg" />
-        <button
-          v-else
-          type="button"
-          :disabled="toggling"
-          :class="[
-            'w-full flex items-center justify-between gap-3 px-4 py-3.5 rounded-lg border text-sm font-semibold transition-colors disabled:opacity-60',
-            isActive
-              ? 'bg-white border-neutral-200 text-neutral-800 hover:bg-neutral-50'
-              : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50',
-          ]"
-          @click="handleToggle"
+    <div class="p-4 sm:p-6">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <UiCard
+          compact-header
+          padding="sm"
+          title="Ketersediaan Armada"
+          description="Jumlah armada siap bertugas"
         >
-          <div class="flex items-center gap-3">
-            <span :class="['h-2 w-2 rounded-full shrink-0', isActive ? 'bg-green-500' : 'bg-neutral-400']" />
-            <span>{{ toggling ? 'Menyimpan...' : (isActive ? 'Layanan Aktif' : 'Layanan Nonaktif') }}</span>
+          <div v-if="showProfileSkeleton" class="space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+              <div class="space-y-2">
+                <div class="soft-skel h-3 w-20" />
+                <div class="soft-skel h-8 rounded-lg" />
+              </div>
+              <div class="space-y-2">
+                <div class="soft-skel h-3 w-28" />
+                <div class="soft-skel h-8 rounded-lg" />
+              </div>
+            </div>
+            <div class="soft-skel h-2 rounded-full w-full" />
+            <div class="soft-skel h-8 rounded-lg w-full" />
           </div>
-          <span class="text-sm font-normal text-neutral-500">Ketuk untuk ubah</span>
-        </button>
-        <p class="text-sm text-neutral-500 mt-2">
-          {{ isActive
-            ? 'Unit saat ini aktif dan dapat menerima pesanan dari warga.'
-            : 'Unit tidak aktif. Pesanan baru tidak akan diteruskan ke unit ini.'
-          }}
-        </p>
-      </UiCard>
+          <template v-else>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm font-medium text-neutral-700 mb-1.5">Total Armada</label>
+                <UiInput
+                  :model-value="String(fleet.total)"
+                  type="number"
+                  min="0"
+                  class="text-center font-semibold"
+                  @update:model-value="fleet.total = Number($event) || 0"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-neutral-700 mb-1.5">Armada Tersedia</label>
+                <UiInput
+                  :model-value="String(fleet.available)"
+                  type="number"
+                  min="0"
+                  :max="fleet.total"
+                  class="text-center font-semibold"
+                  @update:model-value="fleet.available = Number($event) || 0"
+                />
+              </div>
+            </div>
 
-      <UiCard
-        title="Ketersediaan Armada"
-        description="Atur jumlah armada yang tersedia untuk bertugas"
-      >
-        <div v-if="showProfileSkeleton" class="space-y-4">
-          <div class="grid grid-cols-2 gap-3">
-            <div class="space-y-2">
-              <div class="soft-skel h-3 w-20" />
-              <div class="soft-skel h-8 rounded-lg" />
+            <div v-if="fleet.total > 0" class="space-y-1.5 mt-4">
+              <div class="flex justify-between text-sm">
+                <span class="text-neutral-500">Kapasitas terpakai</span>
+                <span :class="['font-medium', fleet.available > 0 ? 'text-green-600' : 'text-emergency-600']">
+                  {{ fleet.available }} / {{ fleet.total }} tersedia
+                </span>
+              </div>
+              <div class="w-full bg-neutral-100 rounded-full h-2 overflow-hidden">
+                <div
+                  :style="{ width: `${Math.min(100, Math.round((fleet.available / fleet.total) * 100))}%` }"
+                  :class="['h-2 rounded-full transition-all duration-300', fleet.available > 0 ? 'bg-green-500' : 'bg-emergency-500']"
+                />
+              </div>
             </div>
-            <div class="space-y-2">
-              <div class="soft-skel h-3 w-28" />
-              <div class="soft-skel h-8 rounded-lg" />
-            </div>
+
+            <UiButton class="w-full mt-4" :loading="updatingFleet" @click="saveFleet">
+              <Icon v-if="fleetSaved" icon="lucide:check-circle" class="text-sm" />
+              <Icon v-else icon="lucide:save" class="text-sm" />
+              {{ fleetSaved ? "Tersimpan!" : "Simpan Perubahan" }}
+            </UiButton>
+          </template>
+        </UiCard>
+
+        <UiCard
+          compact-header
+          padding="sm"
+          title="Wilayah Operasional"
+          description="Kabupaten operasi & import RS"
+        >
+          <div v-if="showProfileSkeleton" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="soft-skel h-10 rounded-lg" />
+            <div class="soft-skel h-10 rounded-lg" />
           </div>
-          <div class="soft-skel h-2 rounded-full w-full" />
-          <div class="soft-skel h-8 rounded-lg w-full" />
-        </div>
-        <template v-else>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-sm font-medium text-neutral-700 mb-1.5">Total Armada</label>
-              <UiInput
-                :model-value="String(fleet.total)"
-                type="number"
-                min="0"
-                class="text-center font-semibold"
-                @update:model-value="fleet.total = Number($event) || 0"
-              />
+          <template v-else>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <UiFormField label="Provinsi" required>
+                <UiSelect
+                  v-model="wilayah.province_id"
+                  placeholder="Pilih provinsi"
+                  searchable
+                  :options="provinceOptions"
+                />
+              </UiFormField>
+              <UiFormField label="Kabupaten / Kota" required>
+                <UiSelect
+                  v-model="wilayah.regency_id"
+                  placeholder="Pilih kabupaten"
+                  searchable
+                  :disabled="!wilayah.province_id"
+                  :options="regencyOptions"
+                />
+              </UiFormField>
             </div>
-            <div>
-              <label class="block text-sm font-medium text-neutral-700 mb-1.5">Armada Tersedia</label>
-              <UiInput
-                :model-value="String(fleet.available)"
-                type="number"
-                min="0"
-                :max="fleet.total"
-                class="text-center font-semibold"
-                @update:model-value="fleet.available = Number($event) || 0"
-              />
-            </div>
-          </div>
-
-          <div v-if="fleet.total > 0" class="space-y-1.5 mt-4">
-            <div class="flex justify-between text-sm">
-              <span class="text-neutral-500">Kapasitas terpakai</span>
-              <span :class="['font-medium', fleet.available > 0 ? 'text-green-600' : 'text-emergency-600']">
-                {{ fleet.available }} / {{ fleet.total }} tersedia
-              </span>
-            </div>
-            <div class="w-full bg-neutral-100 rounded-full h-2 overflow-hidden">
-              <div
-                :style="{ width: `${Math.min(100, Math.round((fleet.available / fleet.total) * 100))}%` }"
-                :class="['h-2 rounded-full transition-all duration-300', fleet.available > 0 ? 'bg-green-500' : 'bg-emergency-500']"
-              />
-            </div>
-          </div>
-
-          <UiButton class="w-full mt-4" :loading="updatingFleet" @click="saveFleet">
-            <Icon v-if="fleetSaved" icon="lucide:check-circle" class="text-sm" />
-            <Icon v-else icon="lucide:save" class="text-sm" />
-            {{ fleetSaved ? 'Tersimpan!' : 'Simpan Perubahan' }}
-          </UiButton>
-        </template>
-      </UiCard>
-
-      <UiCard
-        title="Wilayah Operasional"
-        description="Kabupaten tempat unit beroperasi — dipakai untuk import RS & cakupan dispatch"
-      >
-        <div v-if="showProfileSkeleton" class="space-y-3">
-          <div class="soft-skel h-10 rounded-lg" />
-          <div class="soft-skel h-10 rounded-lg" />
-        </div>
-        <template v-else>
-          <div class="space-y-3">
-            <UiFormField label="Provinsi" required>
-              <UiSelect
-                v-model="wilayah.province_id"
-                placeholder="Pilih provinsi"
-                searchable
-                :options="provinceOptions"
-              />
-            </UiFormField>
-            <UiFormField label="Kabupaten / Kota" required>
-              <UiSelect
-                v-model="wilayah.regency_id"
-                placeholder="Pilih kabupaten"
-                searchable
-                :disabled="!wilayah.province_id"
-                :options="regencyOptions"
-              />
-            </UiFormField>
             <p
               v-if="wilayah.regency_name"
-              class="text-xs text-neutral-500"
+              class="text-xs text-neutral-500 mt-3"
             >
               Saat ini: <span class="font-medium text-neutral-700">{{ wilayah.regency_name }}</span>
               <template v-if="wilayah.province_name">, {{ wilayah.province_name }}</template>
             </p>
-          </div>
-          <UiButton class="w-full mt-4" :loading="savingWilayah" @click="saveWilayah">
-            <Icon v-if="wilayahSaved" icon="lucide:check-circle" class="text-sm" />
-            <Icon v-else icon="lucide:map-pin" class="text-sm" />
-            {{ wilayahSaved ? "Tersimpan!" : "Simpan Wilayah" }}
+            <UiButton class="w-full mt-4" :loading="savingWilayah" @click="saveWilayah">
+              <Icon v-if="wilayahSaved" icon="lucide:check-circle" class="text-sm" />
+              <Icon v-else icon="lucide:map-pin" class="text-sm" />
+              {{ wilayahSaved ? "Tersimpan!" : "Simpan Wilayah" }}
+            </UiButton>
+          </template>
+        </UiCard>
+
+        <UiCard
+          v-if="showJenisPicker"
+          compact-header
+          padding="sm"
+          class="lg:col-span-2"
+          title="Jenis Pelayanan"
+          description="Mode layanan yang unit siap terima dari warga"
+        >
+          <JenisPelayananPicker
+            v-model="jenisPelayanan"
+            :emergency-type-name="emergencyTypeName"
+          />
+          <UiButton class="w-full mt-4" :loading="savingJenis" @click="saveJenisPelayanan">
+            <Icon v-if="jenisSaved" icon="lucide:check-circle" class="text-sm" />
+            <Icon v-else icon="lucide:save" class="text-sm" />
+            {{ jenisSaved ? "Tersimpan!" : "Simpan jenis pelayanan" }}
           </UiButton>
-        </template>
-      </UiCard>
+        </UiCard>
 
-      <UiCard
-        title="Arsip"
-        description="Feedback & laporan biasanya dari detail pesanan. Arsip untuk lihat semua."
-        padding="none"
-      >
-        <div class="divide-y divide-neutral-200">
-          <NuxtLink
-            to="/unit/hospitals"
-            class="flex items-center gap-3 px-4 sm:px-6 py-3.5 hover:bg-neutral-50 transition-colors"
-          >
-            <Icon icon="lucide:hospital" class="text-neutral-500 text-base shrink-0" />
-            <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium text-neutral-900">Import RS wilayah</p>
-              <p class="text-sm text-neutral-500 mt-0.5">Sync & import rumah sakit per kabupaten</p>
-            </div>
-            <Icon icon="lucide:chevron-right" class="text-neutral-400 text-sm" />
-          </NuxtLink>
-          <NuxtLink
-            to="/unit/stats"
-            class="flex items-center gap-3 px-4 sm:px-6 py-3.5 hover:bg-neutral-50 transition-colors"
-          >
-            <Icon icon="lucide:bar-chart-2" class="text-neutral-500 text-base shrink-0" />
-            <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium text-neutral-900">Statistik & bagikan link</p>
-              <p class="text-sm text-neutral-500 mt-0.5">Performa unit + link publik</p>
-            </div>
-            <Icon icon="lucide:chevron-right" class="text-neutral-400 text-sm" />
-          </NuxtLink>
-          <NuxtLink
-            to="/unit/feedback"
-            class="flex items-center gap-3 px-4 sm:px-6 py-3.5 hover:bg-neutral-50 transition-colors"
-          >
-            <Icon icon="lucide:message-square" class="text-neutral-500 text-base shrink-0" />
-            <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium text-neutral-900">Arsip feedback warga</p>
-              <p class="text-sm text-neutral-500 mt-0.5">Semua penilaian untuk unit Anda</p>
-            </div>
-            <Icon icon="lucide:chevron-right" class="text-neutral-400 text-sm" />
-          </NuxtLink>
-          <NuxtLink
-            to="/unit/reports"
-            class="flex items-center gap-3 px-4 sm:px-6 py-3.5 hover:bg-neutral-50 transition-colors"
-          >
-            <Icon icon="lucide:file-text" class="text-neutral-500 text-base shrink-0" />
-            <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium text-neutral-900">Arsip laporan kejadian</p>
-              <p class="text-sm text-neutral-500 mt-0.5">Daftar laporan per e-tiket</p>
-            </div>
-            <Icon icon="lucide:chevron-right" class="text-neutral-400 text-sm" />
-          </NuxtLink>
+        <div v-if="isAmbulance && emergencyId" class="lg:col-span-2">
+          <AmbulanceComplianceForm
+            :emergency-id="emergencyId"
+            :emergency-type-name="emergencyTypeName"
+            :initial="profile?.compliance"
+            unit-mode
+            @saved="refresh()"
+          />
         </div>
-      </UiCard>
 
+        <UiCard
+          compact-header
+          padding="sm"
+          title="Arsip"
+          description="Feedback, laporan, statistik, dan import RS"
+          class="lg:col-span-2"
+        >
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            <NuxtLink
+              v-for="link in archiveLinks"
+              :key="link.to"
+              :to="link.to"
+              class="rounded-lg border border-neutral-200 px-3.5 py-3 hover:bg-neutral-50 transition-colors"
+            >
+              <div class="flex items-start gap-2.5">
+                <Icon :icon="link.icon" class="text-neutral-500 text-base shrink-0 mt-0.5" />
+                <div class="min-w-0">
+                  <p class="text-sm font-medium text-neutral-900">{{ link.label }}</p>
+                  <p class="text-xs text-neutral-500 mt-0.5">{{ link.desc }}</p>
+                </div>
+              </div>
+            </NuxtLink>
+          </div>
+        </UiCard>
+      </div>
     </div>
   </div>
 </template>

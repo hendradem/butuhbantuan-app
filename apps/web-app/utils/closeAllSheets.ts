@@ -7,13 +7,15 @@ export function closeAllSheets() {
   useConfirmationSheetStore().onClose();
   useReviewSheetStore().onClose();
   useSearchSheetStore().onClose();
+  useSavePlaceSheetStore().onClose();
   useExploreSheetStore().onClose();
   useDetailSheetStore().onClose();
   useMoreSheetStore().onClose();
   useSosStore().close();
   useNeedHelpSheetStore().onClose();
-  useTicketSheetStore().close();
+  useUnitsSheetStore().onClose();
   useAppErrorStore().onCloseSheet();
   useSheetStackStore().clear();
-  useLeafletStore().resetLeafletRouting();
+  useMapUrl().clearUnit();
+  useMapRouting().clearRoute();
 }

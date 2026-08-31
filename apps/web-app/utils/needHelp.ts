@@ -11,8 +11,8 @@ export type NeedHelpSituation = {
   /** Optional national hotline tel digits. */
   hotlineTel?: string;
   hotlineLabel?: string;
-  /** Prefer SOS CTA when no good type match. */
-  preferSos?: boolean;
+  /** Prefer national hotline when no good type match (SOS UI is hidden). */
+  preferHotline?: boolean;
 };
 
 export const NEED_HELP_SITUATIONS: NeedHelpSituation[] = [
@@ -65,18 +65,18 @@ export const NEED_HELP_SITUATIONS: NeedHelpSituation[] = [
     typeKeywords: ["polisi", "police", "keamanan"],
     hotlineTel: "110",
     hotlineLabel: "110 Polisi",
-    preferSos: true,
+    preferHotline: true,
   },
   {
     id: "other",
     title: "Tidak yakin",
     subtitle: "Darurat lain atau situasi campur",
-    tip: "Pakai SOS agar sistem mencarikan unit terdekat, atau hubungi PSC 119.",
+    tip: "Hubungi PSC 119, atau pilih unit di peta jika sudah tahu jenis bantuan yang dibutuhkan.",
     icon: "lucide:help-circle",
     typeKeywords: [],
     hotlineTel: "119",
     hotlineLabel: "PSC 119",
-    preferSos: true,
+    preferHotline: true,
   },
 ];
 

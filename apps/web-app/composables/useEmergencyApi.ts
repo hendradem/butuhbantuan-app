@@ -2,6 +2,7 @@ import { getNearestDataWithEstimation } from "~/utils/turf";
 import { formatGeoAddress } from "~/utils/geo";
 import { appToast } from "~/utils/appToast";
 import { compareUnitsSmart } from "~/utils/rankUnits";
+import { roundCoord } from "~/utils/mapUrl";
 
 const MAX_MATRIX_BATCH = 24; // Mapbox Matrix: max 25 coords total (1 origin + 24 destinations)
 /** Road ETA cut for citizen list — cross-kab units stay if within this window. */
@@ -15,7 +16,6 @@ export function useEmergencyApi() {
   const config = useRuntimeConfig();
   const emergencyStore = useEmergencyStore();
   const userLocation = useUserLocationStore();
-  const leaflet = useLeafletStore();
   const toast = appToast();
   const {
     saveEmergencySnapshot,
@@ -45,6 +45,84 @@ export function useEmergencyApi() {
 
   async function fetchEmergencyByProvince(provinceId: string) {
     return $fetch<{ data: any[] }>(`${baseUrl}/api/v1/emergency/province/${provinceId}`);
+  }
+
+  async function fetchEmergencyById(id: string) {
+    const unitId = String(id || "").trim();
+    if (!unitId) return null;
+    try {
+      const res = await $fetch<{ data: any }>(
+        `${baseUrl}/api/v1/emergency/${encodeURIComponent(unitId)}`,
+      );
+      return res?.data ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  function buildListItem(emergency: any, userLat: number, userLng: number, trip?: { duration: number; distance: number } | null) {
+    const userLoc: [number, number] = [userLng, userLat];
+    if (trip) return { emergencyData: emergency, trip };
+    return getNearestDataWithEstimation([emergency], userLoc)[0];
+  }
+
+  function findByCoords(list: any[], lat: number, lng: number) {
+    const rLat = roundCoord(lat);
+    const rLng = roundCoord(lng);
+    return list.find((row: any) => {
+      const coords = row?.emergencyData?.coordinates ?? row?.coordinates;
+      if (!coords?.length) return false;
+      return (
+        roundCoord(parseFloat(coords[1])) === rLat &&
+        roundCoord(parseFloat(coords[0])) === rLng
+      );
+    });
+  }
+
+  /** Ensure deep-link unit is in the list (may be outside ETA filter). */
+  async function ensureDeepLinkUnit(opts: {
+    unitId?: string;
+    toLat?: number;
+    toLng?: number;
+  }) {
+    const unitId = String(opts.unitId || "").trim();
+    const { toLat, toLng } = opts;
+    const userLat = userLocation.lat;
+    const userLng = userLocation.long;
+    if (!userLat || !userLng) return;
+
+    const store = emergencyStore.filteredEmergency;
+    if (unitId && store.some((row: any) => String(row?.emergencyData?.id) === unitId)) return;
+    if (toLat != null && toLng != null && findByCoords(store, toLat, toLng)) return;
+
+    let emergency: any | null = null;
+    if (unitId) emergency = await fetchEmergencyById(unitId);
+
+    if (!emergency && toLat != null && toLng != null) {
+      const provinceId = userLocation.currentRegion?.province?.id;
+      if (provinceId) {
+        const res = await fetchEmergencyByProvince(provinceId);
+        const raw = (res.data ?? []).find((row: any) => {
+          const coords = row?.coordinates;
+          if (!coords?.length) return false;
+          return (
+            roundCoord(parseFloat(coords[1])) === roundCoord(toLat) &&
+            roundCoord(parseFloat(coords[0])) === roundCoord(toLng)
+          );
+        });
+        if (raw) emergency = raw;
+      }
+    }
+
+    if (!emergency) return;
+
+    const matrix = await fetchDistanceMatrix(userLat, userLng, [emergency]);
+    const item = buildListItem(emergency, userLat, userLng, matrix[0]);
+    if (!item) return;
+
+    const id = String(emergency.id || "");
+    const next = store.filter((row: any) => String(row?.emergencyData?.id) !== id);
+    emergencyStore.setFilteredEmergency([item, ...next]);
   }
 
   /** Resolve covered kab by exact available-region name match only. */
@@ -124,7 +202,7 @@ export function useEmergencyApi() {
       emergencyStore.setCoverage(false);
       emergencyStore.setLastRegionName(regionName);
       emergencyStore.setFilteredEmergency([]);
-      leaflet.resetLeafletRouting();
+      useMapRouting().clearRoute();
       markFromCache(false);
       saveEmergencySnapshot({
         savedAt: new Date().toISOString(),
@@ -144,7 +222,8 @@ export function useEmergencyApi() {
       toast.loading(keepMsg || "Mencari layanan...");
 
       const geoWrapper = await $fetch<any>(
-        `${baseUrl}/api/v1/geocoding/reverse?latitude=${lat}&longitude=${lng}`
+        `${baseUrl}/api/v1/geocoding/reverse?latitude=${lat}&longitude=${lng}`,
+        { timeout: 12_000 },
       );
 
       // Bail out if a newer call superseded this one while we were awaiting
@@ -271,5 +350,5 @@ export function useEmergencyApi() {
     }
   }
 
-  return { fetchEmergencyTypes, loadEmergencyData };
+  return { fetchEmergencyTypes, loadEmergencyData, ensureDeepLinkUnit };
 }

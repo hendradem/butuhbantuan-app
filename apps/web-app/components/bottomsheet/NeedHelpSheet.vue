@@ -9,7 +9,6 @@ import {
 const needHelp = useNeedHelpSheetStore();
 const exploreSheet = useExploreSheetStore();
 const emergencyStore = useEmergencyStore();
-const sosStore = useSosStore();
 const { hotlines } = useOfflineCache();
 const { fetchEmergencyTypes } = useEmergencyApi();
 
@@ -63,11 +62,6 @@ function openUnits() {
   needHelp.onClose();
   exploreSheet.setSheetData({ emergencyType: t, emergency: filtered });
   exploreSheet.onOpen();
-}
-
-function openSos() {
-  needHelp.onClose();
-  sosStore.open();
 }
 
 function close() {
@@ -162,7 +156,7 @@ function close() {
             Layanan
           </p>
           <p class="m-0 mt-1 text-[13px] font-semibold ui-text-primary truncate">
-            {{ matchedType?.name || (selected.preferSos ? "SOS darurat" : "Unit terdekat") }}
+            {{ matchedType?.name || "Hotline nasional" }}
           </p>
           <p v-if="matchedType" class="m-0 mt-0.5 text-[11px] ui-text-secondary">
             {{ nearbyCount }} unit di sekitar
@@ -195,19 +189,10 @@ function close() {
           <Icon icon="lucide:map-pin" class="text-base" />
           Lihat unit {{ matchedType.name }}
         </button>
-        <button
-          v-if="selected.preferSos || !matchedType"
-          type="button"
-          class="ui-btn-primary"
-          style="background: var(--bb-danger)"
-          @click="openSos"
-        >
-          <Icon icon="lucide:siren" class="text-base" />
-          Kirim SOS
-        </button>
         <a
           :href="`tel:${selected.hotlineTel || hl.psc}`"
           class="btn-call text-sm !mb-0 w-full"
+          :class="!matchedType && 'ui-btn-primary !bg-[var(--bb-danger)] !text-white !border-0'"
         >
           <Icon icon="lucide:phone" class="w-4 h-4 mr-1.5" />
           Telepon {{ selected.hotlineLabel || hl.label }}

@@ -15,7 +15,9 @@ html[data-ui-theme="soft"] {
   --bb-text-tertiary: #8e8e93;
   --bb-border: rgba(26, 28, 46, 0.06);
   --bb-border-strong: rgba(26, 28, 46, 0.1);
-  --bb-accent: #1a1c2e;
+  /* Same red as ambulance / danger icon wells (ui-icon-well--danger). */
+  --bb-accent: #e11d48;
+  --bb-accent-soft: #fff1f2;
   --bb-accent-contrast: #ffffff;
   --bb-danger: #e11d48;
   --bb-danger-soft: #fff1f2;
@@ -41,10 +43,11 @@ html[data-ui-theme="legacy"] {
   --bb-text-tertiary: #a3a3a3;
   --bb-border: #e5e5e5;
   --bb-border-strong: #d4d4d4;
-  --bb-accent: #1f2937;
+  --bb-accent: #e11d48;
+  --bb-accent-soft: #fff1f2;
   --bb-accent-contrast: #ffffff;
-  --bb-danger: #dc2626;
-  --bb-danger-soft: #fef2f2;
+  --bb-danger: #e11d48;
+  --bb-danger-soft: #fff1f2;
   --bb-radius-sheet: 0.75rem;
   --bb-radius-card: 0.75rem;
   --bb-radius-control: 0.75rem;
@@ -71,8 +74,9 @@ html[data-color-mode="dark"] {
   --bb-text-tertiary: #7a8090;
   --bb-border: rgba(255, 255, 255, 0.08);
   --bb-border-strong: rgba(255, 255, 255, 0.14);
-  --bb-accent: #e8eaef;
-  --bb-accent-contrast: #12141a;
+  --bb-accent: #e11d48;
+  --bb-accent-soft: rgba(225, 29, 72, 0.16);
+  --bb-accent-contrast: #ffffff;
   --bb-danger: #fb7185;
   --bb-danger-soft: rgba(251, 113, 133, 0.14);
   --bb-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -213,6 +217,14 @@ html[data-color-mode="dark"] .divide-neutral-200 > :not([hidden]) ~ :not([hidden
   isolation: isolate;
 }
 
+.bb-map-fab {
+  background: var(--bb-bg-surface);
+  border-radius: 9999px;
+  border: 1px solid var(--bb-border);
+  box-shadow: 0 4px 16px rgba(26, 28, 46, 0.12);
+  color: var(--bb-text);
+}
+
 .ui-icon-well {
   background: var(--bb-bg-muted);
   border-radius: var(--bb-radius-pill);
@@ -285,6 +297,7 @@ html[data-ui-theme="legacy"] .ui-list-stack {
 .ui-list-card--detail {
   padding: 0.85rem 0.9rem;
   box-shadow: var(--bb-shadow-soft);
+  --compliance-flush-gutter: 1.4rem;
 }
 
 html[data-ui-theme="legacy"] .ui-list-card {
@@ -359,6 +372,22 @@ html[data-ui-theme="legacy"] .ui-list-card {
   min-width: 0;
 }
 
+.ui-list-card__title-group {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.ui-list-card__verified {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  margin-top: 0.12rem;
+  color: #0ea5e9;
+}
+
 /* Primary: bold / near-black */
 .ui-list-card__title {
   margin: 0;
@@ -372,7 +401,6 @@ html[data-ui-theme="legacy"] .ui-list-card {
   -webkit-box-orient: vertical;
   overflow: hidden;
   min-width: 0;
-  flex: 1;
 }
 
 /* Location meta: secondary, right of title */
@@ -716,6 +744,11 @@ html[data-ui-theme="legacy"] .ui-list-card {
 
 .ui-btn-primary:not(:disabled):active {
   opacity: 0.9;
+}
+
+.ui-choice-on {
+  background: var(--bb-accent);
+  color: var(--bb-accent-contrast);
 }
 
 .ui-topbar {

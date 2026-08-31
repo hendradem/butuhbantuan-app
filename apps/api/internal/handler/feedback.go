@@ -27,14 +27,15 @@ func (h *FeedbackHandler) WithOrders(orderSvc service.OrderUseCase) *FeedbackHan
 
 func (h *FeedbackHandler) Submit(c *fiber.Ctx) error {
 	var body struct {
-		EmergencyID   string `json:"emergency_id"`
-		EmergencyUUID string `json:"emergency_uuid"` // alias from public ticket DTO
-		TicketNumber  string `json:"ticket_number"`
-		UnitName      string `json:"unit_name"`
-		UnitHelpful   bool   `json:"unit_helpful"`
-		AppHelpful    *bool  `json:"app_helpful"`
-		CallType      string `json:"call_type"`
-		Comment       string `json:"comment"`
+		EmergencyID     string `json:"emergency_id"`
+		EmergencyUUID   string `json:"emergency_uuid"` // alias from public ticket DTO
+		TicketNumber    string `json:"ticket_number"`
+		RequesterPhone  string `json:"requester_phone"`
+		UnitName        string `json:"unit_name"`
+		UnitHelpful     bool   `json:"unit_helpful"`
+		AppHelpful      *bool  `json:"app_helpful"`
+		CallType        string `json:"call_type"`
+		Comment         string `json:"comment"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
@@ -46,6 +47,7 @@ func (h *FeedbackHandler) Submit(c *fiber.Ctx) error {
 	}
 	ticketNumber := strings.TrimSpace(body.TicketNumber)
 	unitName := strings.TrimSpace(body.UnitName)
+	claimPhone := strings.TrimSpace(body.RequesterPhone)
 
 	// Citizen e-ticket may only have ticket_number (or stripped emergency_uuid on older DTOs).
 	if emergencyID == "" && ticketNumber != "" && h.orderSvc != nil {
@@ -55,6 +57,9 @@ func (h *FeedbackHandler) Submit(c *fiber.Ctx) error {
 				return response.Error(c, fiber.StatusBadRequest, "ticket not found")
 			}
 			return response.Error(c, fiber.StatusInternalServerError, "failed to resolve ticket")
+		}
+		if claimPhone == "" || !domain.PhoneMatches(order.RequesterPhone, claimPhone) {
+			return response.Error(c, fiber.StatusForbidden, "verifikasi nomor HP pelapor diperlukan")
 		}
 		emergencyID = strings.TrimSpace(order.EmergencyUUID)
 		if unitName == "" {

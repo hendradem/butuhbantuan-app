@@ -9,8 +9,16 @@ import {
   isPscCandidate,
   type RankedCandidateView,
 } from "~/utils/dispatchCandidate";
+import {
+  buildDispatchWaMessage,
+  dispatchUrlFromToken,
+  isWaOnlyOrder,
+  openDispatchWhatsApp,
+  copyDispatchText,
+} from "~/utils/waDispatchShare";
+import { toast } from "~/utils/appToast";
 
-type Step = "choose" | "auto" | "manual";
+type Step = "choose" | "auto" | "manual" | "wa-share";
 
 type ManualUnit = {
   id: string;
@@ -36,6 +44,7 @@ const emit = defineEmits<{
 
 const config = useRuntimeConfig();
 const baseUrl = config.public.apiBaseUrl as string;
+const webAppUrl = config.public.webAppUrl as string;
 const { fetchCandidates, reassign, acting } = useOrderDispatch(props.mode);
 
 const step = ref<Step>("choose");
@@ -45,6 +54,7 @@ const manualUnits = ref<ManualUnit[]>([]);
 const selected = ref("");
 const search = ref("");
 const loadError = ref("");
+const reassignedOrder = ref<any | null>(null);
 
 const topRecommendations = computed(() => candidates.value.slice(0, REASSIGN_TOP_N));
 const best = computed(() => topRecommendations.value[0] ?? null);
@@ -86,6 +96,7 @@ const filteredManual = computed(() => {
 });
 
 const modalTitle = computed(() => {
+  if (step.value === "wa-share") return "Kirim WA ke Unit";
   if (step.value === "auto") return "Rekomendasi Sistem";
   if (step.value === "manual") return "Cari Unit Manual";
   return "Alihkan ke Unit Lain";
@@ -93,6 +104,10 @@ const modalTitle = computed(() => {
 
 const modalDescription = computed(() => {
   if (!props.order) return "";
+  if (step.value === "wa-share") {
+    const unit = reassignedOrder.value?.unit_name || "unit baru";
+    return `Tiket ${props.order.ticket_number} dialihkan ke ${unit}. Unit ini tanpa dashboard — kirim link tugas lewat WhatsApp.`;
+  }
   if (step.value === "choose") {
     return `Tiket ${props.order.ticket_number} — pilih cara pengalihan.`;
   }
@@ -100,6 +115,16 @@ const modalDescription = computed(() => {
     return "Sistem memilih unit terbaik (kota sendiri · nearby PSC/verified ≤40 km · dispatcher).";
   }
   return "Ketik nama / kota untuk mencari unit di direktori (jenis layanan sama).";
+});
+
+const dispatchUrl = computed(() => {
+  const token = reassignedOrder.value?.track_token;
+  return token ? dispatchUrlFromToken(token, webAppUrl) : "";
+});
+
+const unitContactPhone = computed(() => {
+  const o = reassignedOrder.value;
+  return o?.unit_whatsapp || o?.unit_phone || "";
 });
 
 function resetState() {
@@ -110,6 +135,42 @@ function resetState() {
   candidates.value = [];
   manualUnits.value = [];
   loading.value = false;
+  reassignedOrder.value = null;
+}
+
+function finishReassign(order: any, mode: "auto" | "manual") {
+  const msg = mode === "auto"
+    ? "Dialihkan ke unit rekomendasi sistem"
+    : "Pesanan dialihkan";
+  if (isWaOnlyOrder(order) && order?.track_token) {
+    reassignedOrder.value = order;
+    step.value = "wa-share";
+    toast.success(msg);
+    return;
+  }
+  toast.success(msg);
+  open.value = false;
+  emit("done");
+}
+
+function openUnitWa() {
+  const o = reassignedOrder.value;
+  if (!o || !dispatchUrl.value) return;
+  openDispatchWhatsApp(
+    unitContactPhone.value,
+    buildDispatchWaMessage(o, dispatchUrl.value),
+  );
+}
+
+async function copyDispatchLink() {
+  const msg = await copyDispatchText(dispatchUrl.value, "Link tugas disalin");
+  if (msg) toast.success(msg);
+  else toast.error("Gagal menyalin — salin manual dari kotak link");
+}
+
+function finishWaShare() {
+  open.value = false;
+  emit("done");
 }
 
 async function ensureCandidates() {
@@ -178,37 +239,28 @@ function backToChoose() {
 
 async function confirmAutoBest() {
   if (!props.order?.id) return;
-  const ok = await reassign(props.order.id, { mode: "auto" });
-  if (ok) {
-    open.value = false;
-    emit("done");
-  }
+  const res = await reassign(props.order.id, { mode: "auto" });
+  if (res.ok) finishReassign(res.order, "auto");
 }
 
 async function confirmManual() {
   if (!props.order?.id || !selected.value) return;
-  const ok = await reassign(props.order.id, {
+  const res = await reassign(props.order.id, {
     mode: "manual",
     emergencyUUID: selected.value,
   });
-  if (ok) {
-    open.value = false;
-    emit("done");
-  }
+  if (res.ok) finishReassign(res.order, "manual");
 }
 
 async function confirmAutoPick(c: RankedCandidateView) {
   if (!props.order?.id) return;
   const id = candidateId(c);
   if (!id) return;
-  const ok = await reassign(props.order.id, {
+  const res = await reassign(props.order.id, {
     mode: "manual",
     emergencyUUID: id,
   });
-  if (ok) {
-    open.value = false;
-    emit("done");
-  }
+  if (res.ok) finishReassign(res.order, "manual");
 }
 </script>
 
@@ -309,7 +361,7 @@ async function confirmAutoPick(c: RankedCandidateView) {
                 <span
                   v-else-if="c.emergency?.partner_tier === 'verified'"
                   class="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-sky-100 text-sky-700"
-                >Verified</span>
+                >Swasta</span>
                 <span
                   v-if="c.dispatch_tier === 'nearby'"
                   class="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-100 text-violet-700"
@@ -329,7 +381,7 @@ async function confirmAutoPick(c: RankedCandidateView) {
     </div>
 
     <!-- Step: manual search (full directory) -->
-    <div v-else class="space-y-3">
+    <div v-else-if="step === 'manual'" class="space-y-3">
       <button
         type="button"
         class="inline-flex items-center gap-1 text-xs font-medium text-neutral-500 hover:text-neutral-800"
@@ -372,7 +424,7 @@ async function confirmAutoPick(c: RankedCandidateView) {
               <span
                 v-else-if="String(u.partner_tier || '').toLowerCase() === 'verified'"
                 class="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-sky-100 text-sky-700"
-              >Verified</span>
+              >Swasta</span>
               <span
                 v-if="u.is_province_dispatcher"
                 class="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-100 text-violet-700"
@@ -391,24 +443,82 @@ async function confirmAutoPick(c: RankedCandidateView) {
       </div>
     </div>
 
+    <!-- Step: WA share after reassign to WA-only unit -->
+    <div v-else-if="step === 'wa-share'" class="space-y-4">
+      <div class="rounded-xl border border-amber-200 bg-amber-50/80 p-4">
+        <div class="flex gap-3">
+          <div class="w-10 h-10 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0">
+            <Icon icon="lucide:message-circle" class="text-lg" />
+          </div>
+          <div class="min-w-0 text-sm text-amber-950 leading-relaxed">
+            <p class="font-semibold">Unit tanpa dashboard</p>
+            <p class="mt-1 text-amber-900/90">
+              Kirim link tugas ke petugas lewat WhatsApp. Pelapor juga akan diminta mengirim ulang WA dari e-tiket setelah verifikasi.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="dispatchUrl" class="space-y-2">
+        <p class="text-xs font-medium text-neutral-600">Link tugas petugas</p>
+        <div class="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-700 break-all font-mono">
+          {{ dispatchUrl }}
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <UiButton
+          size="sm"
+          :disabled="!dispatchUrl"
+          @click="copyDispatchLink"
+        >
+          <Icon icon="lucide:copy" class="mr-1.5" />
+          Salin link
+        </UiButton>
+        <UiButton
+          size="sm"
+          variant="secondary"
+          :disabled="!dispatchUrl"
+          @click="openUnitWa"
+        >
+          <Icon icon="lucide:message-circle" class="mr-1.5" />
+          WA petugas
+        </UiButton>
+      </div>
+
+      <p v-if="!unitContactPhone" class="text-[11px] text-neutral-500">
+        Nomor WA unit tidak tercatat — tombol WA tetap membuka chat dengan pesan siap tempel.
+      </p>
+    </div>
+
     <template #footer>
-      <UiButton variant="secondary" size="sm" @click="open = false">Batal</UiButton>
       <UiButton
-        v-if="step === 'auto'"
+        v-if="step === 'wa-share'"
+        variant="secondary"
         size="sm"
-        :disabled="!best || !!acting"
-        @click="confirmAutoBest"
+        @click="finishWaShare"
       >
-        {{ acting ? "Mengalihkan..." : "Konfirmasi rekomendasi terbaik" }}
+        Selesai
       </UiButton>
-      <UiButton
-        v-else-if="step === 'manual'"
-        size="sm"
-        :disabled="!selected || !!acting"
-        @click="confirmManual"
-      >
-        {{ acting ? "Mengalihkan..." : "Alihkan" }}
-      </UiButton>
+      <template v-else>
+        <UiButton variant="secondary" size="sm" @click="open = false">Batal</UiButton>
+        <UiButton
+          v-if="step === 'auto'"
+          size="sm"
+          :disabled="!best || !!acting"
+          @click="confirmAutoBest"
+        >
+          {{ acting ? "Mengalihkan..." : "Konfirmasi rekomendasi terbaik" }}
+        </UiButton>
+        <UiButton
+          v-else-if="step === 'manual'"
+          size="sm"
+          :disabled="!selected || !!acting"
+          @click="confirmManual"
+        >
+          {{ acting ? "Mengalihkan..." : "Alihkan" }}
+        </UiButton>
+      </template>
     </template>
   </UiModal>
 </template>

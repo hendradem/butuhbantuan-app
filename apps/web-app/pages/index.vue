@@ -1,17 +1,24 @@
 <script setup lang="ts">
 import { appToast } from "~/utils/appToast";
 import type { SavedPlace } from "~/utils/savedPlaces";
+import { formatGeoAddress } from "~/utils/geo";
+import { getSavedPlace } from "~/utils/savedPlaces";
+import { hasMapView } from "~/utils/mapUrl";
 
 const route = useRoute();
 const onboardingStore = useOnboardingStore();
-const { initUserLocation, readLastGeo, DIY_CENTER } = useGeolocation();
-const { loadEmergencyData } = useEmergencyApi();
+const { initUserLocation, readLastGeo, DIY_CENTER, reverseGeocode } = useGeolocation();
+const { loadEmergencyData, ensureDeepLinkUnit } = useEmergencyApi();
 const userLocation = useUserLocationStore();
-const leaflet = useLeafletStore();
-const detailSheet = useDetailSheetStore();
-const exploreSheet = useExploreSheetStore();
-const ticketSheet = useTicketSheetStore();
+const mapUrl = useMapUrl();
+const { goToPlace } = usePlaceNavigation();
+
+useMapUrlSync();
 useViewportHeight();
+
+if (import.meta.client) {
+  mapUrl.seedFromUrl(mapUrl.read());
+}
 
 const shouldOnboarding = ref<boolean | null>(null);
 
@@ -35,64 +42,72 @@ watch(
   },
 );
 
-/** Deep link: `/?ticket=NUMBER` (+ optional via/to) opens e-ticket sheet on home. */
-async function openTicketFromQuery() {
-  const n = String(route.query.ticket || "").trim();
-  if (!n) return;
-  const via = String(route.query.via || "");
-  const to = String(route.query.to || "");
-  const nextQuery = { ...route.query };
-  delete nextQuery.ticket;
-  delete nextQuery.via;
-  delete nextQuery.to;
-  // Land on `/` first so the store can pushState `/ticket/…` without remounting home.
-  await navigateTo({ path: "/", query: nextQuery }, { replace: true });
-  ticketSheet.open(n, { via, to });
-}
-
-watch(
-  () => [shouldOnboarding.value, route.query.ticket] as const,
-  ([ready, ticket]) => {
-    if (ready === false && ticket) void openTicketFromQuery();
-  },
-  { immediate: true },
-);
-
 async function boot() {
   const toast = appToast();
-  const seed = readLastGeo() || DIY_CENTER;
+  const urlView = mapUrl.read();
 
-  // 1) Paint services ASAP so map is not stuck grey while GPS resolves
-  void loadEmergencyData(seed.lat, seed.long);
+  let hasUrlPin = hasMapView(urlView);
+  let seed = hasUrlPin
+    ? { lat: urlView.lat!, long: urlView.lng! }
+    : readLastGeo() || DIY_CENTER;
 
-  // 2) Resolve GPS (short attempts) and refresh if we got a real fix
-  const fix = await initUserLocation();
-
-  if (fix.errorCode === 1) {
-    const appError = useAppErrorStore();
-    appError.setErrorMessage("permission_denied");
-    appError.onOpenSheet();
+  if (urlView.place) {
+    const place = getSavedPlace(urlView.place);
+    if (place) {
+      userLocation.setManualLocation(true);
+      userLocation.updateCoordinate(place.lat, place.lng);
+      userLocation.updateFullAddress(place.address);
+      seed = { lat: place.lat, long: place.lng };
+      hasUrlPin = true;
+    }
   }
 
-  if (fix.fromGps) {
-    await loadEmergencyData(fix.lat, fix.long);
-  } else if (fix.errorCode !== 1) {
-    toast.error("Tap ikon target untuk lokasi terkini (izinkan akses lokasi)", {
-      duration: 4000,
+  await loadEmergencyData(seed.lat, seed.long);
+
+  if (urlView.unit || urlView.toLat != null) {
+    await ensureDeepLinkUnit({
+      unitId: urlView.unit,
+      toLat: urlView.toLat,
+      toLng: urlView.toLng,
     });
   }
+
+  if (hasUrlPin && !urlView.place) {
+    userLocation.setAddressLoading(true);
+    try {
+      const geo = await reverseGeocode(urlView.lng!, urlView.lat!);
+      const formatted = formatGeoAddress(geo);
+      userLocation.updateFullAddress(
+        formatted || `${urlView.lat!.toFixed(5)}, ${urlView.lng!.toFixed(5)}`,
+      );
+    } finally {
+      userLocation.setAddressLoading(false);
+    }
+  } else if (!hasUrlPin) {
+    const fix = await initUserLocation();
+
+    if (fix.errorCode === 1) {
+      const appError = useAppErrorStore();
+      appError.setErrorMessage("permission_denied");
+      appError.onOpenSheet();
+    }
+
+    const moved =
+      Math.abs(fix.lat - seed.lat) > 1e-5 || Math.abs(fix.long - seed.long) > 1e-5;
+    if (fix.fromGps || moved) {
+      await loadEmergencyData(fix.lat, fix.long);
+    } else if (fix.errorCode !== 1) {
+      toast.error("Tap ikon target untuk lokasi terkini (izinkan akses lokasi)", {
+        duration: 4000,
+      });
+    }
+  }
+
+  mapUrl.finishHydration();
 }
 
 async function goToSavedPlace(place: SavedPlace) {
-  userLocation.setManualLocation(true);
-  userLocation.updateCoordinate(place.lat, place.lng);
-  userLocation.updateFullAddress(place.address);
-  leaflet.resetLeafletRouting();
-  leaflet.requestDefaultView();
-  detailSheet.clearExploreReturn();
-  detailSheet.onClose();
-  exploreSheet.onClose();
-  await loadEmergencyData(place.lat, place.lng);
+  await goToPlace(place);
 }
 </script>
 
@@ -128,10 +143,11 @@ async function goToSavedPlace(place: SavedPlace) {
           </div>
 
           <div class="absolute bottom-0 left-0 right-0 z-[100] pointer-events-none">
-            <div class="pointer-events-auto px-3 pb-2 flex justify-end">
+            <div class="pointer-events-auto px-3 pb-2 flex flex-col items-end gap-2">
               <SavedPlacesDock @go="goToSavedPlace" />
+              <UnitsDock />
             </div>
-            <div class="pointer-events-auto max-h-[min(52vh,460px)]">
+            <div class="pointer-events-auto">
               <BottomMenu />
             </div>
           </div>
@@ -145,10 +161,11 @@ async function goToSavedPlace(place: SavedPlace) {
         <ConfirmationSheet />
         <ReviewSheet />
         <ErrorSheet />
-        <SosSheet />
+        <!-- SOS sheet kept for re-enable; entry points hidden (menu + NeedHelp). -->
+        <!-- <SosSheet /> -->
         <MoreSheet />
         <NeedHelpSheet />
-        <TicketSheet />
+        <UnitsSheet />
       </template>
     </div>
   </div>

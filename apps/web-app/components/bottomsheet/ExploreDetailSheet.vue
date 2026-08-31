@@ -2,15 +2,19 @@
 import { Icon } from "@iconify/vue";
 import { storeToRefs } from "pinia";
 import { cityNameFormat } from "~/utils/cityNameFormat";
+import { isComplianceComplete, isComplianceVerified } from "~/utils/complianceFilter";
 import { partnerTierOf, type PartnerTier } from "~/utils/partnerTier";
 import { compareUnitsSmart, displayEtaMinutes } from "~/utils/rankUnits";
 
 const exploreSheet = useExploreSheetStore();
 const emergencyStore = useEmergencyStore();
-const emergencyDataStore = useEmergencyDataStore();
 const userLocation = useUserLocationStore();
 const leaflet = useLeafletStore();
 const detailSheet = useDetailSheetStore();
+const mapUrl = useMapUrl();
+const { clearRoute } = useMapRouting();
+const { share: shareMapLink } = useShareMapLink();
+const { openEmergencyDetail } = useOpenUnit();
 const { isLoading } = storeToRefs(emergencyStore);
 
 const sheetData = computed(() => exploreSheet.sheetData);
@@ -25,7 +29,7 @@ const emergencyList = computed(() => {
   );
 });
 
-type ServiceMode = "all" | "emergency" | "transport";
+type ServiceMode = "all" | "emergency" | "transport" | "jenazah";
 type SortMode = "smart" | "eta" | "distance";
 type TierFilter = "all" | PartnerTier;
 
@@ -34,6 +38,8 @@ const sortMode = ref<SortMode>("smart");
 const tierFilter = ref<TierFilter>("all");
 const only24h = ref(false);
 const onlyAvailable = ref(false);
+const onlyVerified = ref(false);
+const onlyComplete = ref(false);
 
 const filterOpen = ref(false);
 const filterMenuRef = ref<HTMLElement | null>(null);
@@ -45,6 +51,11 @@ const showServiceFilter = computed(() => {
 
 const showFilterMenu = computed(() => emergencyList.value.length > 0);
 
+const showComplianceFilter = computed(() => {
+  const name = String(sheetData.value?.emergencyType?.name || "").toLowerCase();
+  return name.includes("ambulance") || name.includes("ambulans");
+});
+
 const activeFilterCount = computed(() => {
   let n = 0;
   if (showServiceFilter.value && serviceMode.value !== "all") n += 1;
@@ -52,6 +63,8 @@ const activeFilterCount = computed(() => {
   if (tierFilter.value !== "all") n += 1;
   if (only24h.value) n += 1;
   if (onlyAvailable.value) n += 1;
+  if (onlyVerified.value) n += 1;
+  if (onlyComplete.value) n += 1;
   return n;
 });
 
@@ -63,6 +76,8 @@ watch(
     tierFilter.value = "all";
     only24h.value = false;
     onlyAvailable.value = false;
+    onlyVerified.value = false;
+    onlyComplete.value = false;
     filterOpen.value = false;
   }
 );
@@ -108,6 +123,7 @@ function matchesService(item: any): boolean {
     const tos = String(item.emergencyData?.type_of_service || "").toLowerCase();
     if (serviceMode.value === "emergency") return tos.includes("emergency") || tos.includes("darurat");
     if (serviceMode.value === "transport") return tos.includes("transport");
+    if (serviceMode.value === "jenazah") return tos.includes("jenazah");
     return true;
   }
   return tipes.includes(serviceMode.value);
@@ -128,6 +144,10 @@ const filteredEmergencyList = computed(() => {
       const available = Number(fleet?.available ?? 0);
       if (!(available > 0 || item.emergencyData?.operational?.is_active)) return false;
     }
+
+    const compliance = item.emergencyData?.compliance;
+    if (onlyVerified.value && !isComplianceVerified(compliance)) return false;
+    if (onlyComplete.value && !isComplianceComplete(compliance)) return false;
 
     return true;
   });
@@ -156,27 +176,7 @@ onUnmounted(() => document.removeEventListener("mousedown", onClickOutside));
 async function handleSelect(item: any) {
   filterOpen.value = false;
   const idx = filteredEmergencyList.value.indexOf(item);
-
-  emergencyDataStore.updateSelectedEmergencyData({
-    selectedEmergencyData: item.emergencyData,
-    selectedEmergencySource: "detail",
-  });
-
-  detailSheet.setDetailSheetData({
-    emergencyType: item.emergencyData?.emergency_type ?? sheetData.value?.emergencyType,
-    emergency: item,
-  });
-  exploreSheet.onClose();
-  detailSheet.onOpenFromExplore();
-
-  const coords = item.emergencyData?.coordinates;
-  if (coords) {
-    leaflet.updateLeafletRouting({
-      startPoint: { lat: userLocation.lat, lng: userLocation.long },
-      routeEndPoint: { lat: parseFloat(coords[1]), lng: parseFloat(coords[0]) },
-    });
-  }
-
+  openEmergencyDetail(item, { fromExplore: true });
   await nextTick();
   scrollSelectedCardToTop(idx);
 }
@@ -214,10 +214,23 @@ function scrollSelectedCardToTop(idx: number) {
 
 function handleClose() {
   filterOpen.value = false;
-  leaflet.resetLeafletRouting();
+  clearRoute();
   detailSheet.clearExploreReturn();
   detailSheet.onClose();
   exploreSheet.onClose();
+  mapUrl.clearService();
+}
+
+async function shareResults() {
+  const type = sheetData.value?.emergencyType;
+  if (!type?.id) return;
+  const label = String(type.name || "Layanan");
+  const area = areaName.value ? ` di ${areaName.value}` : "";
+  await shareMapLink({
+    title: `${label}${area} — ButuhBantuan`,
+    patch: { service: String(type.id) },
+    remove: ["unit", "to", "place"],
+  });
 }
 
 function resetFilters() {
@@ -226,11 +239,13 @@ function resetFilters() {
   tierFilter.value = "all";
   only24h.value = false;
   onlyAvailable.value = false;
+  onlyVerified.value = false;
+  onlyComplete.value = false;
 }
 
 function chipClass(active: boolean) {
   return [
-    "px-2.5 py-1 text-[11px] font-medium rounded-full border transition-colors",
+    "px-2 py-0.5 text-[10px] font-medium rounded-full border transition-colors",
     active
       ? "bg-neutral-900 text-white border-neutral-900"
       : "bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300",
@@ -250,8 +265,8 @@ function chipClass(active: boolean) {
           <div class="flex items-center justify-center w-8 h-8 shrink-0 ui-icon-well--danger" style="border-radius: 0.75rem">
             <Icon :icon="sheetData.emergencyType.icon" class="text-xl" />
           </div>
-          <div class="min-w-0 flex-1">
-            <h1 class="text-md leading-none font-semibold truncate ui-text-primary">
+          <div class="min-w-0">
+            <h1 class="text-md leading-none m-0 font-semibold truncate ui-text-primary">
               {{ sheetData.emergencyType.name }}
             </h1>
             <p v-if="areaName" class="m-0 mt-1 leading-none text-[13px] ui-text-secondary truncate">
@@ -261,19 +276,19 @@ function chipClass(active: boolean) {
         </div>
 
         <div class="flex items-center gap-1.5 shrink-0">
-          <!-- Dotted filter menu -->
+          <!-- Compact filter popover — opens into the sheet, not over the map -->
           <div v-if="showFilterMenu" ref="filterMenuRef" class="relative">
             <button
               type="button"
-              class="relative flex items-center justify-center w-8 h-8 ui-icon-well"
+              class="relative flex items-center justify-center w-8 h-8 shrink-0 ui-icon-well"
               title="Filter"
               aria-label="Filter"
               @click.stop="filterOpen = !filterOpen"
             >
-              <Icon icon="mdi:dots-vertical" class="text-xl" style="color: var(--bb-text-secondary)" />
+              <Icon icon="lucide:list-filter" class="text-lg" style="color: var(--bb-text-secondary)" />
               <span
                 v-if="activeFilterCount > 0"
-                class="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-1 rounded-full text-white text-[9px] font-bold flex items-center justify-center"
+                class="absolute -top-0.5 -right-0.5 min-w-[12px] h-3 px-0.5 rounded-full text-white text-[8px] font-bold flex items-center justify-center"
                 style="background: var(--bb-danger)"
               >
                 {{ activeFilterCount }}
@@ -283,33 +298,34 @@ function chipClass(active: boolean) {
             <Transition name="filter-drop">
               <div
                 v-if="filterOpen"
-                class="ui-card absolute right-0 bottom-full mb-1.5 w-72 max-w-[calc(100vw-1.5rem)] z-[80] overflow-hidden"
+                class="ui-card absolute right-0 top-full mt-1.5 w-64 max-w-[calc(100vw-1.5rem)] z-[80] overflow-hidden"
                 style="box-shadow: var(--bb-shadow-soft)"
               >
-                <div class="px-3 py-2.5 border-b border-neutral-100 flex items-center justify-between gap-2">
-                  <p class="text-sm font-semibold text-neutral-900">Filter</p>
+                <div class="px-2.5 py-2 border-b border-neutral-100 flex items-center justify-between gap-2">
+                  <p class="text-xs font-semibold text-neutral-900">Filter</p>
                   <button
                     v-if="activeFilterCount > 0"
                     type="button"
-                    class="text-[11px] font-medium text-neutral-500 hover:text-neutral-800 px-1.5 py-0.5"
+                    class="text-[10px] font-medium text-neutral-500 hover:text-neutral-800 px-1 py-0.5"
                     @click="resetFilters"
                   >
                     Reset
                   </button>
                 </div>
 
-                <div class="px-3 py-3 space-y-3.5 max-h-[55vh] overflow-y-auto">
+                <div class="px-2.5 py-2.5 space-y-2.5 max-h-[42vh] overflow-y-auto">
                   <!-- Layanan (ambulance only) -->
                   <div v-if="showServiceFilter">
-                    <p class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400 mb-1.5">
+                    <p class="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 mb-1">
                       Jenis layanan
                     </p>
-                    <div class="flex flex-wrap gap-1.5">
+                    <div class="flex flex-wrap gap-1">
                       <button
                         v-for="opt in [
                           { id: 'all', label: 'Semua' },
                           { id: 'emergency', label: 'Darurat' },
                           { id: 'transport', label: 'Transport' },
+                          { id: 'jenazah', label: 'Jenazah' },
                         ]"
                         :key="opt.id"
                         type="button"
@@ -323,10 +339,10 @@ function chipClass(active: boolean) {
 
                   <!-- Urutan -->
                   <div>
-                    <p class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400 mb-1.5">
+                    <p class="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 mb-1">
                       Urutkan
                     </p>
-                    <div class="flex flex-wrap gap-1.5">
+                    <div class="flex flex-wrap gap-1">
                       <button
                         type="button"
                         :class="chipClass(sortMode === 'smart')"
@@ -353,15 +369,15 @@ function chipClass(active: boolean) {
 
                   <!-- Mitra -->
                   <div>
-                    <p class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400 mb-1.5">
+                    <p class="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 mb-1">
                       Jenis mitra
                     </p>
-                    <div class="flex flex-wrap gap-1.5">
+                    <div class="flex flex-wrap gap-1">
                       <button
                         v-for="opt in [
                           { id: 'all', label: 'Semua' },
                           { id: 'psc', label: 'Resmi' },
-                          { id: 'verified', label: 'Terverifikasi' },
+                          { id: 'verified', label: 'Swasta' },
                           { id: 'community', label: 'Komunitas' },
                         ]"
                         :key="opt.id"
@@ -374,44 +390,85 @@ function chipClass(active: boolean) {
                     </div>
                   </div>
 
+                  <!-- Kelengkapan (ambulance) -->
+                  <div v-if="showComplianceFilter">
+                    <p class="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 mb-1">
+                      Kelengkapan
+                    </p>
+                    <div class="space-y-1.5">
+                      <button
+                        type="button"
+                        class="w-full flex items-center justify-between gap-3 px-0.5 py-0.5 text-left"
+                        @click="onlyVerified = !onlyVerified"
+                      >
+                        <span class="text-xs text-neutral-800">Terverifikasi admin</span>
+                        <span
+                          class="w-8 h-[18px] rounded-full relative transition-colors"
+                          :class="onlyVerified ? 'bg-neutral-900' : 'bg-neutral-200'"
+                        >
+                          <span
+                            :class="[
+                              'absolute top-[2px] w-3.5 h-3.5 rounded-full bg-white shadow transition-transform',
+                              onlyVerified ? 'translate-x-[14px]' : 'translate-x-0.5',
+                            ]"
+                          />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        class="w-full flex items-center justify-between gap-3 px-0.5 py-0.5 text-left"
+                        @click="onlyComplete = !onlyComplete"
+                      >
+                        <span class="text-xs text-neutral-800">Kelengkapan ≥80%</span>
+                        <span
+                          class="w-8 h-[18px] rounded-full relative transition-colors"
+                          :class="onlyComplete ? 'bg-neutral-900' : 'bg-neutral-200'"
+                        >
+                          <span
+                            :class="[
+                              'absolute top-[2px] w-3.5 h-3.5 rounded-full bg-white shadow transition-transform',
+                              onlyComplete ? 'translate-x-[14px]' : 'translate-x-0.5',
+                            ]"
+                          />
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
                   <!-- Toggles -->
-                  <div class="space-y-2 pt-0.5">
+                  <div class="space-y-1.5 pt-0.5">
                     <button
                       type="button"
-                      class="w-full flex items-center justify-between gap-3 px-1 py-1 text-left"
+                      class="w-full flex items-center justify-between gap-3 px-0.5 py-0.5 text-left"
                       @click="only24h = !only24h"
                     >
-                      <span class="text-sm text-neutral-800">Hanya 24 jam</span>
+                      <span class="text-xs text-neutral-800">Hanya 24 jam</span>
                       <span
-                        :class="[
-                          'w-9 h-5 rounded-full relative transition-colors',
-                          only24h ? 'bg-neutral-900' : 'bg-neutral-200',
-                        ]"
+                        class="w-8 h-[18px] rounded-full relative transition-colors"
+                        :class="only24h ? 'bg-neutral-900' : 'bg-neutral-200'"
                       >
                         <span
                           :class="[
-                            'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform',
-                            only24h ? 'translate-x-4' : 'translate-x-0.5',
+                            'absolute top-[2px] w-3.5 h-3.5 rounded-full bg-white shadow transition-transform',
+                            only24h ? 'translate-x-[14px]' : 'translate-x-0.5',
                           ]"
                         />
                       </span>
                     </button>
                     <button
                       type="button"
-                      class="w-full flex items-center justify-between gap-3 px-1 py-1 text-left"
+                      class="w-full flex items-center justify-between gap-3 px-0.5 py-0.5 text-left"
                       @click="onlyAvailable = !onlyAvailable"
                     >
-                      <span class="text-sm text-neutral-800">Armada tersedia</span>
+                      <span class="text-xs text-neutral-800">Armada tersedia</span>
                       <span
-                        :class="[
-                          'w-9 h-5 rounded-full relative transition-colors',
-                          onlyAvailable ? 'bg-neutral-900' : 'bg-neutral-200',
-                        ]"
+                        class="w-8 h-[18px] rounded-full relative transition-colors"
+                        :class="onlyAvailable ? 'bg-neutral-900' : 'bg-neutral-200'"
                       >
                         <span
                           :class="[
-                            'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform',
-                            onlyAvailable ? 'translate-x-4' : 'translate-x-0.5',
+                            'absolute top-[2px] w-3.5 h-3.5 rounded-full bg-white shadow transition-transform',
+                            onlyAvailable ? 'translate-x-[14px]' : 'translate-x-0.5',
                           ]"
                         />
                       </span>
@@ -419,14 +476,24 @@ function chipClass(active: boolean) {
                   </div>
                 </div>
 
-                <div class="px-3 py-2 border-t border-neutral-100 bg-neutral-50">
-                  <p class="text-[11px] text-neutral-500">
+                <div class="px-2.5 py-1.5 border-t border-neutral-100 bg-neutral-50">
+                  <p class="text-[10px] text-neutral-500">
                     Menampilkan {{ filteredEmergencyList.length }} dari {{ emergencyList.length }} unit
                   </p>
                 </div>
               </div>
             </Transition>
           </div>
+
+          <button
+            type="button"
+            class="flex items-center justify-center w-8 h-8 shrink-0 ui-icon-well"
+            title="Bagikan hasil"
+            aria-label="Bagikan hasil pencarian"
+            @click="shareResults()"
+          >
+            <Icon icon="lucide:share-2" class="text-lg" style="color: var(--bb-text-secondary)" />
+          </button>
 
           <button
             type="button"
@@ -531,6 +598,6 @@ function chipClass(active: boolean) {
 .filter-drop-enter-from,
 .filter-drop-leave-to {
   opacity: 0;
-  transform: translateY(4px) scale(0.97);
+  transform: translateY(-4px) scale(0.97);
 }
 </style>

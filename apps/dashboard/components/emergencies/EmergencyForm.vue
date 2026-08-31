@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import { PARTNER_TIER_OPTIONS } from "~/utils/partnerTier";
 
 const emit = defineEmits<{ openMapPicker: [] }>();
 
@@ -26,10 +27,8 @@ const props = defineProps<{
     is_dispatcher: boolean;
     is_province_dispatcher: boolean;
     partner_tier: string;
-    trained_driver: boolean;
-    has_oxygen: boolean;
-    has_stretcher: boolean;
-    equipment_notes: string;
+    /** false = unit tanpa login dashboard; citizen kirim WA + /dispatch link */
+    dashboard_access: boolean;
     type_of_service: string;
     tipe_emergency: string[];
     is_active: boolean;
@@ -41,11 +40,9 @@ const props = defineProps<{
   };
 }>();
 
-const partnerTierOptions = [
-  { value: "psc", title: "Resmi", desc: "PSC 119, Damkar, Basarnas, SPGDT — prioritas tertinggi" },
-  { value: "verified", title: "Terverifikasi", desc: "Unit komunitas yang sudah diverifikasi (mis. PMI)" },
-  { value: "community", title: "Komunitas", desc: "Unit informal / grup WA — default" },
-] as const;
+const selectedTypeName = computed(
+  () => props.types.find((t) => String(t.id) === String(props.form.type_id))?.name ?? "",
+);
 
 function setPartnerTier(value: string) {
   props.form.partner_tier = value;
@@ -224,7 +221,7 @@ function selectAddress(item: any) {
 </script>
 
 <template>
-  <div class="space-y-5 pr-1">
+  <div class="space-y-5 pr-1 min-w-0">
 
     <!-- Status Aktif (quick toggle) -->
     <label class="flex items-center gap-3 cursor-pointer w-fit">
@@ -243,7 +240,7 @@ function selectAddress(item: any) {
       <UiFormField label="Nama Layanan" required>
         <UiInput v-model="form.name" placeholder="mis. Ambulance RSUP Dr. Sardjito" />
       </UiFormField>
-      <UiFormField label="Jenis" required>
+      <UiFormField label="Jenis layanan" required>
         <UiSelect v-model="form.type_id" placeholder="Pilih jenis">
           <option v-for="t in types" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
         </UiSelect>
@@ -254,20 +251,10 @@ function selectAddress(item: any) {
       <UiFormField label="Tipe Organisasi">
         <UiInput v-model="form.organization_type" placeholder="mis. Rumah Sakit Pemerintah" />
       </UiFormField>
-      <div class="col-span-2 sm:col-span-1">
-        <label class="block text-sm font-medium text-neutral-900 mb-2">Tipe Emergency</label>
-        <div class="flex flex-wrap gap-2">
-          <label
-            v-for="opt in ['emergency', 'transport', 'pencarian dan pertolongan']"
-            :key="opt"
-            class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-sm cursor-pointer transition-colors"
-            :class="form.tipe_emergency.includes(opt) ? 'bg-primary-50 border-primary-400 text-primary-700 font-medium' : 'border-neutral-200 text-neutral-600 hover:bg-neutral-50'"
-          >
-            <input type="checkbox" :value="opt" v-model="form.tipe_emergency" class="hidden" />
-            {{ opt.charAt(0).toUpperCase() + opt.slice(1) }}
-          </label>
-        </div>
-      </div>
+      <JenisPelayananPicker
+        v-model="form.tipe_emergency"
+        :emergency-type-name="selectedTypeName"
+      />
     </div>
     <UiFormField label="Deskripsi">
       <UiTextarea v-model="form.description" :rows="2" placeholder="Deskripsi singkat..." />
@@ -446,6 +433,19 @@ function selectAddress(item: any) {
           />
           <span class="text-sm text-neutral-700">Dispatcher tingkat provinsi</span>
         </label>
+        <label class="flex items-start gap-2.5 cursor-pointer">
+          <input
+            v-model="form.dashboard_access"
+            type="checkbox"
+            class="mt-0.5 w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+          />
+          <span>
+            <span class="block text-sm text-neutral-700">Akses dashboard unit</span>
+            <span class="block text-xs text-neutral-500 mt-0.5">
+              Matikan jika lembaga tidak boleh login. Pemesan akan kirim link tugas via WhatsApp.
+            </span>
+          </span>
+        </label>
       </div>
     </div>
 
@@ -455,7 +455,7 @@ function selectAddress(item: any) {
       <p class="text-xs text-neutral-400 mb-3">Kualitas &amp; kepercayaan — terpisah dari peran dispatcher cascade.</p>
       <div class="space-y-2" role="radiogroup" aria-label="Tingkat mitra">
         <label
-          v-for="opt in partnerTierOptions"
+          v-for="opt in PARTNER_TIER_OPTIONS"
           :key="opt.value"
           class="flex items-start gap-2.5 cursor-pointer rounded-lg border px-3 py-2.5 transition-colors"
           :class="form.partner_tier === opt.value ? 'border-primary-300 bg-primary-50/60' : 'border-neutral-200 hover:bg-neutral-50'"
@@ -474,46 +474,6 @@ function selectAddress(item: any) {
             <span class="block text-xs text-neutral-500 mt-0.5">{{ opt.desc }}</span>
           </span>
         </label>
-      </div>
-    </div>
-
-    <!-- Readiness -->
-    <div class="border-t border-neutral-100 pt-4">
-      <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">Kesiapan di lapangan</p>
-      <p class="text-xs text-neutral-400 mb-3">Dipakai untuk ranking kandidat dispatch.</p>
-      <div class="space-y-2">
-        <label class="flex items-center gap-2.5 cursor-pointer">
-          <input
-            type="checkbox"
-            class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
-            :checked="form.trained_driver"
-            @change="form.trained_driver = ($event.target as HTMLInputElement).checked"
-          />
-          <span class="text-sm text-neutral-700">Sopir terlatih / bersertifikat</span>
-        </label>
-        <label class="flex items-center gap-2.5 cursor-pointer">
-          <input
-            type="checkbox"
-            class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
-            :checked="form.has_oxygen"
-            @change="form.has_oxygen = ($event.target as HTMLInputElement).checked"
-          />
-          <span class="text-sm text-neutral-700">Tersedia oksigen</span>
-        </label>
-        <label class="flex items-center gap-2.5 cursor-pointer">
-          <input
-            type="checkbox"
-            class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
-            :checked="form.has_stretcher"
-            @change="form.has_stretcher = ($event.target as HTMLInputElement).checked"
-          />
-          <span class="text-sm text-neutral-700">Tersedia brankar / stretcher</span>
-        </label>
-      </div>
-      <div class="mt-3">
-        <UiFormField label="Catatan peralatan (opsional)">
-          <UiInput v-model="form.equipment_notes" placeholder="Mis. AED, suction, incubator..." />
-        </UiFormField>
       </div>
     </div>
 

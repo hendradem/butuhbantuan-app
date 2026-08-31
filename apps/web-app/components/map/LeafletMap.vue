@@ -23,11 +23,13 @@ import { getColorMode } from "~/utils/colorMode";
 
 const leafletStore = useLeafletStore();
 const emergencyStore = useEmergencyStore();
-const emergencyDataStore = useEmergencyDataStore();
 const userLocationStore = useUserLocationStore();
 const appError = useAppErrorStore();
 const detailSheet = useDetailSheetStore();
 const exploreSheet = useExploreSheetStore();
+const { openEmergencyDetail } = useOpenUnit();
+const mapUrl = useMapUrl();
+const { clearRoute } = useMapRouting();
 const { loadEmergencyData } = useEmergencyApi();
 const toast = appToast();
 const mapAppearance = getMapAppearance();
@@ -129,6 +131,29 @@ onMounted(async () => {
 
   leafletStore.setMapInstance(map);
 
+  function applyStoredView(animate = false) {
+    if (!map) return;
+    const lat = userLocationStore.lat;
+    const lng = userLocationStore.long;
+    if (!lat || !lng) return;
+    const z = leafletStore.zoom || DEFAULT_ZOOM;
+    map.setView([lat, lng], z, { animate });
+    leafletStore.setMapZoom(z);
+  }
+
+  applyStoredView(false);
+
+  watch(mapUrl.hydrating, (isHydrating) => {
+    if (!isHydrating) applyStoredView(true);
+  });
+
+  map.on("zoomend", () => {
+    if (!map) return;
+    const z = map.getZoom();
+    leafletStore.setMapZoom(z);
+    mapUrl.syncZoom(z);
+  });
+
   let mapClickTimer: ReturnType<typeof setTimeout> | null = null;
 
   map.on("click", (e: any) => {
@@ -160,7 +185,7 @@ onMounted(async () => {
 
     toast.loading("Mencari layanan di area ini...");
     emergencyStore.setLoading(true);
-    leafletStore.resetLeafletRouting();
+    clearRoute();
     detailSheet.onClose();
 
     mapClickTimer = setTimeout(async () => {
@@ -190,17 +215,20 @@ onMounted(async () => {
           }
 
           if (userLocationStore.isManualLocation) return;
-          // Don't fight the locate button's own watch/getCurrentPosition
           if (userLocationStore.isGetCurrentLocation) return;
 
-          // Don't let coarse Wi‑Fi yank a tighter pin already set by locate / prior GPS
-          const knownBest = Math.min(
-            bestAccuracyM,
-            userLocationStore.gpsAccuracyM > 0
-              ? userLocationStore.gpsAccuracyM
-              : Number.POSITIVE_INFINITY,
-          );
+          const prevLat = userLocationStore.gpsLat || userLocationStore.lat;
+          const prevLng = userLocationStore.gpsLong || userLocationStore.long;
+          const movedFar =
+            !prevLat ||
+            !prevLng ||
+            Math.abs(lat - prevLat) > 0.0007 ||
+            Math.abs(lng - prevLng) > 0.0007;
+
+          // Session-only — don't gate on cached accuracy from a prior visit
+          const knownBest = bestAccuracyM;
           if (
+            !movedFar &&
             Number.isFinite(knownBest) &&
             acc > knownBest &&
             acc > knownBest * 1.25 &&
@@ -209,8 +237,6 @@ onMounted(async () => {
             return;
           }
 
-          const prevLat = userLocationStore.lat;
-          const prevLng = userLocationStore.long;
           const improved =
             acc < knownBest * 0.7 ||
             (acc < knownBest && acc <= 100) ||
@@ -221,11 +247,10 @@ onMounted(async () => {
             Math.abs(lat - prevLat) > 0.0003 ||
             Math.abs(lng - prevLng) > 0.0003;
 
-          // Ignore worse/coarse updates that would yank the pin away
-          if (!improved && !moved && currentLocationMarker) return;
-          if (!improved && acc > knownBest && acc > 150) return;
+          if (!improved && !moved && !movedFar && currentLocationMarker) return;
+          if (!improved && !movedFar && acc > knownBest && acc > 150) return;
 
-          if (improved) bestAccuracyM = Math.min(knownBest, acc);
+          if (improved || movedFar) bestAccuracyM = Math.min(knownBest, acc);
 
           userLocationStore.updateGPSCoordinate(lat, lng, acc);
           // Only pan/frame on first meaningful fix — later GPS ticks just move the pin
@@ -233,11 +258,6 @@ onMounted(async () => {
           renderCurrentLocation(L, lat, lng, shouldFrame, acc);
 
           // Reload nearby services only on meaningful move (~80m+), not every GPS tick
-          const movedFar =
-            !prevLat ||
-            !prevLng ||
-            Math.abs(lat - prevLat) > 0.0008 ||
-            Math.abs(lng - prevLng) > 0.0008;
           if (movedFar) {
             void loadEmergencyData(lat, lng);
           }
@@ -259,20 +279,13 @@ onMounted(async () => {
       );
     };
 
-    const stopGpsWatch = () => {
-      if (gpsWatchId === null) return;
-      navigator.geolocation.clearWatch(gpsWatchId);
-      gpsWatchId = null;
-    };
-
     startGpsWatch();
 
-    // Pause background watch while locate button runs (avoids dual-watch stalls)
+    // Let background watch keep running during locate — restarting it causes slow cold GPS
     watch(
       () => userLocationStore.isGetCurrentLocation,
       (locating) => {
-        if (locating) stopGpsWatch();
-        else startGpsWatch();
+        if (locating) bestAccuracyM = Number.POSITIVE_INFINITY;
       },
     );
   }
@@ -312,7 +325,9 @@ onMounted(async () => {
       } else {
         clearRouteOverlays();
       }
-    }
+      applyMutedMarkers();
+    },
+    { immediate: true },
   );
 
   // Locate button / search selection → always return to default kab/kota zoom
@@ -336,6 +351,7 @@ onMounted(async () => {
     ([open, id]) => {
       const nextId = open && id != null ? String(id) : "";
       setActiveEmergencyMarker(L, nextId);
+      applyMutedMarkers();
     },
   );
 });
@@ -364,6 +380,7 @@ function placeManualPin(L: any, lat: number, lng: number, skipReset = false) {
     accuracyCircle = null;
   }
   renderCurrentLocation(L, lat, lng, false, 0);
+  mapUrl.syncPin(lat, lng);
   if (!skipReset) {
     resetToDefaultView(L, lat, lng);
   }
@@ -560,6 +577,7 @@ function renderMarkers(L: any, data: any[]) {
     detailSheet.isOpen && detailSheet.detailSheetData?.emergency?.emergencyData?.id != null
       ? String(detailSheet.detailSheetData.emergency.emergencyData.id)
       : activeEmergencyId;
+  const muteOthers = Boolean(selectedId && routeIsDrawn());
 
   data.forEach((item: any) => {
     const e = item.emergencyData;
@@ -568,15 +586,17 @@ function renderMarkers(L: any, data: any[]) {
     const id = String(e.id ?? "");
     const typeName = e.emergency_type?.name || "";
     const isActive = !!id && id === selectedId;
+    const muted = muteOthers && !isActive;
 
     const icon = usePin
       ? buildServicePinIcon(L, typeName, {
           enter: true,
           delayMs: Math.min(pinIndex * 45, 360),
           active: isActive,
+          muted,
         })
       : L.divIcon({
-          className: classicMarkerClass(typeName),
+          className: `${classicMarkerClass(typeName)}${muted ? " bb-marker--muted" : ""}`,
           iconSize: isActive ? [32, 32] : [25, 25],
           iconAnchor: isActive ? [16, 16] : [12, 12],
         });
@@ -585,7 +605,7 @@ function renderMarkers(L: any, data: any[]) {
 
     const marker = L.marker([+e.coordinates[1], +e.coordinates[0]], {
       icon,
-      zIndexOffset: isActive ? 800 : 0,
+      zIndexOffset: isActive ? 800 : muted ? -200 : 0,
     })
       .addTo(map!)
       .on("click", (ev: any) => {
@@ -615,10 +635,36 @@ function renderMarkers(L: any, data: any[]) {
   }
 }
 
+function routeIsDrawn(): boolean {
+  return Boolean(leafletStore.routeEndPoint?.lat && leafletStore.routeEndPoint?.lng);
+}
+
+function applyMutedMarkers() {
+  const selectedId =
+    detailSheet.isOpen && detailSheet.detailSheetData?.emergency?.emergencyData?.id != null
+      ? String(detailSheet.detailSheetData.emergency.emergencyData.id)
+      : "";
+  const muteOthers = Boolean(selectedId && routeIsDrawn());
+  const usePin = mapAppearance.markers === "pin";
+
+  for (const [id, marker] of markersById) {
+    const muted = muteOthers && id !== selectedId;
+    const el = marker.getElement?.() ?? (marker as any)._icon;
+    if (usePin) {
+      const pin = el?.querySelector?.(".bb-svc-pin") as HTMLElement | null;
+      pin?.classList.toggle("bb-svc-pin--muted", muted);
+    } else if (el) {
+      el.classList.toggle("bb-marker--muted", muted);
+    }
+    if (id === selectedId) marker.setZIndexOffset(900);
+    else marker.setZIndexOffset(muted ? -200 : 0);
+  }
+}
+
 function buildServicePinIcon(
   L: any,
   typeName: string,
-  opts: { enter?: boolean; delayMs?: number; active?: boolean },
+  opts: { enter?: boolean; delayMs?: number; active?: boolean; muted?: boolean },
 ) {
   const active = !!opts.active;
   return L.divIcon({
@@ -627,6 +673,7 @@ function buildServicePinIcon(
       enter: opts.enter,
       delayMs: opts.delayMs,
       active,
+      muted: !!opts.muted && !active,
     }),
     iconSize: active ? [48, 58] : [28, 34],
     iconAnchor: active ? [24, 56] : [14, 32],
@@ -642,13 +689,16 @@ function setActiveEmergencyMarker(L: any, nextId: string) {
 
   const prevId = activeEmergencyId;
   activeEmergencyId = nextId;
+  const mutePrev = Boolean(nextId && routeIsDrawn());
 
   if (prevId && prevId !== nextId) {
     const prev = markersById.get(prevId);
     const meta = markerMetaById.get(prevId);
     if (prev && meta) {
-      prev.setIcon(buildServicePinIcon(L, meta.typeName, { active: false }));
-      prev.setZIndexOffset(0);
+      prev.setIcon(
+        buildServicePinIcon(L, meta.typeName, { active: false, muted: mutePrev }),
+      );
+      prev.setZIndexOffset(mutePrev ? -200 : 0);
     }
   }
 
@@ -669,28 +719,7 @@ function setActiveEmergencyMarker(L: any, nextId: string) {
 }
 
 function onMarkerClick(item: any) {
-  emergencyDataStore.updateSelectedEmergencyData({
-    selectedEmergencyData: item.emergencyData,
-    selectedEmergencySource: "map",
-  });
-  detailSheet.setDetailSheetData({
-    emergencyType: item.emergencyData.emergency_type,
-    emergency: item,
-  });
-  if (exploreSheet.isOpen) {
-    exploreSheet.onClose();
-    detailSheet.onOpenFromExplore();
-  } else {
-    detailSheet.onOpen();
-  }
-
-  const coords = item.emergencyData?.coordinates;
-  if (coords) {
-    leafletStore.updateLeafletRouting({
-      startPoint: { lat: userLocationStore.lat, lng: userLocationStore.long },
-      routeEndPoint: { lat: parseFloat(coords[1]), lng: parseFloat(coords[0]) },
-    });
-  }
+  openEmergencyDetail(item);
 }
 
 /** Draw polyline progressively (unit → user), smooth distance-based. */

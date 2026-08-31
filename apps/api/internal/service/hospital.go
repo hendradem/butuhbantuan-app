@@ -174,7 +174,8 @@ func (s *hospitalService) Import(req domain.HospitalImportRequest) (*domain.Hosp
 				OpenTime:  "00:00",
 				CloseTime: "23:59",
 			},
-			Fleet: domain.FleetStatus{Total: 0, Available: 0},
+			Fleet:            domain.FleetStatus{Total: 0, Available: 0},
+			DashboardAccess:  true,
 		}
 		created, err := s.emerg.Create(e)
 		if err != nil {

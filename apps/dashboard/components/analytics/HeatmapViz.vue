@@ -5,8 +5,14 @@ import simpleheat from "simpleheat"
 export interface HeatPoint {
   lat: number; lng: number; count: number; type: string
   ticket_number?: string; status?: string; requester_name?: string
+  requester_phone?: string
   unit_name?: string; condition?: string; location?: string
   created_at?: string; regency?: string; province?: string
+  jenis_pelayanan?: string; assessment_acuity?: string
+  assessment?: {
+    answers?: Array<{ code?: string; label?: string; value?: string }>;
+    notes?: string;
+  } | null
 }
 
 const props = withDefaults(
@@ -576,6 +582,12 @@ watch(
   { deep: true },
 )
 
+function cardLocation(p: HeatPoint): string {
+  if (p.location?.trim()) return p.location.trim();
+  if (p.lat !== 0 && p.lng !== 0) return `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
+  return "Lokasi tidak tersedia";
+}
+
 function newcomersFocus(pts: HeatPoint[]): string | null {
   for (const t of freshTickets.value) {
     if (pts.some((p) => p.ticket_number === t && p.lat !== 0 && p.lng !== 0)) return t
@@ -810,6 +822,8 @@ onBeforeUnmount(() => {
           <tr>
             <th class="px-4 py-3 font-semibold cursor-pointer select-none" @click="sortTable('ticket_number')">Tiket</th>
             <th class="px-4 py-3 font-semibold cursor-pointer select-none" @click="sortTable('status')">Status</th>
+            <th class="px-4 py-3 font-semibold">Jenis</th>
+            <th class="px-4 py-3 font-semibold">Triase</th>
             <th class="px-4 py-3 font-semibold cursor-pointer select-none" @click="sortTable('requester_name')">Pelapor</th>
             <th class="px-4 py-3 font-semibold cursor-pointer select-none hidden md:table-cell" @click="sortTable('location')">Lokasi</th>
             <th class="px-4 py-3 font-semibold cursor-pointer select-none hidden lg:table-cell" @click="sortTable('unit_name')">Unit</th>
@@ -838,8 +852,18 @@ onBeforeUnmount(() => {
               </span>
             </td>
             <td class="px-4 py-3">
+              <OrderJenisBadge :code="p.jenis_pelayanan" fallback="emergency" show-empty compact />
+            </td>
+            <td class="px-4 py-3">
+              <OrderTriageBadge
+                :acuity="p.assessment_acuity"
+                :jenis-pelayanan="p.jenis_pelayanan"
+                emergency-only
+              />
+            </td>
+            <td class="px-4 py-3">
               <p class="font-medium text-neutral-800 truncate max-w-[10rem]">{{ p.requester_name || "—" }}</p>
-              <p class="text-xs text-neutral-400 line-clamp-1">{{ p.condition || "" }}</p>
+              <p class="text-xs text-neutral-400 line-clamp-1">{{ cardLocation(p) }}</p>
             </td>
             <td class="px-4 py-3 text-xs text-neutral-500 hidden md:table-cell max-w-[14rem]">
               <span class="line-clamp-2">{{ p.location || "—" }}</span>
@@ -972,7 +996,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Soft UI cards (web-app sheet list chrome) -->
-        <div v-else class="p-3 space-y-2">
+        <div v-else class="p-2 space-y-1.5">
           <article
             v-for="(p, i) in filtered"
             :key="p.ticket_number ?? i"
@@ -984,77 +1008,49 @@ onBeforeUnmount(() => {
             }"
             @click="onCardClick(p)"
           >
-            <!-- Top: icon + status -->
-            <div class="flex items-start justify-between gap-2 mb-2">
-              <div
-                class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-                :class="isFresh(p.ticket_number) ? 'bg-emergency-50' : 'bg-neutral-100'"
-              >
-                <Icon
-                  :icon="isFresh(p.ticket_number) ? 'lucide:siren' : 'lucide:ticket'"
-                  :class="isFresh(p.ticket_number) ? 'text-emergency-600' : 'text-neutral-500'"
-                  class="text-sm"
-                />
-              </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <span
+            <div class="flex items-center justify-between gap-2 min-w-0">
+              <span class="font-mono text-[11px] font-medium text-neutral-500 truncate">
+                {{ p.ticket_number || "—" }}
+              </span>
+              <div class="flex items-center gap-1 shrink-0">
+                <UiBadge
                   v-if="isFresh(p.ticket_number)"
-                  class="inline-flex items-center text-[10px] font-semibold uppercase tracking-wide text-emergency-700 bg-emergency-50 px-2 py-0.5 rounded-full"
+                  variant="danger"
+                  size="sm"
+                  dot
                 >
                   Baru
-                </span>
-                <span
-                  class="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full"
-                  :class="sBadge(p.status ?? '')"
-                >
-                  <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="sDot(p.status ?? '')" />
-                  {{ sLabel(p.status ?? "") }}
-                </span>
+                </UiBadge>
+                <UiStatusBadge :status="p.status ?? ''" size="sm" />
               </div>
             </div>
 
-            <!-- Title + description (nama pelapor = teks, bukan link) -->
-            <h3 class="text-[15px] font-bold text-neutral-950 tracking-tight truncate leading-snug">
+            <h3 class="mt-1 text-sm font-semibold text-neutral-900 truncate leading-tight">
               {{ p.requester_name || "Pelapor" }}
             </h3>
-            <p class="mt-0.5 text-sm font-medium text-neutral-600 line-clamp-1 leading-snug">
-              {{ p.condition || "—" }}
-            </p>
 
-            <!-- Meta -->
-            <div class="mt-2 space-y-1">
-              <div class="flex items-center gap-2 text-xs font-semibold text-neutral-700 min-w-0">
-                <Icon icon="lucide:hash" class="text-neutral-400 text-[12px] shrink-0" />
-                <span class="font-mono truncate">{{ p.ticket_number || "—" }}</span>
-              </div>
-              <div class="flex items-center gap-2 text-xs font-medium text-neutral-600 min-w-0">
-                <Icon
-                  :icon="p.lat !== 0 ? 'lucide:map-pin' : 'lucide:map-pin-off'"
-                  class="text-neutral-400 text-[12px] shrink-0"
-                />
-                <span class="truncate">
-                  {{ p.location || (p.lat !== 0 ? `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}` : "Lokasi tidak tersedia") }}
-                </span>
-              </div>
-              <div v-if="p.unit_name" class="flex items-center gap-2 text-xs font-medium text-neutral-600 min-w-0">
-                <Icon icon="lucide:shield" class="text-neutral-400 text-[12px] shrink-0" />
-                <span class="truncate">{{ p.unit_name }}</span>
-              </div>
+            <div class="mt-1 flex flex-wrap items-center gap-1">
+              <OrderJenisBadge :code="p.jenis_pelayanan" fallback="emergency" compact />
+              <OrderTriageBadge
+                :acuity="p.assessment_acuity"
+                :jenis-pelayanan="p.jenis_pelayanan"
+                emergency-only
+                compact
+              />
             </div>
 
-            <!-- Footer -->
-            <div class="mt-2.5 pt-2 border-t border-neutral-100 flex items-center justify-between gap-2">
-              <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-neutral-500 min-w-0">
-                <Icon icon="lucide:calendar" class="text-[12px] shrink-0" />
-                <span class="truncate">{{ p.created_at || "—" }}</span>
-              </span>
+            <p class="mt-1.5 text-xs text-neutral-500 truncate leading-snug">
+              {{ cardLocation(p) }}
+            </p>
+
+            <div class="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-neutral-400">
+              <span class="truncate">{{ p.created_at || "—" }}</span>
               <button
                 type="button"
-                class="inline-flex items-center gap-1 text-xs font-bold text-neutral-900 hover:text-neutral-950 transition-colors shrink-0 relative z-10"
+                class="shrink-0 font-medium text-neutral-600 hover:text-neutral-900 transition-colors relative z-10"
                 @click.stop.prevent="openDetail(p.ticket_number)"
               >
-                Detail
-                <Icon icon="lucide:arrow-right" class="text-[12px]" />
+                Detail →
               </button>
             </div>
           </article>
@@ -1072,8 +1068,8 @@ onBeforeUnmount(() => {
 .hm-order-card {
   background: #ffffff;
   border: 1px solid rgba(26, 28, 46, 0.06);
-  border-radius: 1rem;
-  padding: 0.75rem 0.85rem;
+  border-radius: 0.75rem;
+  padding: 0.625rem 0.7rem;
   box-shadow: 0 1px 2px rgba(26, 28, 46, 0.03);
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }

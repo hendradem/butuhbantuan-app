@@ -1,4 +1,5 @@
 import { partnerTierOf, type PartnerTier } from "~/utils/partnerTier";
+import { complianceSmartDelta } from "~/utils/complianceFilter";
 
 /**
  * Display ETA from Mapbox Matrix trip.duration (already minutes).
@@ -66,6 +67,7 @@ export function unitSmartScore(item: any): number {
   if (!open) score += 1_000_000;
   score += (eta ?? 40) * 12;
   score += tierPenalty(tier);
+  score += complianceSmartDelta(item?.emergencyData);
   score += Math.min(distM, 50_000) / 120;
   return score;
 }

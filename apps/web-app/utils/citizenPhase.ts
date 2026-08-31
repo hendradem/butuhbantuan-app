@@ -44,15 +44,13 @@ function hasLiveResponderCoords(ticket: CitizenPhaseTicket): boolean {
 /** Derive OTW / on-scene from live fields (status may stay accepted until Sampai Lokasi). */
 function resolveEnRoutePhase(ticket: CitizenPhaseTicket): string {
   if (ticket.arrived_at) return "on_scene";
-  if (
-    ticket.status === "in_progress" ||
-    ticket.track_enabled_at ||
-    hasLiveResponderCoords(ticket)
-  ) {
+  if (ticket.status === "in_progress" || hasLiveResponderCoords(ticket)) {
     return "in_progress";
   }
   return "accepted";
 }
+
+const PENDING_EN_ROUTE_PHASES = new Set(["accepted", "in_progress", "on_scene"]);
 
 export function resolveCitizenPhase(
   ticket: CitizenPhaseTicket | null | undefined,
@@ -65,7 +63,14 @@ export function resolveCitizenPhase(
     return resolveEnRoutePhase(ticket);
   }
 
-  if (ticket.citizen_phase) return ticket.citizen_phase;
+  // WA EnableTrack sets track_enabled_at on a still-pending ticket. Ignore any
+  // stale in_progress/accepted phase that would contradict "menunggu unit".
+  if (
+    ticket.citizen_phase &&
+    !(ticket.status === "pending" && PENDING_EN_ROUTE_PHASES.has(ticket.citizen_phase))
+  ) {
+    return ticket.citizen_phase;
+  }
 
   switch (ticket.status) {
     case "completed":
@@ -78,4 +83,27 @@ export function resolveCitizenPhase(
   if ((ticket.dispatch_round ?? 0) > 1 && ticket.unit_name) return "reassigned";
   if (ticket.unit_name) return "waiting_unit";
   return "searching";
+}
+
+/**
+ * 0 Diproses · 1 OTW · 2 Penanganan · 3 Selesai · −1 cancelled
+ * OTW only after the unit accepted — not merely because a WA magic link exists.
+ */
+export function citizenTrackStepIndex(
+  ticket: CitizenPhaseTicket | null | undefined,
+): number {
+  const s = ticket?.status;
+  const phase = resolveCitizenPhase(ticket);
+  if (!s || s === "cancelled" || phase === "cancelled") return -1;
+  if (s === "completed" || phase === "completed") return 3;
+  if (phase === "on_scene") return 2;
+  if (
+    s === "accepted" ||
+    s === "in_progress" ||
+    phase === "accepted" ||
+    phase === "in_progress"
+  ) {
+    return 1;
+  }
+  return 0;
 }

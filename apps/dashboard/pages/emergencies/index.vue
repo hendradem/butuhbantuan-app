@@ -2,6 +2,7 @@
 import { Icon } from "@iconify/vue";
 import { toast } from "~/utils/appToast";
 import { placeAnchoredMenu } from "~/utils/placeAnchoredMenu";
+import { partnerTierBadgeClass, partnerTierLabel } from "~/utils/partnerTier";
 
 definePageMeta({ title: "Layanan Darurat", keepalive: true });
 
@@ -72,27 +73,31 @@ const paginated = computed(() => {
   return filtered.value.slice(start, start + pageSize.value);
 });
 
-// ── Badge helpers ──────────────────────────────────────────────────────────────
-function typeBadgeColor(name: string) {
-  const m: Record<string, string> = {
-    Ambulance:    "bg-red-100 text-red-800",
-    Damkar:       "bg-orange-100 text-orange-800",
-    "Rumah Sakit":"bg-blue-100 text-blue-800",
-    SAR:          "bg-green-100 text-green-800",
-  };
-  return m[name] ?? "bg-neutral-100 text-neutral-700";
+function operasiMeta(item: any) {
+  const active = item.operational?.is_active !== false;
+  let hours = "";
+  if (item.operational?.is_24_hours) hours = "24 jam";
+  else if (item.operational?.open_time) {
+    hours = `${item.operational.open_time}–${item.operational.close_time}`;
+  }
+  return { active, hours };
 }
 
-function partnerTierLabel(tier?: string) {
-  if (tier === "psc") return "Resmi";
-  if (tier === "verified") return "Terverifikasi";
-  return "Komunitas";
-}
-
-function partnerTierBadgeClass(tier?: string) {
-  if (tier === "psc") return "bg-emerald-100 text-emerald-800";
-  if (tier === "verified") return "bg-indigo-100 text-indigo-700";
-  return "bg-neutral-100 text-neutral-600";
+/** Satu label akses utama — hindari badge menumpuk di kolom nama. */
+function aksesLabel(item: any): { text: string; tone: string } {
+  if (item.is_province_dispatcher) {
+    return { text: "Dispatcher provinsi", tone: "bg-violet-50 text-violet-700 ring-violet-100" };
+  }
+  if (item.is_dispatcher) {
+    return { text: "Dispatcher", tone: "bg-blue-50 text-blue-700 ring-blue-100" };
+  }
+  if (item.dashboard_access === false || item.wa_dispatch) {
+    return { text: "WA only", tone: "bg-amber-50 text-amber-800 ring-amber-100" };
+  }
+  if (credSet.value.has(item.id)) {
+    return { text: "Login aktif", tone: "bg-emerald-50 text-emerald-700 ring-emerald-100" };
+  }
+  return { text: "Dashboard", tone: "bg-neutral-100 text-neutral-600 ring-neutral-200" };
 }
 
 // ── Dashboard access badges ────────────────────────────────────────────────────
@@ -121,7 +126,7 @@ const createForm = reactive({
   full_address: "", lat: "", lng: "",
   is_dispatcher: false, is_province_dispatcher: false,
   partner_tier: "community",
-  trained_driver: false, has_oxygen: false, has_stretcher: false, equipment_notes: "",
+  dashboard_access: true,
   type_of_service: "", tipe_emergency: [] as string[],
   is_active: true, is_24_hours: false,
   open_time: "08:00", close_time: "17:00",
@@ -151,12 +156,7 @@ async function submitCreate() {
       is_dispatcher: createForm.is_dispatcher,
       is_province_dispatcher: createForm.is_province_dispatcher,
       partner_tier: createForm.partner_tier,
-      readiness: {
-        trained_driver: createForm.trained_driver,
-        has_oxygen: createForm.has_oxygen,
-        has_stretcher: createForm.has_stretcher,
-        equipment_notes: createForm.equipment_notes,
-      },
+      dashboard_access: createForm.dashboard_access === true,
       type_of_service: createForm.type_of_service,
       tipe_emergency: createForm.tipe_emergency,
       operational: {
@@ -175,7 +175,7 @@ async function submitCreate() {
       regency_display: "", province_display: "",
       full_address: "", lat: "", lng: "", is_dispatcher: false, is_province_dispatcher: false,
       partner_tier: "community",
-      trained_driver: false, has_oxygen: false, has_stretcher: false, equipment_notes: "",
+      dashboard_access: true,
       type_of_service: "", tipe_emergency: [],
       is_active: true, is_24_hours: false, open_time: "08:00", close_time: "17:00",
       total_units: 0, available_units: 0,
@@ -268,31 +268,28 @@ async function executeDelete() {
 
     <!-- Table card -->
     <div class="p-4 sm:p-6">
-      <UiTableCard>
-        <template #toolbar>
-          <div class="flex flex-wrap items-center gap-2.5">
-            <UiSearchInput
-              v-model="search"
-              placeholder="Cari nama, organisasi, wilayah..."
-              class="flex-1 min-w-[160px] max-w-sm"
-            />
-            <UiSelect v-model="selectedType" class="!w-auto">
-              <option value="">Semua Jenis</option>
-              <option v-for="t in (types?.data ?? [])" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
-            </UiSelect>
-            <UiSelect v-model="filterProvince" class="!w-auto">
-              <option value="">Semua Provinsi (tercakup)</option>
-              <option v-for="p in coveredProvinces" :key="p.id" :value="p.id">{{ p.name }}</option>
-            </UiSelect>
-            <UiSelect v-model="pageSize" class="!w-auto" @change="page = 1">
-              <option :value="10">10 / halaman</option>
-              <option :value="25">25 / halaman</option>
-              <option :value="50">50 / halaman</option>
-            </UiSelect>
-          </div>
+      <UiTableCard
+        title="Daftar Layanan"
+        :badge="filtered.length"
+        description="Unit darurat terdaftar di sistem"
+      >
+        <template #actions>
+          <UiSearchInput
+            v-model="search"
+            placeholder="Cari..."
+            class="w-28 sm:w-36 shrink-0"
+          />
+          <UiSelect v-model="selectedType" class="!w-auto shrink-0">
+            <option value="">Semua jenis</option>
+            <option v-for="t in (types?.data ?? [])" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
+          </UiSelect>
+          <UiSelect v-model="filterProvince" class="!w-auto shrink-0">
+            <option value="">Semua provinsi</option>
+            <option v-for="p in coveredProvinces" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </UiSelect>
         </template>
 
-        <UiTable>
+        <UiTable table-class="ui-table--orders-v2 ui-table--emergencies" min-width="52rem">
           <thead>
             <tr>
               <th class="ui-th-sortable" @click="sortBy('name')">
@@ -301,45 +298,47 @@ async function executeDelete() {
                   <Icon :icon="sortCol==='name'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='name'?'text-neutral-700':'text-neutral-300']" />
                 </span>
               </th>
-              <th class="ui-th-sortable hidden md:table-cell" @click="sortBy('type')">
+              <th class="ui-th-sortable hidden sm:table-cell" @click="sortBy('type')">
                 <span class="ui-th-label">
                   Jenis
                   <Icon :icon="sortCol==='type'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='type'?'text-neutral-700':'text-neutral-300']" />
                 </span>
               </th>
+              <th class="hidden md:table-cell">Tier</th>
               <th class="hidden lg:table-cell">Wilayah</th>
-              <th class="ui-th-sortable hidden sm:table-cell" @click="sortBy('status')">
+              <th class="ui-th-sortable hidden md:table-cell" @click="sortBy('status')">
                 <span class="ui-th-label">
-                  Status
+                  Operasi
                   <Icon :icon="sortCol==='status'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='status'?'text-neutral-700':'text-neutral-300']" />
                 </span>
               </th>
-              <th class="hidden xl:table-cell">Dashboard</th>
-              <th class="ui-th-right"><span class="sr-only">Aksi</span></th>
+              <th class="hidden xl:table-cell">Akses</th>
+              <th class="ui-th-right w-12"><span class="sr-only">Aksi</span></th>
             </tr>
           </thead>
           <tbody>
             <!-- Skeleton -->
             <tr v-if="showSkeleton" v-for="i in 5" :key="`skel-${i}`">
               <td>
-                <div class="flex items-center gap-3">
-                  <div class="soft-skel w-10 h-10 rounded-lg shrink-0" />
-                  <div class="space-y-2 flex-1">
-                    <div class="soft-skel h-3.5 w-36" />
+                <div class="flex items-center gap-2.5">
+                  <div class="soft-skel w-9 h-9 rounded-lg shrink-0" />
+                  <div class="space-y-1.5 flex-1">
+                    <div class="soft-skel h-3.5 w-32" />
                     <div class="soft-skel h-3 w-24" />
                   </div>
                 </div>
               </td>
-              <td class="hidden md:table-cell"><div class="soft-skel h-6 rounded-full w-20" /></td>
-              <td class="hidden lg:table-cell"><div class="soft-skel h-3.5 w-28" /></td>
               <td class="hidden sm:table-cell"><div class="soft-skel h-6 rounded-full w-16" /></td>
-              <td class="hidden xl:table-cell"><div class="soft-skel h-5 rounded-full w-14" /></td>
+              <td class="hidden md:table-cell"><div class="soft-skel h-5 rounded-full w-14" /></td>
+              <td class="hidden lg:table-cell"><div class="soft-skel h-3.5 w-24" /></td>
+              <td class="hidden md:table-cell"><div class="soft-skel h-5 rounded-full w-20" /></td>
+              <td class="hidden xl:table-cell"><div class="soft-skel h-5 rounded-full w-16" /></td>
               <td class="ui-td-right"><div class="soft-skel h-8 rounded-lg w-8 ml-auto" /></td>
             </tr>
 
             <!-- Empty -->
             <tr v-else-if="!paginated.length">
-              <td colspan="6">
+              <td colspan="7">
                 <UiEmptyState title="Tidak ada layanan yang cocok">
                   <template #icon>
                     <Icon icon="lucide:search-x" class="text-neutral-400 text-2xl" />
@@ -349,83 +348,103 @@ async function executeDelete() {
             </tr>
 
             <!-- Data rows -->
-            <tr v-else v-for="item in paginated" :key="item.id" class="cursor-pointer hover:bg-neutral-50/50" @click="navigateTo(`/emergencies/${item.id}`)">
-              <!-- Layanan -->
+            <tr
+              v-else
+              v-for="item in paginated"
+              :key="item.id"
+              class="orders-row group cursor-pointer"
+              @click="navigateTo(`/emergencies/${item.id}`)"
+            >
               <td>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2.5 min-w-0">
                   <img
                     v-if="item.organization_logo"
                     :src="item.organization_logo"
                     :alt="item.name"
-                    class="w-10 h-10 rounded-lg object-contain bg-neutral-100 p-1 shrink-0"
+                    class="w-9 h-9 rounded-lg object-contain bg-neutral-100 p-0.5 shrink-0"
                   />
-                  <div v-else class="w-10 h-10 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0">
-                    <Icon icon="lucide:shield" class="text-neutral-400 text-lg" />
+                  <div v-else class="w-9 h-9 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0">
+                    <Icon icon="lucide:shield" class="text-neutral-400 text-base" />
                   </div>
                   <div class="min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <p class="ui-cell-title">{{ item.name }}</p>
-                      <span :class="['inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0', partnerTierBadgeClass(item.partner_tier)]">
+                    <p class="text-sm font-medium text-neutral-900 truncate max-w-[14rem] sm:max-w-[18rem]">
+                      {{ item.name }}
+                    </p>
+                    <p v-if="item.organization_name" class="text-xs text-neutral-500 truncate max-w-[14rem] sm:max-w-[18rem]">
+                      {{ item.organization_name }}
+                    </p>
+                    <div class="mt-1 flex flex-wrap items-center gap-1 md:hidden">
+                      <span class="text-[11px] text-neutral-500">{{ item.emergency_type?.name ?? "—" }}</span>
+                      <span
+                        :class="['inline-flex text-[10px] font-semibold px-1.5 py-px rounded-full ring-1 ring-inset', partnerTierBadgeClass(item.partner_tier)]"
+                      >
                         {{ partnerTierLabel(item.partner_tier) }}
                       </span>
-                      <span
-                        v-if="item.is_dispatcher"
-                        class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 shrink-0"
-                      >
-                        <Icon icon="lucide:phone-incoming" class="text-[10px]" />
-                        Dispatcher
-                      </span>
                     </div>
-                    <p class="ui-cell-desc truncate max-w-[200px]">{{ item.organization_name }}</p>
                   </div>
                 </div>
               </td>
 
-              <!-- Jenis -->
-              <td class="hidden md:table-cell">
-                <span class="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-0.5 text-xs font-medium text-neutral-700 ring-1 ring-inset ring-neutral-200">
+              <td class="hidden sm:table-cell">
+                <span class="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
                   {{ item.emergency_type?.name ?? "—" }}
                 </span>
               </td>
 
-              <!-- Wilayah -->
-              <td class="hidden lg:table-cell">
-                <p class="ui-cell-title">{{ item.address?.regency ?? '—' }}</p>
-                <p class="ui-cell-desc">{{ item.address?.province }}</p>
+              <td class="hidden md:table-cell">
+                <span
+                  :class="['inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ring-1 ring-inset', partnerTierBadgeClass(item.partner_tier)]"
+                >
+                  {{ partnerTierLabel(item.partner_tier) }}
+                </span>
               </td>
 
-              <!-- Status -->
-              <td class="hidden sm:table-cell">
-                <span :class="['inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', item.operational?.is_active !== false ? 'bg-green-50 text-green-700' : 'bg-neutral-100 text-neutral-500']">
-                  <span :class="['h-1.5 w-1.5 rounded-full shrink-0', item.operational?.is_active !== false ? 'bg-green-500' : 'bg-neutral-400']" />
-                  {{ item.operational?.is_active !== false ? 'Aktif' : 'Nonaktif' }}
-                </span>
-                <p class="ui-cell-desc mt-0.5">
-                  <template v-if="item.operational?.is_24_hours">24 Jam</template>
-                  <template v-else-if="item.operational?.open_time">{{ item.operational.open_time }}–{{ item.operational.close_time }}</template>
+              <td class="hidden lg:table-cell">
+                <p class="text-sm text-neutral-800 truncate max-w-[10rem]">{{ item.address?.regency ?? "—" }}</p>
+                <p v-if="item.address?.province" class="text-xs text-neutral-500 truncate max-w-[10rem]">
+                  {{ item.address.province }}
                 </p>
               </td>
 
-              <!-- Dashboard access badge -->
-              <td class="hidden xl:table-cell" @click.stop>
+              <td class="hidden md:table-cell whitespace-nowrap">
                 <span
-                  v-if="credSet.has(item.id)"
-                  class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
+                  :class="[
+                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
+                    operasiMeta(item).active ? 'bg-green-50 text-green-700' : 'bg-neutral-100 text-neutral-500',
+                  ]"
                 >
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                  Aktif
+                  <span
+                    :class="[
+                      'h-1.5 w-1.5 rounded-full shrink-0',
+                      operasiMeta(item).active ? 'bg-green-500' : 'bg-neutral-400',
+                    ]"
+                  />
+                  {{ operasiMeta(item).active ? "Aktif" : "Nonaktif" }}
                 </span>
-                <span v-else class="text-xs text-neutral-300">—</span>
+                <span v-if="operasiMeta(item).hours" class="ml-1.5 text-xs text-neutral-500 tabular-nums">
+                  · {{ operasiMeta(item).hours }}
+                </span>
               </td>
 
-              <!-- Aksi -->
-              <td class="ui-td-right" @click.stop>
+              <td class="hidden xl:table-cell" @click.stop>
+                <span
+                  :class="[
+                    'inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ring-1 ring-inset',
+                    aksesLabel(item).tone,
+                  ]"
+                >
+                  {{ aksesLabel(item).text }}
+                </span>
+              </td>
+
+              <td class="ui-td-right ui-td-actions !pr-3" @click.stop>
                 <button
                   type="button"
-                  class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-neutral-600 bg-white rounded-lg shadow-sm ring-1 ring-inset ring-neutral-200 hover:bg-neutral-50 transition-colors"
+                  class="inline-flex items-center justify-center w-8 h-8 text-neutral-500 rounded-lg hover:bg-neutral-100 hover:text-neutral-800 transition-colors opacity-70 group-hover:opacity-100"
+                  aria-label="Aksi lainnya"
                   @click.stop="toggleDropdown(item, $event)"
                 >
-                  <Icon icon="lucide:more-horizontal" class="text-sm" />
+                  <Icon icon="lucide:more-horizontal" class="text-base" />
                 </button>
               </td>
             </tr>
@@ -435,9 +454,11 @@ async function executeDelete() {
         <template v-if="filtered.length" #footer>
           <UiPagination
             v-model:page="page"
+            v-model:page-size="pageSize"
             :total-pages="totalPages"
             :total="filtered.length"
-            :page-size="pageSize"
+            :page-size-options="[10, 25, 50]"
+            @update:page-size="page = 1"
           />
         </template>
       </UiTableCard>

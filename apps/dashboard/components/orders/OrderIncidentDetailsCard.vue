@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import { jenisPelayananLabel } from "@butuhbantuan/utils";
 
 /**
  * Always-open incident detail card (Info | Riwayat | Selesai).
@@ -63,13 +64,7 @@ watch(isTerminal, (v) => {
   if (!v && tab.value === "after") tab.value = "info";
 });
 
-const summaryLine = computed(() => {
-  const parts = [
-    props.order?.requester_name || "Pelapor",
-    props.order?.location || null,
-  ].filter(Boolean);
-  return parts.join(" · ");
-});
+const summaryLine = computed(() => props.order?.location || props.order?.requester_name || "");
 
 const hasValidCoords = computed(() => {
   const lat = Number(props.order?.requester_lat);
@@ -142,6 +137,11 @@ const metaRows = computed(() => {
   if (o?.completed_at) rows.push({ label: "Selesai", value: props.formatDate(o.completed_at) });
   return rows;
 });
+
+const hasAssessment = computed(() => {
+  const a = props.order?.assessment;
+  return !!(a?.answers?.length || a?.notes || a?.acuity || props.order?.assessment_acuity);
+});
 </script>
 
 <template>
@@ -207,12 +207,22 @@ const metaRows = computed(() => {
           </div>
         </div>
 
-        <!-- Kondisi -->
-        <div v-if="order.condition" class="py-4">
-          <p class="text-xs font-medium text-neutral-400">Kondisi / kejadian</p>
-          <p class="mt-1.5 text-sm text-neutral-800 leading-relaxed whitespace-pre-wrap">
-            {{ order.condition }}
+        <div v-if="order.jenis_pelayanan" class="pb-4">
+          <p class="text-xs font-medium text-neutral-400">Jenis pelayanan</p>
+          <p class="mt-1 text-sm font-medium text-neutral-900">
+            {{ jenisPelayananLabel(order.jenis_pelayanan) }}
           </p>
+        </div>
+
+        <!-- Asesmen awal / kondisi -->
+        <div v-if="hasAssessment || order.condition" class="py-4">
+          <div class="rounded-xl border border-neutral-100 bg-neutral-50/70 px-3.5 py-3">
+            <OrderAssessmentBlock
+              :assessment="order.assessment"
+              :acuity="order.assessment_acuity"
+              :condition="order.condition"
+            />
+          </div>
         </div>
 
         <!-- Lokasi + map -->

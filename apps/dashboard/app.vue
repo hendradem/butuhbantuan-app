@@ -2,6 +2,7 @@
 </script>
 
 <template>
+  <DashboardNavLoading />
   <NuxtLayout>
     <NuxtRouteAnnouncer />
     <NuxtPage />

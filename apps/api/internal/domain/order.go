@@ -12,9 +12,12 @@ type OrderTicket struct {
 	UnitName       string     `json:"unit_name"`
 	RequesterName  string     `json:"requester_name"`
 	RequesterPhone string     `json:"requester_phone"`
-	Location       string     `json:"location"`
-	Condition      string     `json:"condition"`
-	PhotoURL       string     `json:"photo_url,omitempty"`
+	JenisPelayanan   string            `json:"jenis_pelayanan,omitempty"`
+	Location         string            `json:"location"`
+	Condition        string            `json:"condition"`
+	Assessment       *OrderAssessment  `json:"assessment,omitempty"`
+	AssessmentAcuity string            `json:"assessment_acuity,omitempty"`
+	PhotoURL         string            `json:"photo_url,omitempty"`
 	RequesterLat   float64    `json:"requester_lat"`
 	RequesterLng   float64    `json:"requester_lng"`
 	Status         string     `json:"status"`  // pending | accepted | in_progress | completed | cancelled
@@ -31,8 +34,9 @@ type OrderTicket struct {
 	// Escalation (PSC hotline) — set when ops escalates an exhausted ticket.
 	EscalationHotline string `json:"escalation_hotline,omitempty"`
 	EscalationLabel   string `json:"escalation_label,omitempty"`
-	// Live responder tracking (magic link). Token is never exposed on public ticket GET.
+	// Live responder tracking (magic link). Token is omitted on public GET unless pelapor phone is verified.
 	TrackToken         string     `json:"track_token,omitempty"`
+	PublicToken        string     `json:"public_token,omitempty"`
 	TrackEnabledAt     *time.Time `json:"track_enabled_at,omitempty"`
 	TrackExpiresAt     *time.Time `json:"track_expires_at,omitempty"`
 	ResponderLat       float64    `json:"responder_lat,omitempty"`
@@ -45,6 +49,8 @@ type OrderTicket struct {
 	UnitLat      float64 `json:"unit_lat,omitempty"`
 	UnitLng      float64 `json:"unit_lng,omitempty"`
 	ETAMinutes   int     `json:"eta_minutes,omitempty"`
+	// WaDispatch: assigned unit has no dashboard — citizen must send /dispatch via WA.
+	WaDispatch bool `json:"wa_dispatch,omitempty"`
 	// CitizenPhase is derived on read for honest e-ticket status.
 	CitizenPhase string     `json:"citizen_phase,omitempty"`
 	AcceptedAt   *time.Time `json:"accepted_at,omitempty"`
@@ -74,6 +80,7 @@ type SOSAlert struct {
 	RegencyID    string    `json:"regency_id"`
 	ProvinceID   string    `json:"province_id"`
 	TicketNumber string    `json:"ticket_number"`
+	PublicToken  string    `json:"public_token,omitempty"`
 	// Reused is true when Submit redirected to an already-open ticket (duplicate SOS guard).
 	Reused    bool      `json:"reused,omitempty"`
 	CreatedAt time.Time `json:"created_at"`

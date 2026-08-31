@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
 import { appToast } from "~/utils/appToast";
-import { closeAllSheets } from "~/utils/closeAllSheets";
+import { saveTicketAccess } from "~/utils/ticketAccess";
 
 const sosStore = useSosStore();
 const location = useUserLocationStore();
@@ -68,11 +68,14 @@ async function submit() {
     closeAllSheets();
     toast.dismiss();
 
-    if (result?.ticket_number) {
+    if (result?.public_token) {
+      saveTicketAccess(result.public_token, phone.value);
       if (result.reused) {
         toast.success("Tiket aktif ditemukan — membuka e-tiket");
       }
-      useTicketSheetStore().open(result.ticket_number);
+      await navigateTo(`/ticket/${result.public_token}`);
+    } else if (result?.ticket_number) {
+      toast.error("Tiket dibuat tapi link tidak tersedia");
     }
   } catch {
     toast.error("Gagal mengirim permintaan darurat");

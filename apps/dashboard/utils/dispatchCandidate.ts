@@ -12,6 +12,10 @@ export type RankedCandidateView = {
       has_oxygen?: boolean;
       has_stretcher?: boolean;
     };
+    compliance?: {
+      completeness_pct?: number;
+      verification?: { status?: string; is_verified?: boolean };
+    };
     address?: { regency?: string; province?: string };
   };
   id?: string;
@@ -69,7 +73,7 @@ export function candidateReasons(c: RankedCandidateView): string[] {
   const reasons: string[] = [];
   const tier = candidatePartnerTier(c);
   if (tier === "psc" || isPscCandidate(c)) reasons.push("Resmi");
-  else if (tier === "verified") reasons.push("Terverifikasi");
+  else if (tier === "verified") reasons.push("Swasta");
   else if (tier === "community") reasons.push("Komunitas");
   if (c.emergency?.is_dispatcher || c.is_dispatcher) reasons.push("Dispatcher");
   if (c.dispatch_tier === "nearby") reasons.push("Kota tetangga · ≤40 km");
@@ -83,6 +87,10 @@ export function candidateReasons(c: RankedCandidateView): string[] {
   }
   if (c.open_now) reasons.push("Siaga / buka");
   else reasons.push("Di luar jam operasional");
+  const comp = c.emergency?.compliance;
+  if (comp?.verification?.is_verified) reasons.push("Kelengkapan terverifikasi");
+  else if (comp?.verification?.status === "expired") reasons.push("Verifikasi kedaluwarsa");
+  else if (Number(comp?.completeness_pct ?? 0) >= 80) reasons.push(`Kelengkapan ${comp?.completeness_pct}%`);
   reasons.push(formatDistanceKm(c.distance_km));
   const regency = c.emergency?.address?.regency;
   if (regency) reasons.push(regency);

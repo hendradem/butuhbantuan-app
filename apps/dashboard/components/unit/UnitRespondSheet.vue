@@ -476,9 +476,17 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <p v-if="order.condition" class="text-xs text-neutral-700 leading-snug line-clamp-2 bg-emergency-50/80 rounded-lg px-2.5 py-2">
-          {{ order.condition }}
-        </p>
+        <div
+          v-if="order.assessment?.answers?.length || order.assessment_acuity || order.condition"
+          class="rounded-lg border border-neutral-100 bg-neutral-50/80 px-2.5 py-2"
+        >
+          <OrderAssessmentBlock
+            compact
+            :assessment="order.assessment"
+            :acuity="order.assessment_acuity"
+            :condition="order.condition"
+          />
+        </div>
         <p v-if="order.location" class="text-[11px] text-neutral-500 flex items-start gap-1.5">
           <Icon icon="lucide:map-pin" class="text-neutral-400 shrink-0 mt-0.5" />
           <span class="line-clamp-2">{{ order.location }}</span>

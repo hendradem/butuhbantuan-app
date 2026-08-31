@@ -1,4 +1,4 @@
-const CACHE_KEY = "bb-offline-emergency-v1";
+const CACHE_KEY = "bb-offline-emergency-v2";
 const TYPES_KEY = "bb-offline-types-v1";
 const HOTLINE_KEY = "bb-offline-hotlines-v1";
 

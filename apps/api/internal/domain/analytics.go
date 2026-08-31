@@ -28,6 +28,12 @@ type TypeStat struct {
 	Count int64  `json:"count"`
 }
 
+// JenisPelayananStat counts orders by citizen-selected service mode.
+type JenisPelayananStat struct {
+	Code  string `json:"code"`
+	Count int64  `json:"count"`
+}
+
 type HourStat struct {
 	Hour  int   `json:"hour"`
 	Count int64 `json:"count"`
@@ -95,11 +101,29 @@ type Analytics struct {
 	DailyTrend      []DailyStat       `json:"daily_trend"`
 	StatusBreakdown []StatusStat      `json:"status_breakdown"`
 	ByType          []TypeStat        `json:"by_type"`
+	ByJenisPelayanan []JenisPelayananStat `json:"by_jenis_pelayanan"`
 	ByHour          []HourStat        `json:"by_hour"`
 	UnitPerformance []UnitPerformance `json:"unit_performance"`
 	RegionStats     []RegionStat      `json:"region_stats"`
 	DispatchFunnel  []FunnelStage     `json:"dispatch_funnel"`
 	FunnelDrops     []FunnelDrop      `json:"funnel_drops"`
+	AccessChannels  []AccessChannelStat `json:"access_channels"`
 	ResponseSla     []SlaBucket       `json:"response_sla"` // created → accepted
 	ArrivalSla      []SlaBucket       `json:"arrival_sla"`  // accepted → arrived
+}
+
+// AccessChannelStat splits ops by unit dashboard_access (WA-only vs login).
+type AccessChannelStat struct {
+	Key              string  `json:"key"` // wa_only | dashboard
+	Label            string  `json:"label"`
+	Orders           int64   `json:"orders"`
+	Accepted         int64   `json:"accepted"`
+	Arrived          int64   `json:"arrived"`
+	Completed        int64   `json:"completed"`
+	AcceptRate       float64 `json:"accept_rate"`        // accepted / orders
+	AvgAcceptSec     float64 `json:"avg_accept_sec"`     // created → accepted
+	AvgArriveSec     float64 `json:"avg_arrive_sec"`     // accepted → arrived
+	AvgCompleteSec   float64 `json:"avg_complete_sec"`   // accepted → completed
+	TrackEnabled     int64   `json:"track_enabled"`      // ever had magic link
+	GpsPinged        int64   `json:"gps_pinged"`         // responder_updated_at set
 }

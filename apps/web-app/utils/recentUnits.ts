@@ -4,6 +4,8 @@
  * Storage: bb-recent-units-v1 → { [regencyId]: RecentUnit[] }
  */
 
+import { ref } from "vue";
+
 export type RecentUnit = {
   id: string;
   name: string;
@@ -19,6 +21,9 @@ export type RecentUnit = {
 
 const STORAGE_KEY = "bb-recent-units-v1";
 const MAX_PER_REGION = 8;
+
+/** Bump so UI re-reads storage. */
+export const recentUnitsTick = ref(0);
 
 type StoreShape = Record<string, RecentUnit[]>;
 
@@ -38,6 +43,7 @@ function writeStore(store: StoreShape) {
   if (!import.meta.client) return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    recentUnitsTick.value += 1;
   } catch {
     /* ignore quota */
   }
@@ -80,6 +86,7 @@ export function clearRecentUnits(regencyId?: string) {
   if (!import.meta.client) return;
   if (!regencyId) {
     localStorage.removeItem(STORAGE_KEY);
+    recentUnitsTick.value += 1;
     return;
   }
   const store = readStore();

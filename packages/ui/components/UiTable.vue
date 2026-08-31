@@ -7,12 +7,18 @@ defineProps<{
   minWidth?: string;
   /** Extra classes on the overflow wrapper (e.g. hidden md:block) */
   wrapperClass?: string;
+  /** Extra classes on the table element */
+  tableClass?: string;
 }>();
 </script>
 
 <template>
   <div :class="['overflow-x-auto', wrapperClass]">
-    <table class="ui-table" :style="minWidth ? { minWidth } : undefined">
+    <table
+      class="ui-table"
+      :class="tableClass"
+      :style="minWidth ? { minWidth } : undefined"
+    >
       <slot />
     </table>
   </div>

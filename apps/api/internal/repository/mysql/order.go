@@ -56,9 +56,12 @@ func (r *OrderRepo) Create(o domain.OrderTicket) (*domain.OrderTicket, error) {
 			UnitName:       o.UnitName,
 			RequesterName:  o.RequesterName,
 			RequesterPhone: o.RequesterPhone,
-			Location:       o.Location,
-			Condition:      o.Condition,
-			PhotoURL:       o.PhotoURL,
+			JenisPelayanan: o.JenisPelayanan,
+			Location:         o.Location,
+			Condition:        o.Condition,
+			AssessmentJSON:   marshalAssessment(o),
+			AssessmentAcuity: o.AssessmentAcuity,
+			PhotoURL:         o.PhotoURL,
 			RequesterLat:   o.RequesterLat,
 			RequesterLng:   o.RequesterLng,
 			Status:         "pending",
@@ -105,6 +108,21 @@ func (r *OrderRepo) FindByID(id string) (*domain.OrderTicket, error) {
 func (r *OrderRepo) FindByTicketNumber(number string) (*domain.OrderTicket, error) {
 	var row OrderTicketEntity
 	if err := r.db.Where("ticket_number = ?", number).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repository.ErrNotFound
+		}
+		return nil, err
+	}
+	return mapOrder(row), nil
+}
+
+func (r *OrderRepo) FindByPublicToken(token string) (*domain.OrderTicket, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, repository.ErrNotFound
+	}
+	var row OrderTicketEntity
+	if err := r.db.Where("public_token = ?", token).First(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, repository.ErrNotFound
 		}
@@ -377,6 +395,17 @@ func (r *OrderRepo) FindActiveByPhone(phone string, typeID uint) (*domain.OrderT
 	return mapOrder(row), nil
 }
 
+func marshalAssessment(o domain.OrderTicket) string {
+	if o.Assessment == nil {
+		return ""
+	}
+	raw, err := o.Assessment.Marshal()
+	if err != nil {
+		return ""
+	}
+	return raw
+}
+
 func mapOrder(row OrderTicketEntity) *domain.OrderTicket {
 	src := row.Source
 	if src == "" {
@@ -389,9 +418,11 @@ func mapOrder(row OrderTicketEntity) *domain.OrderTicket {
 		UnitName:          row.UnitName,
 		RequesterName:     row.RequesterName,
 		RequesterPhone:    row.RequesterPhone,
-		Location:          row.Location,
-		Condition:         row.Condition,
-		PhotoURL:          row.PhotoURL,
+		JenisPelayanan:    row.JenisPelayanan,
+		Location:         row.Location,
+		Condition:        row.Condition,
+		AssessmentAcuity: row.AssessmentAcuity,
+		PhotoURL:         row.PhotoURL,
 		RequesterLat:      row.RequesterLat,
 		RequesterLng:      row.RequesterLng,
 		Status:            row.Status,
@@ -409,6 +440,7 @@ func mapOrder(row OrderTicketEntity) *domain.OrderTicket {
 		EscalationHotline:  row.EscalationHotline,
 		EscalationLabel:    row.EscalationLabel,
 		TrackToken:         row.TrackToken,
+		PublicToken:        row.PublicToken,
 		TrackEnabledAt:     row.TrackEnabledAt,
 		TrackExpiresAt:     row.TrackExpiresAt,
 		ResponderLat:       row.ResponderLat,
@@ -423,6 +455,9 @@ func mapOrder(row OrderTicketEntity) *domain.OrderTicket {
 	}
 	if o.HasIncidentReport {
 		o.IncidentReport = json.RawMessage(row.IncidentReport)
+	}
+	if a, err := domain.ParseOrderAssessment(row.AssessmentJSON); err == nil && a != nil {
+		o.Assessment = a
 	}
 	o.CitizenPhase = domain.ResolveCitizenPhase(*o)
 	return o
@@ -463,8 +498,9 @@ func (r *OrderRepo) SetReferralHospital(id, hospitalID, hospitalName string) err
 
 func (r *OrderRepo) EnableTrack(id, token string, expiresAt time.Time) (*domain.OrderTicket, error) {
 	now := time.Now()
+	// pending allowed: WA dispatch /unit-job link before accept.
 	result := r.db.Model(&OrderTicketEntity{}).
-		Where("uuid = ? AND status IN ?", id, []string{"accepted", "in_progress"}).
+		Where("uuid = ? AND status IN ?", id, []string{"pending", "accepted", "in_progress"}).
 		Updates(map[string]any{
 			"track_token":      token,
 			"track_enabled_at": now,
@@ -479,7 +515,21 @@ func (r *OrderRepo) EnableTrack(id, token string, expiresAt time.Time) (*domain.
 	return r.FindByID(id)
 }
 
+func (r *OrderRepo) ExtendTrackExpiry(id string, expiresAt time.Time) error {
+	result := r.db.Model(&OrderTicketEntity{}).
+		Where("uuid = ? AND track_token IS NOT NULL AND track_token <> ''", id).
+		Update("track_expires_at", expiresAt)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
 func (r *OrderRepo) FindByTrackToken(token string) (*domain.OrderTicket, error) {
+	if token == "" {
+		return nil, repository.ErrNotFound
+	}
+	token = strings.TrimSpace(token)
 	if token == "" {
 		return nil, repository.ErrNotFound
 	}

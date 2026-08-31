@@ -518,6 +518,11 @@ const breadcrumbs = computed(() => {
     { label: "Home", to: "/unit/orders" },
   ];
 
+  if (path === "/unit/orders/new") {
+    crumbs.push({ label: "Pesanan", to: "/unit/orders" });
+    crumbs.push({ label: "Buat E-Tiket" });
+    return crumbs;
+  }
   if (path.startsWith("/unit/orders/") && path !== "/unit/orders") {
     crumbs.push({ label: "Pesanan", to: "/unit/orders" });
     crumbs.push({ label: String(route.params.ticket || "Detail") });
@@ -554,7 +559,7 @@ const breadcrumbs = computed(() => {
 </script>
 
 <template>
-  <div class="flex h-screen bg-neutral-50 overflow-hidden font-sans">
+  <div class="flex h-dvh max-h-dvh bg-neutral-50 overflow-hidden font-sans">
 
     <!-- ── Mobile: drawer overlay ────────────────────────────────────────────── -->
     <Transition name="fade">
@@ -568,10 +573,10 @@ const breadcrumbs = computed(() => {
     <!-- ── Sidebar (desktop collapsible, mobile as drawer) ─────────────────── -->
     <aside
       :class="[
-        'fixed inset-y-0 left-0 z-50 flex flex-col h-full bg-white border-r border-neutral-200 shrink-0 transition-all duration-300',
+        'fixed inset-y-0 left-0 z-50 flex flex-col h-full max-h-dvh bg-white border-r border-neutral-200 shrink-0 transition-all duration-300 overflow-hidden',
         sidebarCollapsed ? 'lg:w-[60px]' : 'lg:w-[240px]',
         'w-[240px]',
-        'lg:static lg:translate-x-0',
+        'lg:relative lg:translate-x-0',
         drawerOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
       ]"
     >
@@ -670,7 +675,7 @@ const breadcrumbs = computed(() => {
     </aside>
 
     <!-- ── Main content ───────────────────────────────────────────────────────── -->
-    <div class="flex flex-col flex-1 min-w-0 overflow-hidden">
+    <div class="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
 
       <!-- Top header -->
       <header class="h-[60px] shrink-0 flex items-center gap-3 px-4 sm:px-6 bg-white border-b border-neutral-200 relative z-40">
@@ -773,12 +778,15 @@ const breadcrumbs = computed(() => {
       </header>
 
       <!-- Page content -->
-      <main data-dashboard-scroll="main" class="flex-1 overflow-y-auto pb-16 lg:pb-0">
+      <main
+        data-dashboard-scroll="main"
+        class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-neutral-50"
+      >
         <slot />
       </main>
 
-      <!-- ── Mobile bottom navigation ─────────────────────────────────────────── -->
-      <nav class="lg:hidden shrink-0 fixed bottom-0 inset-x-0 z-30 bg-white border-t border-neutral-200 flex">
+      <!-- Mobile bottom navigation (in flex flow — avoids fixed overlap on scroll) -->
+      <nav class="lg:hidden shrink-0 bg-white border-t border-neutral-200 flex safe-bottom">
         <NuxtLink
           v-for="item in coreNavItems"
           :key="item.to"

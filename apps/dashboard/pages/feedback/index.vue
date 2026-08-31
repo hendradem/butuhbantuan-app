@@ -204,18 +204,17 @@ function rateTextColor(rate: number) {
       </div>
 
       <!-- Grouped table -->
-      <UiTableCard>
-        <template #toolbar>
-          <div class="flex flex-wrap items-center gap-2.5">
-            <p class="text-sm font-medium text-neutral-700 mr-auto">
-              {{ filteredGroups.length }} unit dengan penilaian
-            </p>
-            <UiSearchInput
-              v-model="search"
-              placeholder="Cari unit..."
-              class="w-full sm:w-[220px]"
-            />
-          </div>
+      <UiTableCard
+        title="Penilaian per Unit"
+        :badge="filteredGroups.length"
+        description="Ringkasan feedback dari pengguna aplikasi"
+      >
+        <template #actions>
+          <UiSearchInput
+            v-model="search"
+            placeholder="Cari unit..."
+            class="w-28 sm:w-40 shrink-0"
+          />
         </template>
 
         <UiTable v-if="showFeedbackSkeleton">

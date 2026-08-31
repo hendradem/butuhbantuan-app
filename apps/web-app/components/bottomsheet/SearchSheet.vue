@@ -1,12 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import {
-  PLACE_SLOTS,
-  getSavedPlace,
-  savedPlacesTick,
-  type PlaceSlot,
-  type SavedPlace,
-} from "~/utils/savedPlaces";
+import { listSavedPlaces, savedPlacesTick, type SavedPlace } from "~/utils/savedPlaces";
 
 type SheetTab = "search" | "favorites";
 
@@ -18,6 +12,9 @@ const leaflet = useLeafletStore();
 const detailSheet = useDetailSheetStore();
 const exploreSheet = useExploreSheetStore();
 const savePlaceSheet = useSavePlaceSheetStore();
+const mapUrl = useMapUrl();
+const { goToPlace } = usePlaceNavigation();
+const { clearRoute } = useMapRouting();
 const { loadEmergencyData } = useEmergencyApi();
 
 const tab = ref<SheetTab>("search");
@@ -29,12 +26,9 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null;
 const hasQuery = computed(() => query.value.trim().length > 0);
 const noResults = computed(() => !loading.value && results.value.length === 0 && hasQuery.value);
 
-const slots = computed(() => {
+const places = computed(() => {
   void savedPlacesTick.value;
-  return PLACE_SLOTS.map((meta) => ({
-    ...meta,
-    place: getSavedPlace(meta.slot),
-  }));
+  return listSavedPlaces();
 });
 
 watch(
@@ -71,13 +65,14 @@ async function goToPoint(lat: number, lng: number, address?: string) {
   userLocation.updateCoordinate(lat, lng);
   if (address) userLocation.updateFullAddress(address);
   searchData.updateSearchCoordinate(lat, lng);
-  leaflet.resetLeafletRouting();
   leaflet.requestDefaultView();
   detailSheet.onClose();
   exploreSheet.onClose();
   searchSheet.onClose();
   query.value = "";
   results.value = [];
+  clearRoute();
+  mapUrl.clearMapContext();
   await loadEmergencyData(lat, lng);
 }
 
@@ -89,12 +84,15 @@ async function handleSelect(item: any) {
 }
 
 async function handleSavedPlace(place: SavedPlace) {
-  await goToPoint(place.lat, place.lng, place.address);
+  searchSheet.onClose();
+  query.value = "";
+  results.value = [];
+  await goToPlace(place);
 }
 
-function openSave(slot: PlaceSlot) {
+function openSave(editId?: string) {
   searchSheet.onClose();
-  nextTick(() => savePlaceSheet.openSave(slot));
+  nextTick(() => savePlaceSheet.openSave(editId));
 }
 
 function handleSearchOnMaps() {
@@ -225,67 +223,84 @@ watch(query, (val) => {
       </div>
 
       <!-- Tab: Favorit -->
-      <div v-else class="flex-1 overflow-y-auto px-4 pt-4 pb-6 space-y-3">
-        <p class="m-0 text-[12px] ui-text-secondary leading-relaxed">
-          Pin lokasi di peta, lalu simpan sebagai Rumah atau Kantor.
-        </p>
+      <div v-else class="flex-1 overflow-y-auto px-4 pt-4 pb-6 space-y-5">
+        <section>
+          <p class="m-0 mb-2 text-[11px] font-semibold uppercase tracking-wide ui-text-secondary">
+            Tempat
+          </p>
+          <p class="m-0 mb-3 text-[12px] ui-text-secondary leading-relaxed">
+            Pin lokasi di peta, lalu simpan dengan nama bebas.
+          </p>
 
-        <div
-          v-for="s in slots"
-          :key="s.slot"
-          class="ui-card flex items-center gap-3 px-3.5 py-3.5"
-        >
-          <div
-            class="w-10 h-10 shrink-0 flex items-center justify-center"
-            style="background: var(--bb-bg-muted); border-radius: 0.75rem"
-          >
-            <Icon :icon="s.icon" class="text-lg" style="color: var(--bb-text)" />
-          </div>
-
-          <button
-            v-if="s.place"
-            type="button"
-            class="min-w-0 flex-1 text-left"
-            @click="handleSavedPlace(s.place)"
-          >
-            <p class="m-0 text-[13px] font-semibold ui-text-primary">{{ s.label }}</p>
-            <p class="m-0 mt-0.5 text-[11px] ui-text-secondary leading-snug line-clamp-2">
-              {{ s.place.address }}
-            </p>
-          </button>
-          <div v-else class="min-w-0 flex-1">
-            <p class="m-0 text-[13px] font-semibold ui-text-primary">{{ s.label }}</p>
-            <p class="m-0 mt-0.5 text-[11px] ui-text-secondary">Belum disimpan</p>
-          </div>
-
-          <div class="flex items-center gap-2 shrink-0">
-            <button
-              v-if="s.place"
-              type="button"
-              class="px-3 py-1.5 text-[11px] font-semibold"
-              style="
-                background: var(--bb-accent);
-                color: var(--bb-accent-contrast);
-                border-radius: var(--bb-radius-pill);
-              "
-              @click="handleSavedPlace(s.place)"
+          <div class="space-y-2">
+            <div
+              v-for="p in places"
+              :key="p.id"
+              class="ui-card flex items-center gap-3 px-3.5 py-3"
             >
-              Buka
-            </button>
+              <div
+                class="w-10 h-10 shrink-0 flex items-center justify-center"
+                style="background: var(--bb-bg-muted); border-radius: 0.75rem"
+              >
+                <Icon :icon="p.icon" class="text-lg" style="color: var(--bb-text)" />
+              </div>
+              <button
+                type="button"
+                class="min-w-0 flex-1 text-left"
+                @click="handleSavedPlace(p)"
+              >
+                <p class="m-0 text-[13px] font-semibold ui-text-primary">{{ p.label }}</p>
+                <p class="m-0 mt-0.5 text-[11px] ui-text-secondary leading-snug line-clamp-2">
+                  {{ p.address }}
+                </p>
+              </button>
+              <div class="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  class="px-3 py-1.5 text-[11px] font-semibold"
+                  style="
+                    background: var(--bb-accent);
+                    color: var(--bb-accent-contrast);
+                    border-radius: var(--bb-radius-pill);
+                  "
+                  @click="handleSavedPlace(p)"
+                >
+                  Buka
+                </button>
+                <button
+                  type="button"
+                  class="px-3 py-1.5 text-[11px] font-semibold"
+                  style="
+                    background: var(--bb-bg-muted);
+                    color: var(--bb-text);
+                    border-radius: var(--bb-radius-pill);
+                  "
+                  @click="openSave(p.id)"
+                >
+                  Ubah
+                </button>
+              </div>
+            </div>
+
             <button
               type="button"
-              class="px-3 py-1.5 text-[11px] font-semibold"
-              style="
-                background: var(--bb-bg-muted);
-                color: var(--bb-text);
-                border-radius: var(--bb-radius-pill);
-              "
-              @click="openSave(s.slot)"
+              class="w-full ui-card flex items-center gap-3 px-3.5 py-3 text-left"
+              style="border-style: dashed"
+              @click="openSave()"
             >
-              {{ s.place ? "Ganti" : "Simpan" }}
+              <div
+                class="w-10 h-10 shrink-0 flex items-center justify-center"
+                style="background: var(--bb-bg-muted); border-radius: 0.75rem"
+              >
+                <Icon icon="lucide:plus" class="text-lg" style="color: var(--bb-text-secondary)" />
+              </div>
+              <div class="min-w-0">
+                <p class="m-0 text-[13px] font-semibold ui-text-primary">Simpan pin saat ini</p>
+                <p class="m-0 mt-0.5 text-[11px] ui-text-secondary">Nama bebas — Rumah, Kantor, Kos…</p>
+              </div>
             </button>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   </CoreSheet>

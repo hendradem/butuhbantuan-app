@@ -11,10 +11,12 @@ const MAX_CACHE_ACCURACY_M = 400;
 const GOOD_ENOUGH_M = 50;
 /** Locate: after a few seconds, accept a decent fix instead of waiting longer. */
 const ACCEPTABLE_M = 100;
-/** Locate max wait — keep the button snappy. */
-const LOCATE_MAX_MS = 7_000;
+/** Hard ceiling for the locate button. */
+const PREFER_GPS_DEADLINE_MS = 12_000;
 /** Boot sampling window. */
-const BOOT_MAX_MS = 4_000;
+const BOOT_MAX_MS = 6_000;
+/** Reuse in-session GPS from map watch when this fresh. */
+const SESSION_GPS_FRESH_MS = 20_000;
 /** Ignore coarse Wi‑Fi once we have anything tighter. */
 const COARSE_DISCARD_M = 200;
 
@@ -78,13 +80,34 @@ function writeLastGeo(lat: number, long: number, accuracyM?: number) {
   }
 }
 
+/** Hard cap — some browsers never invoke getCurrentPosition callbacks despite `timeout`. */
 function readPosition(options: PositionOptions): Promise<GeolocationPosition> {
+  const timeoutMs = options.timeout ?? 10_000;
   return new Promise((resolve, reject) => {
     if (!navigator?.geolocation) {
       reject(Object.assign(new Error("unsupported"), { code: 0 }));
       return;
     }
-    navigator.geolocation.getCurrentPosition(resolve, reject, options);
+
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hardTimer);
+      fn();
+    };
+
+    const hardTimer = setTimeout(() => {
+      finish(() => {
+        reject(Object.assign(new Error("timeout"), { code: 3 }));
+      });
+    }, timeoutMs + 750);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => finish(() => resolve(pos)),
+      (err) => finish(() => reject(err)),
+      options,
+    );
   });
 }
 
@@ -208,6 +231,12 @@ function collectHighAccuracyFixes(
       // Decent fix after a short wait — don't make the user wait the full window
       if (acceptable > 0 && elapsed >= acceptAfter && bestAcc <= acceptable) {
         earlyTimer = setTimeout(finish, 200);
+        return;
+      }
+
+      // Any reading after a short wait — better than waiting on a cold GPS chip
+      if (elapsed >= acceptAfter && samples.length > 0 && bestAcc < 2_000) {
+        earlyTimer = setTimeout(finish, 250);
       }
     };
 
@@ -333,78 +362,76 @@ export function useGeolocation() {
       return { ...DIY_CENTER, fromGps: false, errorCode: 0 };
     }
 
+  function freshSessionFix(): GeoFix | null {
+    const age = userLocation.gpsUpdatedAt
+      ? Date.now() - userLocation.gpsUpdatedAt
+      : Number.POSITIVE_INFINITY;
+    if (age > SESSION_GPS_FRESH_MS) return null;
+    const lat = userLocation.gpsLat;
+    const lng = userLocation.gpsLong;
+    const acc = userLocation.gpsAccuracyM;
+    if (!lat || !lng || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (acc > 0 && acc > MAX_CACHE_ACCURACY_M) return null;
+    return {
+      lat,
+      long: lng,
+      fromGps: true,
+      accuracyM: acc > 0 ? acc : undefined,
+    };
+  }
+
     if (opts?.preferGps) {
-      const best = await collectHighAccuracyFixes(LOCATE_MAX_MS, {
-        goodEnoughM: GOOD_ENOUGH_M,
-        acceptableM: ACCEPTABLE_M,
-        acceptAfterMs: 2_000,
-        kickMaximumAgeMs: 15_000,
-        onSample: opts.onSample,
-      });
-      if (best?.fromGps) return best;
-      if (best?.errorCode === 1) return best;
-
-      // One-shot high accuracy — allow a recent browser fix (boot/watch)
-      try {
-        const pos = await readPosition({
-          enableHighAccuracy: true,
-          timeout: 5_000,
-          maximumAge: 15_000,
-        });
-        const fix = toFix(pos);
-        opts?.onSample?.(fix);
-        return fix;
-      } catch (e: any) {
-        if (e?.code === 1) {
-          return { ...DIY_CENTER, fromGps: false, errorCode: 1 };
+      const preferGps = async (): Promise<GeoFix> => {
+        // Map watch may already have a fresh fix — don't cold-start a second watch
+        const live = freshSessionFix();
+        if (live) {
+          opts?.onSample?.(live);
+          return live;
         }
-      }
 
-      // Coarse network location (same path boot uses after GPS window)
-      try {
-        const pos = await readPosition({
-          enableHighAccuracy: false,
-          timeout: 4_000,
-          maximumAge: 60_000,
-        });
-        const fix = toFix(pos);
-        opts?.onSample?.(fix);
-        return fix;
-      } catch (e: any) {
-        if (e?.code === 1) {
-          return { ...DIY_CENTER, fromGps: false, errorCode: 1 };
+        try {
+          const pos = await readPosition({
+            enableHighAccuracy: true,
+            timeout: 8_000,
+            maximumAge: 0,
+          });
+          const fix = toFix(pos);
+          opts?.onSample?.(fix);
+          return fix;
+        } catch (e: any) {
+          if (e?.code === 1) {
+            return { ...DIY_CENTER, fromGps: false, errorCode: 1 };
+          }
         }
-      }
 
-      // In-session GPS already known (map boot / watch) — relocate pin there
-      const liveLat = userLocation.gpsLat;
-      const liveLng = userLocation.gpsLong;
-      const liveAcc = userLocation.gpsAccuracyM;
-      if (
-        liveLat &&
-        liveLng &&
-        Number.isFinite(liveLat) &&
-        Number.isFinite(liveLng) &&
-        (liveAcc <= 0 || liveAcc <= MAX_CACHE_ACCURACY_M)
-      ) {
-        return {
-          lat: liveLat,
-          long: liveLng,
-          fromGps: true,
-          accuracyM: liveAcc > 0 ? liveAcc : undefined,
-        };
-      }
+        try {
+          const pos = await readPosition({
+            enableHighAccuracy: false,
+            timeout: 5_000,
+            maximumAge: 0,
+          });
+          const fix = toFix(pos);
+          opts?.onSample?.(fix);
+          return fix;
+        } catch (e: any) {
+          if (e?.code === 1) {
+            return { ...DIY_CENTER, fromGps: false, errorCode: 1 };
+          }
+        }
 
-      const cached = readLastGeo();
-      if (cached) {
-        return {
-          ...cached,
-          fromGps: true,
-          accuracyM: cached.accuracyM,
-        };
-      }
+        // Never treat localStorage cache as a successful locate
+        return { ...DIY_CENTER, fromGps: false, errorCode: 3 };
+      };
 
-      return { ...DIY_CENTER, fromGps: false, errorCode: 3 };
+      return Promise.race([
+        preferGps(),
+        new Promise<GeoFix>((resolve) => {
+          setTimeout(
+            () => resolve({ ...DIY_CENTER, fromGps: false, errorCode: 3 }),
+            PREFER_GPS_DEADLINE_MS,
+          );
+        }),
+      ]);
     }
 
     const gps = await collectHighAccuracyFixes(BOOT_MAX_MS, {
@@ -418,8 +445,8 @@ export function useGeolocation() {
     try {
       const pos = await readPosition({
         enableHighAccuracy: false,
-        timeout: 4_000,
-        maximumAge: 30_000,
+        timeout: 5_000,
+        maximumAge: 0,
       });
       const fix = toFix(pos);
       if ((fix.accuracyM ?? 9999) > MAX_CACHE_ACCURACY_M) {
@@ -438,32 +465,15 @@ export function useGeolocation() {
   }
 
   async function initUserLocation(): Promise<GeoFix> {
-    const seed = readLastGeo() || DIY_CENTER;
     userLocation.setManualLocation(false);
-    userLocation.updateGPSCoordinate(seed.lat, seed.long, seed.accuracyM);
-
-    void (async () => {
-      userLocation.setAddressLoading(true);
-      try {
-        const geo = await reverseGeocode(seed.long, seed.lat);
-        const formatted = formatGeoAddress(geo);
-        if (
-          !userLocation.gpsLat ||
-          Math.abs(userLocation.gpsLat - seed.lat) < 1e-7
-        ) {
-          userLocation.updateFullAddress(
-            formatted || `${seed.lat.toFixed(5)}, ${seed.long.toFixed(5)}`,
-          );
-        }
-      } finally {
-        userLocation.setAddressLoading(false);
-      }
-    })();
+    // Paint map from cache only — address waits for the GPS attempt below
+    const cached = readLastGeo();
+    if (cached) {
+      userLocation.seedFromCache(cached.lat, cached.long);
+    }
 
     const fix = await getCurrentLocation({ preferGps: false });
-    if (fix.fromGps) {
-      await applyFix(fix);
-    }
+    await applyFix(fix, { force: true });
     return fix;
   }
 

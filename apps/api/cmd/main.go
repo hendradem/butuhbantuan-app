@@ -47,8 +47,9 @@ func main() {
 		analyticsRepo repository.AnalyticsRepository
 		attemptRepo   repository.DispatchAttemptRepository
 		eventRepo     repository.OrderEventRepository
-		tileRepo      repository.MapTileUsageRepository
-		db            *gorm.DB
+		tileRepo       repository.MapTileUsageRepository
+		assessmentRepo repository.AssessmentRepository
+		db             *gorm.DB
 	)
 
 	switch cfg.Storage {
@@ -71,6 +72,7 @@ func main() {
 		mysqlAttempt := mysqlrepo.NewDispatchAttemptRepo(db)
 		mysqlEvent := mysqlrepo.NewOrderEventRepo(db)
 		mysqlTiles := mysqlrepo.NewMapTileUsageRepo(db)
+		mysqlAssessment := mysqlrepo.NewAssessmentRepo(db)
 
 		emergencyRepo = mysqlEmergency
 		typeRepo = mysqlType
@@ -97,6 +99,9 @@ func main() {
 			if err := runSeed(mysqlEmergency, mysqlType, mysqlRegion); err != nil {
 				log.Fatalf("seed failed: %v", err)
 			}
+			if err := mysqlAssessment.EnsureDefaultTemplates(); err != nil {
+				log.Printf("assessment seed warning: %v", err)
+			}
 			log.Println("seeding completed")
 			return
 		}
@@ -112,6 +117,11 @@ func main() {
 			}
 		}
 
+		if err := mysqlAssessment.EnsureDefaultTemplates(); err != nil {
+			log.Printf("assessment template seed warning: %v", err)
+		}
+		assessmentRepo = mysqlAssessment
+
 	default: // "json"
 		if *seed {
 			log.Fatalln("--seed requires STORAGE=mysql")
@@ -125,7 +135,6 @@ func main() {
 		regionRepo = repo
 	}
 
-	emergencySvc := service.NewEmergencyService(emergencyRepo, typeRepo)
 	regionSvc := service.NewRegionService(regionRepo)
 	var feedbackSvc service.FeedbackUseCase
 	if feedbackRepo != nil {
@@ -198,6 +207,8 @@ func main() {
 		sosSvc = service.NewNoopSOSService()
 	}
 
+	emergencySvc := service.NewEmergencyService(emergencyRepo, typeRepo, unitCredRepo)
+
 	mapTilesSvc := service.NewMapTilesService(tileRepo, true)
 
 	var hospitalSvc service.HospitalUseCase
@@ -219,6 +230,11 @@ func main() {
 		wilayahResolver = service.NewWilayahResolver(regionRepo, emergencyRepo)
 	}
 
+	var assessmentSvc service.AssessmentUseCase
+	if assessmentRepo != nil {
+		assessmentSvc = service.NewAssessmentService(assessmentRepo, emergencyRepo)
+	}
+
 	app := fiber.New(fiber.Config{
 		// Multipart incident photos (client compresses; leave headroom for form overhead).
 		BodyLimit: 12 * 1024 * 1024,
@@ -232,7 +248,9 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	router.Register(app, emergencySvc, emergencySvc, regionSvc, feedbackSvc, orderSvc, unitAuthSvc, sosSvc, pushSvc, analyticsSvc, dispatchSvc, unitCredRepo, mapTilesSvc, wilayahResolver, hospitalSvc, cfg, eventHub, db)
+	complianceSvc := service.NewAmbulanceComplianceService(emergencyRepo)
+
+	router.Register(app, emergencySvc, emergencySvc, regionSvc, feedbackSvc, orderSvc, unitAuthSvc, sosSvc, pushSvc, analyticsSvc, dispatchSvc, unitCredRepo, mapTilesSvc, wilayahResolver, hospitalSvc, assessmentSvc, complianceSvc, cfg, eventHub)
 
 	// Graceful shutdown on SIGINT / SIGTERM
 	quit := make(chan os.Signal, 1)

@@ -10,6 +10,11 @@ import (
 	"github.com/butuhbantuan/api/internal/domain"
 )
 
+// RankContext carries optional order-side signals for soft ranking nudges.
+type RankContext struct {
+	AssessmentAcuity string // red | yellow | green | unknown
+}
+
 // RankCandidates scores emergency units within a single cascade tier.
 // Lower score is better. excludeIDs skips units already offered.
 // When typeID > 0 or requestedTypeName is set, only compatible types are ranked
@@ -25,8 +30,9 @@ func RankCandidates(
 	typeID uint,
 	requestedTypeName string,
 	excludeIDs map[string]struct{},
+	ctx RankContext,
 ) []domain.RankedCandidate {
-	return rankCandidates(candidates, lat, lng, typeID, requestedTypeName, excludeIDs, true)
+	return rankCandidates(candidates, lat, lng, typeID, requestedTypeName, excludeIDs, true, ctx)
 }
 
 // rankCandidates is the shared scorer. When strictCapacity is false, closed /
@@ -39,6 +45,7 @@ func rankCandidates(
 	requestedTypeName string,
 	excludeIDs map[string]struct{},
 	strictCapacity bool,
+	ctx RankContext,
 ) []domain.RankedCandidate {
 	reqFamily := typeFamily(requestedTypeName)
 	ranked := make([]domain.RankedCandidate, 0, len(candidates))
@@ -70,6 +77,7 @@ func rankCandidates(
 		if fleetOK && e.Fleet.Available > 0 {
 			soft -= 0.25
 		}
+		soft += domain.ComplianceRankDelta(e, ctx.AssessmentAcuity)
 		if soft < -0.75 {
 			soft = -0.75
 		}

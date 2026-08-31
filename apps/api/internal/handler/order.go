@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log"
 	"strconv"
 	"strings"
 
@@ -17,6 +18,8 @@ type OrderHandler struct {
 	emergencySvc service.EmergencyUseCase
 	dispatch     service.DispatchUseCase
 	wilayah      *service.WilayahResolver
+	assessment   service.AssessmentUseCase
+	waDispatch   *service.WaDispatchResolver
 }
 
 func NewOrderHandler(svc service.OrderUseCase, emergencySvc service.EmergencyUseCase) *OrderHandler {
@@ -33,21 +36,33 @@ func (h *OrderHandler) WithWilayah(w *service.WilayahResolver) *OrderHandler {
 	return h
 }
 
+func (h *OrderHandler) WithAssessment(a service.AssessmentUseCase) *OrderHandler {
+	h.assessment = a
+	return h
+}
+
+func (h *OrderHandler) WithWaDispatch(w *service.WaDispatchResolver) *OrderHandler {
+	h.waDispatch = w
+	return h
+}
+
 func (h *OrderHandler) Create(c *fiber.Ctx) error {
 	var body struct {
-		EmergencyUUID  string  `json:"emergency_uuid"`
-		UnitName       string  `json:"unit_name"`
-		RequesterName  string  `json:"requester_name"`
-		RequesterPhone string  `json:"requester_phone"`
-		Location       string  `json:"location"`
-		Condition      string  `json:"condition"`
-		PhotoURL       string  `json:"photo_url"`
-		RequesterLat   float64 `json:"requester_lat"`
-		RequesterLng   float64 `json:"requester_lng"`
-		TypeID         uint    `json:"type_id"`
-		RegencyID      string  `json:"regency_id"`
-		ProvinceID     string  `json:"province_id"`
-		Source         string  `json:"source"`
+		EmergencyUUID  string                 `json:"emergency_uuid"`
+		UnitName       string                 `json:"unit_name"`
+		RequesterName  string                 `json:"requester_name"`
+		RequesterPhone string                 `json:"requester_phone"`
+		JenisPelayanan string                 `json:"jenis_pelayanan"`
+		Location       string                 `json:"location"`
+		Condition      string                 `json:"condition"`
+		PhotoURL       string                 `json:"photo_url"`
+		RequesterLat   float64                `json:"requester_lat"`
+		RequesterLng   float64                `json:"requester_lng"`
+		TypeID         uint                   `json:"type_id"`
+		RegencyID      string                 `json:"regency_id"`
+		ProvinceID     string                 `json:"province_id"`
+		Source         string                 `json:"source"`
+		Assessment     *domain.OrderAssessment `json:"assessment"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
@@ -70,8 +85,10 @@ func (h *OrderHandler) Create(c *fiber.Ctx) error {
 		UnitName:       body.UnitName,
 		RequesterName:  body.RequesterName,
 		RequesterPhone: body.RequesterPhone,
+		JenisPelayanan: body.JenisPelayanan,
 		Location:       body.Location,
 		Condition:      body.Condition,
+		Assessment:     body.Assessment,
 		PhotoURL:       body.PhotoURL,
 		RequesterLat:   body.RequesterLat,
 		RequesterLng:   body.RequesterLng,
@@ -88,15 +105,17 @@ func (h *OrderHandler) Create(c *fiber.Ctx) error {
 // CreateManual creates an ops-entered ticket (admin dashboard).
 func (h *OrderHandler) CreateManual(c *fiber.Ctx) error {
 	var body struct {
-		EmergencyUUID  string  `json:"emergency_uuid"`
-		UnitName       string  `json:"unit_name"`
-		RequesterName  string  `json:"requester_name"`
-		RequesterPhone string  `json:"requester_phone"`
-		Location       string  `json:"location"`
-		Condition      string  `json:"condition"`
-		PhotoURL       string  `json:"photo_url"`
-		RequesterLat   float64 `json:"requester_lat"`
-		RequesterLng   float64 `json:"requester_lng"`
+		EmergencyUUID  string                  `json:"emergency_uuid"`
+		UnitName       string                  `json:"unit_name"`
+		RequesterName  string                  `json:"requester_name"`
+		RequesterPhone string                  `json:"requester_phone"`
+		Location       string                  `json:"location"`
+		Condition      string                  `json:"condition"`
+		PhotoURL       string                  `json:"photo_url"`
+		RequesterLat   float64                 `json:"requester_lat"`
+		RequesterLng   float64                 `json:"requester_lng"`
+		JenisPelayanan string                  `json:"jenis_pelayanan"`
+		Assessment     *domain.OrderAssessment `json:"assessment"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
@@ -110,8 +129,10 @@ func (h *OrderHandler) CreateManual(c *fiber.Ctx) error {
 		UnitName:       body.UnitName,
 		RequesterName:  body.RequesterName,
 		RequesterPhone: body.RequesterPhone,
+		JenisPelayanan: body.JenisPelayanan,
 		Location:       body.Location,
 		Condition:      body.Condition,
+		Assessment:     body.Assessment,
 		PhotoURL:       body.PhotoURL,
 		RequesterLat:   body.RequesterLat,
 		RequesterLng:   body.RequesterLng,
@@ -122,13 +143,13 @@ func (h *OrderHandler) CreateManual(c *fiber.Ctx) error {
 }
 
 func (h *OrderHandler) createEnriched(c *fiber.Ctx, order domain.OrderTicket) error {
-	preferredUUID := order.EmergencyUUID
-
 	// Enrich type/region from the chosen unit so later reassign/dispatch works
 	// even when the client only sends emergency_uuid.
+	var unit *domain.Emergency
 	if h.emergencySvc != nil {
 		if units, err := h.emergencySvc.GetByIDs([]string{order.EmergencyUUID}); err == nil && len(units) > 0 {
 			u := units[0]
+			unit = &u
 			if order.UnitName == "" {
 				order.UnitName = u.Name
 			}
@@ -143,6 +164,13 @@ func (h *OrderHandler) createEnriched(c *fiber.Ctx, order domain.OrderTicket) er
 			}
 		}
 	}
+	if unit != nil {
+		resolved, err := domain.ResolveJenisPelayanan(order.JenisPelayanan, *unit)
+		if err != nil {
+			return response.Error(c, fiber.StatusBadRequest, err.Error())
+		}
+		order.JenisPelayanan = resolved
+	}
 	// Prefer GPS → covered region over client-supplied / unit HQ when coords exist.
 	if h.wilayah != nil {
 		order.RegencyID, order.ProvinceID = h.wilayah.Resolve(
@@ -152,63 +180,145 @@ func (h *OrderHandler) createEnriched(c *fiber.Ctx, order domain.OrderTicket) er
 		)
 	}
 
-	// Citizen call/list: same distance-first cascade as SOS (with soft prefer for tap).
-	if order.Source == "call" && h.dispatch != nil &&
-		order.TypeID != 0 && order.RequesterLat != 0 && order.RequesterLng != 0 {
-		result, err := h.dispatch.AssignIncident(service.IncidentAssignInput{
-			Source:        "call",
-			Name:          order.RequesterName,
-			Phone:         order.RequesterPhone,
-			Address:       order.Location,
-			Description:   order.Condition,
-			PhotoURL:      order.PhotoURL,
-			Lat:           order.RequesterLat,
-			Lng:           order.RequesterLng,
-			TypeID:        order.TypeID,
-			RegencyID:     order.RegencyID,
-			ProvinceID:    order.ProvinceID,
-			PreferredUUID: preferredUUID,
-		})
-		if err != nil {
-			return response.Error(c, fiber.StatusInternalServerError, "failed to create order")
-		}
-		if result != nil && result.Ticket != nil {
-			return response.OK(c, "order created", result.Ticket)
+	// Structured initial assessment (master checklist) → acuity + condition summary.
+	if order.Assessment != nil && h.assessment != nil {
+		if tpl, err := h.assessment.GetTemplateForOrder(order.EmergencyUUID, order.JenisPelayanan); err == nil && tpl != nil {
+			service.EnrichOrderAssessment(&order, tpl)
 		}
 	}
 
+	// Citizen picked a specific unit from the list — assign directly to that unit.
+	// Distance-first cascade (AssignIncident) is for SOS auto-dispatch only.
 	result, err := h.svc.Create(order)
 	if err != nil {
 		return response.Error(c, fiber.StatusInternalServerError, "failed to create order")
 	}
-	return response.OK(c, "order created", result)
+	ticket := maybeEnableWaDispatch(h.svc, h.emergencySvc, h.waDispatch, result)
+	h.enrichUnitContact(ticket)
+	return response.OK(c, "order created", ticket)
+}
+
+// maybeEnableWaDispatch mints /dispatch/{token} when the assigned unit has no dashboard access.
+// Used by admin/public create and unit manual create so WA-only units get a magic link.
+func maybeEnableWaDispatch(
+	orderSvc service.OrderUseCase,
+	emergencySvc service.EmergencyUseCase,
+	wa *service.WaDispatchResolver,
+	ticket *domain.OrderTicket,
+) *domain.OrderTicket {
+	if ticket == nil || ticket.EmergencyUUID == "" || orderSvc == nil || emergencySvc == nil {
+		return ticket
+	}
+	units, err := emergencySvc.GetByIDs([]string{ticket.EmergencyUUID})
+	if err != nil || len(units) == 0 {
+		return ticket
+	}
+	usesWa := units[0].WaDispatch
+	if wa != nil {
+		usesWa = wa.UsesWaDispatch(units[0])
+	} else {
+		usesWa = units[0].UsesWaDispatch(false)
+	}
+	if !usesWa {
+		return ticket
+	}
+	updated, err := orderSvc.EnableTrack(ticket.ID, "system")
+	if err != nil {
+		log.Printf("wa-dispatch: EnableTrack failed ticket=%s unit=%s: %v", ticket.TicketNumber, ticket.UnitName, err)
+		return ticket
+	}
+	return updated
 }
 
 func (h *OrderHandler) GetByTicketNumber(c *fiber.Ctx) error {
-	order, err := h.svc.GetByTicketNumber(c.Params("number"))
-	if err != nil {
-		return response.Error(c, fiber.StatusNotFound, "order not found")
-	}
-	h.enrichUnitContact(order)
-	order.CitizenPhase = domain.ResolveCitizenPhase(*order)
+	return response.Error(c, fiber.StatusNotFound, "gunakan link bagikan dari e-tiket")
+}
 
-	// Public surface: citizen-safe DTO. Full phone only when claim matches (e-ticket owner).
+func ticketClaimPhone(c *fiber.Ctx) string {
 	claim := strings.TrimSpace(c.Get("X-Requester-Phone"))
 	if claim == "" {
 		claim = strings.TrimSpace(c.Query("phone"))
 	}
+	return claim
+}
+
+func (h *OrderHandler) respondPublicTicket(c *fiber.Ctx, order *domain.OrderTicket) error {
+	h.enrichUnitContact(order)
+	order.CitizenPhase = domain.ResolveCitizenPhase(*order)
+	claim := ticketClaimPhone(c)
 	verified := claim != "" && domain.PhoneMatches(order.RequesterPhone, claim)
 	return response.OK(c, "success", domain.ToPublicTicket(*order, verified))
 }
 
+// GetByViewToken serves the citizen e-ticket via unguessable public_token.
+func (h *OrderHandler) GetByViewToken(c *fiber.Ctx) error {
+	order, err := h.svc.GetByPublicToken(c.Params("token"))
+	if err != nil {
+		return response.Error(c, fiber.StatusNotFound, "order not found")
+	}
+	return h.respondPublicTicket(c, order)
+}
+
+// VerifyViewTokenPhone lets a viewer claim an e-ticket by confirming pelapor phone.
+func (h *OrderHandler) VerifyViewTokenPhone(c *fiber.Ctx) error {
+	var body struct {
+		Phone string `json:"phone"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+	claim := strings.TrimSpace(body.Phone)
+	if claim == "" {
+		return response.Error(c, fiber.StatusBadRequest, "phone is required")
+	}
+
+	order, err := h.svc.GetByPublicToken(c.Params("token"))
+	if err != nil {
+		return response.Error(c, fiber.StatusNotFound, "order not found")
+	}
+	if !domain.PhoneMatches(order.RequesterPhone, claim) {
+		return response.Error(c, fiber.StatusForbidden, "nomor HP tidak cocok dengan data pelapor")
+	}
+	h.enrichUnitContact(order)
+	order.CitizenPhase = domain.ResolveCitizenPhase(*order)
+	return response.OK(c, "phone verified", domain.ToPublicTicket(*order, true))
+}
+
+// VerifyTicketPhone is deprecated — use VerifyViewTokenPhone with the share link token.
+func (h *OrderHandler) VerifyTicketPhone(c *fiber.Ctx) error {
+	return response.Error(c, fiber.StatusNotFound, "gunakan link bagikan dari e-tiket")
+}
+
 // GetTrackSession is public — field petugas opens /track/:token without login.
 func (h *OrderHandler) GetTrackSession(c *fiber.Ctx) error {
-	order, err := h.svc.GetByTrackToken(c.Params("token"))
+	token := strings.TrimSpace(c.Params("token"))
+	order, err := h.svc.GetByTrackToken(token)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return response.Error(c, fiber.StatusNotFound, "track link not found")
 		}
 		if errors.Is(err, repository.ErrConflict) {
+			// Pending WA-dispatch offer tokens are valid until trackOfferTTL but
+			// GetByTrackToken only serves accepted/in_progress GPS sessions.
+			if offer, oerr := h.svc.GetOfferByToken(token); oerr == nil && offer != nil && offer.Status == "pending" {
+				return response.OK(c, "success", fiber.Map{
+					"ticket_number":    offer.TicketNumber,
+					"unit_name":        offer.UnitName,
+					"status":           offer.Status,
+					"is_offer":         true,
+					"can_share":        false,
+					"requester_name":   offer.RequesterName,
+					"requester_phone":  offer.RequesterPhone,
+					"requester_lat":    offer.RequesterLat,
+					"requester_lng":    offer.RequesterLng,
+					"location":         offer.Location,
+					"condition":        offer.Condition,
+					"photo_url":        offer.PhotoURL,
+					"track_expires_at": offer.TrackExpiresAt,
+					"arrived_at":       offer.ArrivedAt,
+					"accepted_at":      offer.AcceptedAt,
+				})
+			}
 			return response.Error(c, fiber.StatusGone, "track link expired or order inactive")
 		}
 		return response.Error(c, fiber.StatusInternalServerError, "failed to load track session")
@@ -326,12 +436,19 @@ func (h *OrderHandler) CompleteByToken(c *fiber.Ctx) error {
 // Unlike GetTrackSession, this also allows pending (unaccepted) orders so the unit can
 // see the offer and tap Accept / Reject without opening the dashboard.
 func (h *OrderHandler) GetOfferSession(c *fiber.Ctx) error {
-	order, err := h.svc.GetOfferByToken(c.Params("token"))
+	order, err := h.svc.GetOfferByToken(strings.TrimSpace(c.Params("token")))
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return response.Error(c, fiber.StatusNotFound, "link tidak ditemukan atau sudah tidak aktif")
 		}
 		return response.Error(c, fiber.StatusGone, "link sudah kedaluwarsa")
+	}
+	travelSec := 0
+	if order.AcceptedAt != nil && order.ArrivedAt != nil {
+		travelSec = int(order.ArrivedAt.Sub(*order.AcceptedAt).Seconds())
+		if travelSec < 0 {
+			travelSec = 0
+		}
 	}
 	return response.OK(c, "offer session", fiber.Map{
 		"ticket_number":    order.TicketNumber,
@@ -341,6 +458,7 @@ func (h *OrderHandler) GetOfferSession(c *fiber.Ctx) error {
 		"is_offer":         order.Status == "pending",
 		"can_share":        order.Status == "accepted" || order.Status == "in_progress",
 		"requester_name":   order.RequesterName,
+		"requester_phone":  order.RequesterPhone,
 		"location":         order.Location,
 		"condition":        order.Condition,
 		"photo_url":        order.PhotoURL,
@@ -348,13 +466,14 @@ func (h *OrderHandler) GetOfferSession(c *fiber.Ctx) error {
 		"requester_lng":    order.RequesterLng,
 		"arrived_at":       order.ArrivedAt,
 		"accepted_at":      order.AcceptedAt,
+		"travel_sec":       travelSec,
 		"track_expires_at": order.TrackExpiresAt,
 	})
 }
 
 // AcceptByToken accepts a dispatch offer via the WA magic-link page (no dashboard login).
 func (h *OrderHandler) AcceptByToken(c *fiber.Ctx) error {
-	offer, err := h.svc.GetOfferByToken(c.Params("token"))
+	offer, err := h.svc.GetOfferByToken(strings.TrimSpace(c.Params("token")))
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return response.Error(c, fiber.StatusNotFound, "link tidak ditemukan")
@@ -383,7 +502,7 @@ func (h *OrderHandler) AcceptByToken(c *fiber.Ctx) error {
 
 // RejectByToken rejects a dispatch offer via the WA magic-link page.
 func (h *OrderHandler) RejectByToken(c *fiber.Ctx) error {
-	offer, err := h.svc.GetOfferByToken(c.Params("token"))
+	offer, err := h.svc.GetOfferByToken(strings.TrimSpace(c.Params("token")))
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return response.Error(c, fiber.StatusNotFound, "link tidak ditemukan")
@@ -424,6 +543,12 @@ func (h *OrderHandler) enrichUnitContact(order *domain.OrderTicket) {
 	order.UnitWhatsapp = u.Contact.Whatsapp
 	if order.UnitWhatsapp == "" {
 		order.UnitWhatsapp = u.Contact.Phone
+	}
+	order.WaDispatch = u.WaDispatch
+	if h.waDispatch != nil {
+		order.WaDispatch = h.waDispatch.UsesWaDispatch(u)
+	} else {
+		order.WaDispatch = u.UsesWaDispatch(false)
 	}
 	lat, lng := parseCoordPair(u.Coordinates)
 	order.UnitLat = lat

@@ -22,6 +22,7 @@ type UnitHandler struct {
 	analyticsSvc service.AnalyticsUseCase
 	dispatchSvc  service.DispatchUseCase
 	wilayah      *service.WilayahResolver
+	assessment   service.AssessmentUseCase
 }
 
 func NewUnitHandler(authSvc service.UnitAuthUseCase, orderSvc service.OrderUseCase, emergencySvc service.EmergencyUseCase, feedbackSvc service.FeedbackUseCase) *UnitHandler {
@@ -40,6 +41,11 @@ func (h *UnitHandler) WithWilayah(w *service.WilayahResolver) *UnitHandler {
 
 func (h *UnitHandler) WithAnalytics(a service.AnalyticsUseCase) *UnitHandler {
 	h.analyticsSvc = a
+	return h
+}
+
+func (h *UnitHandler) WithAssessment(a service.AssessmentUseCase) *UnitHandler {
+	h.assessment = a
 	return h
 }
 
@@ -145,6 +151,7 @@ func (h *UnitHandler) GetProfile(c *fiber.Ctx) error {
 	if err == nil && len(units) > 0 {
 		u := units[0]
 		profile["unit_name"] = u.Name
+		profile["organization_name"] = u.OrganizationName
 		profile["emergency_type"] = u.EmergencyType.Name
 		profile["address"] = u.Address
 		profile["contact"] = u.Contact
@@ -154,8 +161,12 @@ func (h *UnitHandler) GetProfile(c *fiber.Ctx) error {
 		profile["is_dispatcher"] = u.IsDispatcher
 		profile["is_province_dispatcher"] = u.IsProvinceDispatcher
 		profile["partner_tier"] = u.PartnerTier
+		profile["dashboard_access"] = u.DashboardAccess
 		profile["regency_id"] = u.Address.RegencyID
 		profile["province_id"] = u.Address.ProvinceID
+		profile["tipe_emergency"] = u.TipeEmergency
+		profile["compliance"] = u.Compliance
+		profile["incident_report_template"] = u.IncidentReportTemplate
 		if scope, ok := domain.OpsScopeFromEmergency(u); ok {
 			profile["ops_scope"] = scope
 		}
@@ -223,13 +234,15 @@ func (h *UnitHandler) CreateOrder(c *fiber.Ctx) error {
 	unitName, _ := c.Locals("unit_name").(string)
 
 	var body struct {
-		RequesterName  string  `json:"requester_name"`
-		RequesterPhone string  `json:"requester_phone"`
-		Location       string  `json:"location"`
-		Condition      string  `json:"condition"`
-		PhotoURL       string  `json:"photo_url"`
-		RequesterLat   float64 `json:"requester_lat"`
-		RequesterLng   float64 `json:"requester_lng"`
+		RequesterName  string                  `json:"requester_name"`
+		RequesterPhone string                  `json:"requester_phone"`
+		JenisPelayanan string                  `json:"jenis_pelayanan"`
+		Location       string                  `json:"location"`
+		Condition      string                  `json:"condition"`
+		PhotoURL       string                  `json:"photo_url"`
+		RequesterLat   float64                 `json:"requester_lat"`
+		RequesterLng   float64                 `json:"requester_lng"`
+		Assessment     *domain.OrderAssessment `json:"assessment"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
@@ -249,8 +262,10 @@ func (h *UnitHandler) CreateOrder(c *fiber.Ctx) error {
 		UnitName:       unitName,
 		RequesterName:  body.RequesterName,
 		RequesterPhone: body.RequesterPhone,
+		JenisPelayanan: body.JenisPelayanan,
 		Location:       body.Location,
 		Condition:      body.Condition,
+		Assessment:     body.Assessment,
 		PhotoURL:       body.PhotoURL,
 		RequesterLat:   body.RequesterLat,
 		RequesterLng:   body.RequesterLng,
@@ -269,6 +284,11 @@ func (h *UnitHandler) CreateOrder(c *fiber.Ctx) error {
 			order.TypeID = uint(u.EmergencyType.ID)
 			order.RegencyID = u.Address.RegencyID
 			order.ProvinceID = u.Address.ProvinceID
+			if resolved, rerr := domain.ResolveJenisPelayanan(order.JenisPelayanan, u); rerr == nil {
+				order.JenisPelayanan = resolved
+			} else if rerr == domain.ErrJenisPelayananRequired {
+				return response.Error(c, fiber.StatusBadRequest, "jenis_pelayanan is required")
+			}
 		}
 	}
 	if h.wilayah != nil {
@@ -278,12 +298,17 @@ func (h *UnitHandler) CreateOrder(c *fiber.Ctx) error {
 			order.RegencyID, order.ProvinceID,
 		)
 	}
+	if order.Assessment != nil && h.assessment != nil {
+		if tpl, err := h.assessment.GetTemplateForOrder(emergencyUUID, order.JenisPelayanan); err == nil && tpl != nil {
+			service.EnrichOrderAssessment(&order, tpl)
+		}
+	}
 
 	result, err := h.orderSvc.Create(order)
 	if err != nil {
 		return response.Error(c, fiber.StatusInternalServerError, "failed to create order")
 	}
-	return response.OK(c, "order created", result)
+	return response.OK(c, "order created", maybeEnableWaDispatch(h.orderSvc, h.emergencySvc, nil, result))
 }
 
 func (h *UnitHandler) GetFeedback(c *fiber.Ctx) error {
@@ -324,6 +349,28 @@ func (h *UnitHandler) UpdateFleet(c *fiber.Ctx) error {
 		"total":     body.Total,
 		"available": body.Available,
 	})
+}
+
+func (h *UnitHandler) UpdateJenisPelayanan(c *fiber.Ctx) error {
+	emergencyUUID := c.Locals("emergency_uuid").(string)
+	var body struct {
+		TipeEmergency []string `json:"tipe_emergency"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+	e, err := h.emergencySvc.GetByID(emergencyUUID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "emergency not found")
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "failed to load profile")
+	}
+	e.TipeEmergency = body.TipeEmergency
+	if _, err := h.emergencySvc.Update(*e); err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "failed to update jenis pelayanan")
+	}
+	return response.OK(c, "jenis pelayanan updated", fiber.Map{"tipe_emergency": e.TipeEmergency})
 }
 
 func (h *UnitHandler) UpdateAvailability(c *fiber.Ctx) error {
@@ -385,6 +432,62 @@ func (h *UnitHandler) UpdateWilayah(c *fiber.Ctx) error {
 		"province":    body.ProvinceName,
 		"regency":     body.RegencyName,
 	})
+}
+
+func (h *UnitHandler) GetReportTemplate(c *fiber.Ctx) error {
+	emergencyUUID := c.Locals("emergency_uuid").(string)
+	tpl, err := h.emergencySvc.GetIncidentReportTemplate(emergencyUUID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "unit tidak ditemukan")
+		}
+		if errors.Is(err, repository.ErrNotSupported) {
+			return response.NotImplemented(c)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "gagal memuat template laporan")
+	}
+	return response.OK(c, "success", tpl)
+}
+
+func (h *UnitHandler) UpdateReportTemplate(c *fiber.Ctx) error {
+	emergencyUUID := c.Locals("emergency_uuid").(string)
+	var body domain.IncidentReportTemplate
+	if err := c.BodyParser(&body); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+	body.Header = strings.TrimSpace(body.Header)
+	body.VolunteerTitle = strings.TrimSpace(body.VolunteerTitle)
+	body.Closing = strings.TrimSpace(body.Closing)
+	body.Footer = strings.TrimSpace(body.Footer)
+	if body.PresetID == "" {
+		body.PresetID = domain.IncidentReportPresetGeneric
+	}
+	tpl, err := h.emergencySvc.UpdateIncidentReportTemplate(emergencyUUID, body)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "unit tidak ditemukan")
+		}
+		if errors.Is(err, repository.ErrNotSupported) {
+			return response.NotImplemented(c)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "gagal menyimpan template laporan")
+	}
+	return response.OK(c, "template laporan updated", tpl)
+}
+
+func (h *UnitHandler) GetReportTemplateForAdmin(c *fiber.Ctx) error {
+	id := strings.TrimSpace(c.Params("id"))
+	if id == "" {
+		return response.Error(c, fiber.StatusBadRequest, "id required")
+	}
+	tpl, err := h.emergencySvc.GetIncidentReportTemplate(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return response.Error(c, fiber.StatusNotFound, "unit tidak ditemukan")
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "gagal memuat template laporan")
+	}
+	return response.OK(c, "success", tpl)
 }
 
 func (h *UnitHandler) UpdateOrder(c *fiber.Ctx) error {
@@ -618,7 +721,7 @@ func (h *UnitHandler) enableTrack(c *fiber.Ctx, actorUUID string, admin bool) er
 	result, err := h.orderSvc.EnableTrack(id, actor)
 	if err != nil {
 		if errors.Is(err, repository.ErrConflict) {
-			return response.Error(c, fiber.StatusConflict, "order must be accepted or in progress to share location")
+			return response.Error(c, fiber.StatusConflict, "track link tidak tersedia untuk status tiket ini")
 		}
 		if errors.Is(err, repository.ErrNotFound) {
 			return response.Error(c, fiber.StatusNotFound, "order not found")
@@ -839,5 +942,25 @@ func (h *UnitHandler) mapDispatchErr(c *fiber.Ctx, result *domain.OrderTicket, e
 		log.Printf("dispatch action error: %v", err)
 		return response.Error(c, fiber.StatusInternalServerError, "failed to process order action")
 	}
+	if result != nil {
+		h.enrichDispatchOrder(result)
+	}
 	return response.OK(c, okMsg, result)
+}
+
+func (h *UnitHandler) enrichDispatchOrder(order *domain.OrderTicket) {
+	if order == nil || order.EmergencyUUID == "" || h.emergencySvc == nil {
+		return
+	}
+	units, err := h.emergencySvc.GetByIDs([]string{order.EmergencyUUID})
+	if err != nil || len(units) == 0 {
+		return
+	}
+	u := units[0]
+	order.UnitPhone = u.Contact.Phone
+	order.UnitWhatsapp = u.Contact.Whatsapp
+	if order.UnitWhatsapp == "" {
+		order.UnitWhatsapp = u.Contact.Phone
+	}
+	order.WaDispatch = u.UsesWaDispatch(false)
 }

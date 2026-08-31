@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<title>Technology, Innovation &amp; Safety Partnership Proposal</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #1f2933;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page {
+    width: 297mm;
+    height: 210mm;
+    padding: 14mm 16mm 12mm;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+    background: #fff;
+  }
+  .page:last-child { page-break-after: auto; }
+  .kicker {
+    font-size: 12.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #1f5c4d;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  h1 { font-size: 32px; line-height: 1.25; font-weight: 700; color: #132033; max-width: 920px; }
+  h2 { font-size: 27px; line-height: 1.25; font-weight: 700; color: #132033; margin-bottom: 8px; }
+  h3 { font-size: 16px; font-weight: 700; color: #132033; margin-bottom: 6px; }
+  p, li { font-size: 15.5px; line-height: 1.55; color: #374151; }
+  .lead { margin-top: 10px; max-width: 860px; font-size: 16.5px; line-height: 1.55; }
+  .footer {
+    position: absolute; left: 16mm; right: 16mm; bottom: 8mm;
+    display: flex; justify-content: space-between;
+    font-size: 11.5px; color: #6b7280;
+    border-top: 1px solid #e5e7eb; padding-top: 6px;
+  }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .card {
+    background: #f5f7f6; border: 1px solid #e3e9e6;
+    border-radius: 10px; padding: 14px;
+  }
+  .card.green { background: #14352c; border-color: #14352c; color: #fff; }
+  .card.green h3, .card.green p, .card.green li { color: #f3faf7; }
+  .card.soft { background: #fff; border: 1px solid #dbe3df; }
+  ul { padding-left: 18px; margin-top: 6px; }
+  ul li { margin-bottom: 5px; }
+  .meta-box { margin-top: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .cover {
+    background:
+      radial-gradient(900px 420px at -10% -30%, rgba(31,92,77,0.12), transparent 55%),
+      radial-gradient(700px 360px at 110% 120%, rgba(20,53,44,0.08), transparent 50%),
+      #f7faf9;
+  }
+  .stat { font-size: 28px; font-weight: 700; color: #1f5c4d; margin-bottom: 4px; }
+  table {
+    width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14.5px;
+  }
+  th, td {
+    text-align: left; padding: 10px 11px;
+    border-bottom: 1px solid #e5e7eb; vertical-align: top;
+  }
+  th { background: #14352c; color: #fff; font-weight: 600; font-size: 13.5px; }
+  tr:nth-child(even) td { background: #f8faf9; }
+  .note {
+    margin-top: 12px; padding: 11px 13px;
+    background: #f5f7f6; border-left: 3px solid #1f5c4d;
+    border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.5; color: #374151;
+  }
+  .close { background: #14352c; color: #fff; }
+  .close h1, .close h2, .close p, .close .kicker, .close li { color: #fff; }
+  .close .footer { color: rgba(255,255,255,0.7); border-top-color: rgba(255,255,255,0.2); }
+  .close .kicker { opacity: 0.85; }
+  .small { font-size: 14px; color: #6b7280; }
+  .title-en {
+    font-size: 38px; line-height: 1.15; font-weight: 750;
+    color: #132033; letter-spacing: 0.01em; max-width: 920px;
+  }
+  .pill-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .pill {
+    background: #e8f0ec; color: #14352c;
+    padding: 6px 12px; border-radius: 6px;
+    font-size: 13px; font-weight: 600;
+  }
+  .outcome-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .outcome-grid h3 { font-size: 15px; margin-bottom: 6px; }
+  .outcome-grid ul { font-size: 14.5px; }
+  .commit { color: #1f5c4d; font-weight: 600; }
+  .nocommit { color: #6b7280; }
+  .highlight-box {
+    margin-top: 14px; padding: 14px 16px;
+    background: #14352c; color: #fff; border-radius: 10px;
+    font-size: 16px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<!-- 01 Cover -->
+<section class="page cover">
+  <div class="kicker">Usulan Kemitraan · PT Soiltama Indokarya Persada</div>
+  <h1 class="title-en">TECHNOLOGY, INNOVATION<br />&amp; SAFETY PARTNERSHIP PROPOSAL</h1>
+  <p class="lead">
+    PT. Soiltama berinvestasi pada pengembangan kapabilitas teknologi profesional,
+    dan memperoleh kemitraan digital &amp; keselamatan selama 18 bulan.
+  </p>
+  <div class="meta-box">
+    <div>
+      <p><strong>Pengusul</strong><br />Ade Mahendra<br />Software Engineer · Humanitarian</p>
+      <p style="margin-top:14px;"><strong>Program studi</strong><br />M.Cs. (Master of Computer Science) Berbasis Penelitian — UGM<br />Minat: AI, Intelligent Systems, Software Engineering</p>
+    </div>
+    <div>
+      <p><strong>Periode kemitraan</strong><br />18 bulan</p>
+      <p style="margin-top:14px;"><strong>Nilai investasi yang diusulkan</strong><br />Rp119.000.000 / 18 bulan<br /><span class="small">≈ Rp6,6 juta per bulan</span></p>
+    </div>
+  </div>
+  <div class="footer"><span>Technology, Innovation &amp; Safety Partnership Proposal</span><span>1 / 14</span></div>
+</section>
+
+<!-- 02 Executive Summary -->
+<section class="page">
+  <div class="kicker">Ringkasan eksekutif</div>
+  <h2>Investasi pada kapabilitas, imbalan pada operasional</h2>
+  <p class="lead">
+    Usulan ini bukan permohonan beasiswa semata. Ini kemitraan 18 bulan:
+    PT. Soiltama mendukung pengembangan profesional saya melalui studi M.Cs. Research di UGM,
+    sementara saya berkontribusi pada digitalisasi, publikasi, dan keselamatan lapangan perusahaan.
+  </p>
+  <div class="grid-3">
+    <div class="card green">
+      <h3>Digital</h3>
+      <p>Website, sistem internal, dan dokumentasi digital yang lebih tertata.</p>
+    </div>
+    <div class="card">
+      <h3>Innovation</h3>
+      <p>Eksplorasi otomasi dan AI hanya jika dibutuhkan dan disepakati.</p>
+    </div>
+    <div class="card">
+      <h3>Safety</h3>
+      <p>Pelatihan P3K dan kesiapsiagaan untuk personel lapangan — relevan bagi operasi geoteknik dan survei.</p>
+    </div>
+  </div>
+  <div class="highlight-box">
+    Dukungan studi M.Cs. adalah bagian dari kesepakatan, bukan alasan untuk mengalihkan fokus ke proyek pribadi.
+    Objek utama kerja sama tetap kebutuhan PT. Soiltama.
+  </div>
+  <div class="footer"><span>Technology, Innovation &amp; Safety Partnership Proposal</span><span>2 / 14</span></div>
+</section>
+
+<!-- 03 Why This Partnership -->
+<section class="page">
+  <div class="kicker">Mengapa kemitraan ini</div>
+  <h2>Why This Partnership Makes Sense</h2>
+  <p class="lead">
+    PT. Soiltama bergerak di lingkungan lapangan yang menuntut ketertiban dokumentasi, komunikasi proyek,
+    dan kesiapan keselamatan. Saya menawarkan kombinasi kapabilitas yang jarang ada dalam satu profil.
+  </p>
+  <div class="grid-2" style="margin-top:14px;">
+    <div class="card soft">
+      <h3>Software Engineering</h3>
+      <p>4+ tahun membangun perangkat lunak dan produk digital.</p>
+    </div>
+    <div class="card soft">
+      <h3>Industry Experience</h3>
+      <p>Pengalaman IoT monitoring di lingkungan industri — memahami konteks operasional nyata.</p>
+    </div>
+    <div class="card soft">
+      <h3>Humanitarian &amp; Safety</h3>
+      <p>200+ peserta pelatihan P3K per tahun; pengalaman respons darurat.</p>
+    </div>
+    <div class="card green">
+      <h3>Research (M.Cs. UGM)</h3>
+      <p>AI · Intelligent Systems · Software Engineering — memperkuat kapabilitas jangka panjang.</p>
+    </div>
+  </div>
+  <p class="note" style="margin-top:14px;">
+    <strong>Technology + Safety + Applied Research</strong> — narasi inti kemitraan ini.
+    Setelah 18 bulan, kemitraan dapat dievaluasi bersama untuk perpanjangan jika diperlukan.
+  </p>
+  <div class="footer"><span>Technology, Innovation &amp; Safety Partnership Proposal</span><span>3 / 14</span></div>
+</section>
+
+<!-- 04 About Me -->
+<section class="page">
+  <div class="kicker">Profil pengusul</div>
+  <h2>Ade Mahendra — Why Me?</h2>
+  <div class="grid-4" style="margin-top:16px;">
+    <div class="card soft"><div class="stat">4+</div><p>tahun software engineering</p></div>
+    <div class="card soft"><div class="stat">7+</div><p>produk diselesaikan</p></div>
+    <div class="card soft"><div class="stat">100+</div><p>stakeholder ButuhBantuan</p></div>
+    <div class="card soft"><div class="stat">200+</div><p>peserta P3K / tahun</p></div>
+  </div>
+  <div class="grid-2" style="margin-top:14px;">
+    <div class="card">
+      <h3>Professional Experience</h3>
+      <ul>
+        <li>Software engineering — pengembangan produk end-to-end</li>
+        <li>Industrial IoT — monitoring mesin real-time (TMMIN)</li>
+        <li>Founder Humanity Tech Lab / ButuhBantuan</li>
+        <li>PMI — komunikasi publik &amp; respons darurat</li>
+      </ul>
+      <div class="pill-row">
+        <span class="pill">TMMIN / IoT</span>
+        <span class="pill">ButuhBantuan</span>
+        <span class="pill">PMI</span>
+        <span class="pill">Humanity Tech Lab</span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Rencana studi</h3>
+      <ul>
+        <li>M.Cs. Research UGM — fokus AI &amp; sistem cerdas</li>
+        <li>Riset terapan melalui kasus nyata (termasuk ButuhBantuan sebagai bukti eksekusi, bukan objek utama kerja sama)</li>
+        <li>Rencana S3 di beberapa tahun ke depan sebagai pengembangan kapabilitas jangka panjang</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer"><span>Technology, Innovation &amp; Safety Partnership Proposal</span><span>4 / 14</span></div>
+</section>
+
+<!-- 05 Track Record -->
+<section class="page">
+  <div class="kicker">Rekam jejak</div>
+  <h2>Track Record</h2>
+  <div class="grid-2" style="margin-top:14px;">
+    <div class="card soft">
+      <h3>ButuhBantuan — Proof of Applied Innovation</h3>
+      <p>Platform layanan kedaruratan dengan 100+ pemangku kepentingan. Ditampilkan sebagai bukti eksekusi, bukan objek utama kerja sama dengan PT. Soiltama.</p>
+    </div>
+    <div class="card soft">
+      <h3>Product Delivery</h3>
+      <p>7+ produk untuk klien dan pengembangan mandiri — dari ide hingga peluncuran.</p>
+    </div>
+    <div class="card soft">
+      <h3>Industrial Systems</h3>
+      <p>Pemantauan mesin real-time di lingkungan manufaktur — relevan dengan kebutuhan data operasional.</p>
+    </div>
+    <div class="card soft">
+      <h3>Safety Training</h3>
+      <p>Pelatihan P3K untuk relawan, sekolah, perusahaan, dan komunitas — 200+ peserta per tahun.</p>
+    </div>
+  </div>
+  <div class="footer"><span>Technology, Innovation &amp; Safety Partnership Proposal</span><span>5 / 14</span></div>
+</section>
+
+<!-- 06 What I Can Contribute -->
+<section class="page">
+  <div class="kicker">Kontribusi</div>
+  <h2>What I Can Contribute</h2>
+  <p class="lead">Technology × Safety — tiga pilar kontribusi yang selaras dengan operasi PT. Soiltama.</p>
+  <div class="grid-3" style="margin-top:14px;">
+    <div class="card green">
+      <h3>Digital</h3>
+      <ul>
+        <li>Website &amp; company profile</li>
+        <li>Sistem internal sederhana</li>
+        <li>Dokumentasi digital operasional</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Innovation</h3>
+      <ul>
+        <li>Eksplorasi otomasi selektif</li>
+        <li>AI hanya jika ada kebutuhan + data memadai</li>
+        <li>Bukan kewajiban utama kemitraan</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Safety</h3>
+      <ul>
+        <li>Pelatihan P3K &amp; kesiapsiagaan</li>
+        <li>Materi pelatihan yang dapat digunakan ulang</li>
+        <li>Relevan bagi operasi lapangan geoteknik &amp; survei</li>
+      </ul>
+    </div>
+  </div>
+  <table style="margin-top:14px;">
+    <thead>
+      <tr><th>Area</th><th>Value untuk PT. Soiltama</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Digitalization</td><td>Website &amp; alur kerja internal</td></tr>
+      <tr><td>Communication</td><td>Dokumentasi korporat &amp; publikasi</td></tr>
+      <tr><td>Employee Safety</td><td>P3K &amp; kesiapsiagaan darurat</td></tr>
+      <tr><td>Technology</td><td>Eksplorasi otomasi &amp; teknologi</td></tr>
+      <tr><td>Knowledge</td><td>Dokumentasi &amp; transfer pengetahuan</td></tr>
+      <tr><td>Long-term capability</td><td>Kapabilitas digital internal yang bertahan</td></tr>
+    </tbody>
+  </table>
+  <div class="footer"><span>Technology, Innovation &amp; Safety Partnership Proposal</span><span>6 / 14</span></div>
+</section>
+
+<!-- 07 What PT Soiltama Gets -->
+<section class="page">
+  <div class="kicker">Hasil kemitraan</div>
+  <h2>What PT. Soiltama Gets — setelah 18 bulan</h2>
+  <div class="outcome-grid">
+    <div class="card soft">
+      <h3>🌐 Digital</h3>
+      <ul>
+        <li>Website perusahaan terpelihara</li>
+        <li>Kehadiran digital lebih terstruktur</li>
+        <li>Dokumentasi digital yang lebih rapi</li>
+      </ul>
+    </div>
+    <div class="card soft">
+      <h3>💻 Internal</h3>
+      <ul>
+        <li>Alur kerja digital terpilih yang disepakati</li>
+        <li>Perbaikan sistem internal sesuai kebutuhan</li>
+      </ul>
+    </div>
+    <div class="card soft">
+      <h3>📣 Communication</h3>
+      <ul>
+        <li>Alur publikasi yang lebih terorganisir</li>
+        <li>Materi portofolio proyek</li>
+      </ul>
+    </div>
+    <div class="card soft">
+      <h3>🩺 Safety</h3>
+      <ul>
+        <li>Sesi pelatihan P3K dilaksanakan</li>
+        <li>Materi pelatihan dapat digunakan ulang</li>
+      </ul>
+    </div>
+    <div class="card green" style="grid-column: 1 / -1;">
+      <h3>📚 Knowledge</h3>
+      <ul>
+        <li>Dokumentasi teknis setiap deliverable</li>
+        <li>Serah terima hasil kerja</li>
+        <li>Transfer pengetahuan ke tim internal</li>
+      </ul>
+    </div>
+  </div>
+  <div class="note">
+    Detail prioritas ditentukan bersama manajemen di awal. Tidak ada janji angka penghematan atau target kinerja yang belum diukur bersama.
+  </div>
+  <div class="footer"><span>Technology, Innovation &amp; Safety Partnership Proposal</span><span>7 / 14</span></div>
+</section>
+
+<!-- 08 18-Month Roadmap -->
+<section class="page">
+  <div class="kicker">Peta jalan</div>
+  <h2>18-Month Partnership Roadmap</h2>
+  <div class="grid-3" style="margin-top:16px;">
+    <div class="card green">
+      <h3>Bulan 1–6 · Fondasi</h3>
+      <ul>
+        <li>Mulai M.Cs. Research</li>
+        <li>Asesmen website &amp; sistem internal</li>
+        <li>Baseline dokumentasi &amp; media</li>
+        <li>Perencanaan pelatihan P3K</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Bulan 7–12 · Pelaksanaan</h3>
+      <ul>
+        <li>Perkuliahan &amp; riset berjalan</li>
+        <li>Perbaikan website / sistem</li>
+        <li>Publikasi berkala</li>
+        <li>Pelatihan sesuai jadwal</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Bulan 13–18 · Penyelesaian</h3>
+      <ul>
+        <li>Penyelesaian deliverable perusahaan</li>
+        <li>Dokumentasi akhir &amp; serah terima</li>
+        <li>Evaluasi bersama hasil kemitraan</li>
+        <li>Opsi perpanjangan berdasarkan kesepakatan</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer"><span>Technology, Innovation &amp; Safety Partnership Proposal</span><span>8 / 14</span></div>
+</section>
+
+<!-- 09 Partnership Scope & Boundaries -->
+<section class="page">
+  <div class="kicker">Ruang lingkup &amp; batasan</div>
+  <h2>Partnership Principles</h2>
+  <div class="grid-2" style="margin-top:14px;">
+    <div class="card soft">
+      <h3 class="nocommit">Saya tidak menjanjikan</h3>
+      <ul>
+        <li>Dukungan IT tanpa batas</li>
+        <li>Proyek software skala besar di luar ruang lingkup</li>
+        <li>Implementasi AI tanpa data yang memadai</li>
+        <li>Hasil riset yang dijamin pasti</li>
+        <li>Ketersediaan penuh waktu (full-time)</li>
+      </ul>
+    </div>
+    <div class="card green">
+      <h3 class="commit">Saya berkomitmen pada</h3>
+      <ul>
+        <li>Ruang lingkup yang disepakati</li>
+        <li>Alokasi waktu bulanan yang jelas</li>
+        <li>Deliverable terdokumentasi</li>
+        <li>Komunikasi rutin</li>
+        <li>Serah terima hasil kerja</li>
+        <li>Kerahasiaan data perusahaan</li>
+      </ul>
+    </div>
+  </div>
+  <div class="note">
+    Beban kerja bulanan disepakati di awal agar tidak bertabrakan dengan kewajiban studi dan riset.
+    Pekerjaan di luar ruang lingkup dibahas terpisah.
+  </div>
+  <div class="footer"><span>Technology, Innovation &amp; Safety Partnership Proposal</span><span>9 / 14</span></div>
+</section>
+
+<!-- 10 Proposed Investment -->
+<section class="page">
+  <div class="kicker">Investasi</div>
+  <h2>Proposed Partnership Investment</h2>
+  <p class="lead">
+  <strong>Rp119.000.000 / 18 bulan</strong> · ≈ <strong>Rp6,6 juta per bulan</strong>
+  </p>
+  <p style="margin-top:8px;">
+    Investasi ini mencakup dukungan studi M.Cs. Research sekaligus kontribusi digital &amp; keselamatan selama 18 bulan.
+    Bukan sekadar biaya jasa vendor — ini kemitraan pengembangan kapabilitas jangka panjang.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Komponen investasi</th><th style="width:22%">Nilai</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>M.Cs. Research — UGM (3 semester)</td><td><strong>Rp36.000.000</strong></td></tr>
+      <tr><td>Research &amp; Development Workstation</td><td><strong>Rp25.000.000</strong></td></tr>
+      <tr><td>Pre-S2 AI / ML preparation</td><td><strong>Rp7.000.000</strong></td></tr>
+      <tr><td>Research &amp; publication fund</td><td><strong>Rp15.000.000</strong></td></tr>
+      <tr><td>Education &amp; Professional Development Allowance</td><td><strong>Rp36.000.000</strong></td></tr>
+      <tr><td><strong>Total</strong></td><td><strong>Rp119.000.000</strong></td></tr>
+    </tbody>
+  </table>
+  <div class="note">
+    <strong>Education &amp; Professional Development Allowance (Rp36 juta):</strong>
+    Rp2.000.000 × 18 bulan — untuk transportasi akademik, makan selama kegiatan akademik, buku, cetak, seminar,
+    kebutuhan riset insidental, langganan software, dan biaya studi lain yang belum tercover.
+  </div>
+  <div class="footer"><span>Technology, Innovation &amp; Safety Partnership Proposal</span><span>10 / 14</span></div>
+</section>
+
+<!-- 11 Payment Structure -->
+<section class="page">
+  <div class="kicker">Pencairan</div>
+  <h2>Investment &amp; Payment Structure</h2>
+  <table>
+    <thead>
+      <tr><th>Tahap</th><th>Periode</th><th style="width:18%">%</th><th style="width:22%">Nilai</th><th>Kondisi</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Tahap 1</strong></td>
+        <td>Bulan 1–3</td>
+        <td>30%</td>
+        <td><strong>Rp35.700.000</strong></td>
+        <td>Setelah kesepakatan kemitraan ditandatangani</td>
+      </tr>
+      <tr>
+        <td><strong>Tahap 2</strong></td>
+        <td>Bulan 7–9</td>
+        <td>40%</td>
+        <td><strong>Rp47.600.000</strong></td>
+        <td>Setelah evaluasi deliverable tahap fondasi</td>
+      </tr>
+      <tr>
+        <td><strong>Tahap 3</strong></td>
+        <td>Bulan 13–15</td>
+        <td>30%</td>
+        <td><strong>Rp35.700.000</strong></td>
+        <td>Setelah evaluasi deliverable tahap pelaksanaan</td>
+      </tr>
+      <tr>
+        <td><strong>Total</strong></td>
+        <td>18 bulan</td>
+        <td>100%</td>
+        <td><strong>Rp119.000.000</strong></td>
+        <td>—</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="grid-2" style="margin-top:14px;">
+    <div class="card">
+      <h3>Transparansi</h3>
+      <p>Beasiswa, hibah, atau pengurangan biaya studi akan disampaikan. Kelebihan anggaran dialihkan sesuai kesepakatan.</p>
+    </div>
+    <div class="card">
+      <h3>Perpanjangan</h3>
+      <p>Setelah 18 bulan, kemitraan dapat diperpanjang berdasarkan evaluasi bersama — bukan otomatis.</p>
+    </div>
+  </div>
+  <div class="footer"><span>Technology, Innovation &amp; Safety Partnership Proposal</span><span>11 / 14</span></div>
+</section>
+
+<!-- 12 Terms -->
+<section class="page">
+  <div class="kicker">Ketentuan</div>
+  <h2>Terms &amp; Conditions</h2>
+  <div class="grid-2" style="margin-top:14px;">
+    <div class="card"><h3>Periode</h3><p>Kemitraan 18 bulan, investasi dan deliverable selesai dalam periode yang sama.</p></div>
+    <div class="card"><h3>Ruang lingkup</h3><p>Digitalisasi, publikasi, P3K. Pekerjaan lain dibahas terpisah.</p></div>
+    <div class="card"><h3>Alokasi waktu</h3><p>Beban kerja bulanan disepakati di awal.</p></div>
+    <div class="card"><h3>Dokumentasi</h3><p>Setiap hasil kerja dilengkapi dokumentasi dan serah terima.</p></div>
+    <div class="card"><h3>Kerahasiaan</h3><p>Data dan informasi internal perusahaan dijaga.</p></div>
+    <div class="card"><h3>Kepemilikan</h3><p>Kepemilikan aset digital dan ketentuan handover disepakati per proyek.</p></div>
+  </div>
+  <div class="footer"><span>Technology, Innovation &amp; Safety Partnership Proposal</span><span>12 / 14</span></div>
+</section>
+
+<!-- 13 Closing -->
+<section class="page close">
+  <div class="kicker">Penutup</div>
+  <h1 style="margin-top:8px; max-width:880px; font-size:30px;">
+    PT. Soiltama berinvestasi pada kapabilitas teknologi — dan memperoleh kemitraan digital &amp; keselamatan 18 bulan.
+  </h1>
+  <p class="lead" style="color:rgba(255,255,255,0.92); max-width:760px; margin-top:14px;">
+    Saya siap membahas prioritas pekerjaan, jadwal deliverable, dan skema pencairan bersama manajemen.
+  </p>
+  <div class="grid-3" style="margin-top:24px;">
+    <div class="card" style="background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.18);">
+      <h3 style="color:#fff;">Periode</h3>
+      <p style="color:#fff;">18 bulan</p>
+    </div>
+    <div class="card" style="background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.18);">
+      <h3 style="color:#fff;">Investasi</h3>
+      <p style="color:#fff;">Rp119 juta · ≈ Rp6,6 jt/bulan</p>
+    </div>
+    <div class="card" style="background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.18);">
+      <h3 style="color:#fff;">Fokus</h3>
+      <p style="color:#fff;">Digital · Innovation · Safety</p>
+    </div>
+  </div>
+  <p style="margin-top:28px; font-size:20px; font-weight:700;">Ade Mahendra</p>
+  <p style="margin-top:4px; font-size:15px; color:rgba(255,255,255,0.9);">Software Engineer · Humanitarian</p>
+  <div class="footer"><span>Technology, Innovation &amp; Safety Partnership Proposal</span><span>13 / 14</span></div>
+</section>
+
+<!-- 14 Appendix -->
+<section class="page">
+  <div class="kicker">Lampiran</div>
+  <h2>Referensi tambahan</h2>
+  <div class="grid-2" style="margin-top:10px;">
+    <div>
+      <h3 style="margin-bottom:8px;">A. Acuan biaya pasar (referensi)</h3>
+      <p class="small" style="margin-bottom:8px;">Kisaran pasar untuk lingkup setara — bukan penawaran vendor, bukan ROI.</p>
+      <table style="font-size:13px;">
+        <thead><tr><th>Pekerjaan</th><th>Estimasi pasar</th></tr></thead>
+        <tbody>
+          <tr><td>Website company profile</td><td>Rp5–15 juta</td></tr>
+          <tr><td>Sistem internal sederhana</td><td>Rp15–40 juta</td></tr>
+          <tr><td>Sosmed &amp; publikasi (18 bln)</td><td>Rp27–45 juta</td></tr>
+          <tr><td>Pelatihan P3K (3–4 sesi)</td><td>Rp8–18 juta</td></tr>
+          <tr><td><strong>Total acuan jasa</strong></td><td><strong>Rp55–118 juta</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h3 style="margin-bottom:8px;">B. Spesifikasi Research &amp; Development Workstation</h3>
+      <div class="card soft" style="font-size:13.5px;">
+        <p><strong>Apple MacBook Pro — M2 Pro · 32GB</strong> (alokasi Rp25 juta)</p>
+        <ul style="margin-top:6px; font-size:13px;">
+          <li>CPU: hingga 12-core · GPU: hingga 19-core</li>
+          <li>Neural Engine 16-core · 32GB unified memory</li>
+          <li>SSD · Liquid Retina XDR display</li>
+          <li>Wi-Fi 6E · Thunderbolt / USB 4</li>
+        </ul>
+        <p class="small" style="margin-top:8px;">Digunakan untuk riset akademik dan pekerjaan kemitraan dengan PT. Soiltama.</p>
+      </div>
+      <h3 style="margin-top:12px; margin-bottom:6px;">C. Education Allowance — rincian</h3>
+      <p style="font-size:14px;">Rp2.000.000/bulan × 18 bulan = Rp36.000.000<br />
+      Transportasi akademik · makan kegiatan akademik · buku · cetak · seminar · langganan software · kebutuhan riset insidental.</p>
+    </div>
+  </div>
+  <div class="footer"><span>Technology, Innovation &amp; Safety Partnership Proposal · Lampiran</span><span>14 / 14</span></div>
+</section>
+
+</body>
+</html>

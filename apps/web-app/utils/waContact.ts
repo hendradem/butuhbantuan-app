@@ -4,6 +4,7 @@
  */
 
 import { convertPhoneNumber } from "~/utils/convertPhoneNumber";
+import { ticketViewUrl } from "~/utils/ticketUrl";
 
 export type WaContactPayload = {
   unitName?: string;
@@ -14,8 +15,12 @@ export type WaContactPayload = {
   condition?: string;
   lat?: number | null;
   lng?: number | null;
-  /** Public ticket status URL for the unit / citizen. */
-  ticketUrl?: string;
+  /** Public e-ticket view token (share link). */
+  viewToken?: string;
+  /** Magic-link for units without dashboard (/dispatch/{token}). */
+  dispatchUrl?: string;
+  /** Absolute URL to incident photo (wa.me cannot attach binary files). */
+  photoUrl?: string;
 };
 
 export function mapsPinUrl(lat?: number | null, lng?: number | null): string | null {
@@ -25,15 +30,19 @@ export function mapsPinUrl(lat?: number | null, lng?: number | null): string | n
   return `https://maps.google.com/?q=${lat},${lng}`;
 }
 
-export function ticketStatusUrl(ticketNumber: string): string {
-  const n = String(ticketNumber || "").trim();
-  if (!n) return "";
-  if (!import.meta.client) return `/ticket/${encodeURIComponent(n)}`;
-  return `${window.location.origin}/ticket/${encodeURIComponent(n)}`;
+export function ticketStatusUrl(viewToken: string): string {
+  return ticketViewUrl(viewToken);
+}
+
+export function dispatchJobUrl(trackToken: string): string {
+  const t = String(trackToken || "").trim();
+  if (!t) return "";
+  if (!import.meta.client) return `/dispatch/${encodeURIComponent(t)}`;
+  return `${window.location.origin}/dispatch/${encodeURIComponent(t)}`;
 }
 
 /**
- * Prefill message sent to the unit when citizen taps Hubungi / WA.
+ * Prefill message sent to the unit when citizen taps Hubungi / WhatsApp.
  * Keep short, scannable, and actionable on a busy radio desk.
  */
 export function buildUnitWaMessage(p: WaContactPayload): string {
@@ -45,7 +54,9 @@ export function buildUnitWaMessage(p: WaContactPayload): string {
   const address = String(p.address || "").trim();
   const condition = String(p.condition || "").trim();
   const statusUrl = String(p.ticketUrl || "").trim()
-    || (ticket ? ticketStatusUrl(ticket) : "");
+    || (p.viewToken ? ticketStatusUrl(p.viewToken) : "");
+  const dispatchUrl = String(p.dispatchUrl || "").trim();
+  const photoUrl = String(p.photoUrl || "").trim();
 
   const lines = [
     `Halo *${unit}*, saya butuh bantuan darurat via ButuhBantuan.`,
@@ -58,6 +69,14 @@ export function buildUnitWaMessage(p: WaContactPayload): string {
   if (pin) lines.push(`*Pin lokasi:* ${pin}`);
   if (address) lines.push(`*Alamat:* ${address}`);
   if (condition) lines.push(`*Kondisi:* ${condition}`);
+  if (photoUrl) lines.push(`*Foto:* ${photoUrl}`);
+  if (dispatchUrl) {
+    lines.push(
+      "",
+      `*Link tugas (khusus petugas · berlaku terbatas):*`,
+      dispatchUrl,
+    );
+  }
   if (statusUrl) lines.push(`*Status tiket:* ${statusUrl}`);
 
   lines.push("", "Mohon dibantu segera. Terima kasih.");
@@ -71,11 +90,34 @@ export function waDeepLink(phone: string, text: string): string {
   return `https://wa.me/${digits}${q}`;
 }
 
-/** Open WhatsApp chat (new tab). Returns false if phone invalid. */
+/** Open WhatsApp in a new tab; keep the current page (e-ticket) open. */
 export function openWhatsApp(phone: string, text: string): boolean {
   if (!import.meta.client) return false;
   const href = waDeepLink(phone, text);
   if (!href) return false;
-  window.open(href, "_blank", "noopener,noreferrer");
+
+  // Prefer window.open; after await some browsers block it — fall back to <a target=_blank>.
+  const w = window.open(href, "_blank", "noopener,noreferrer");
+  if (w) return true;
+
+  const a = document.createElement("a");
+  a.href = href;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
   return true;
+}
+
+/** Unit uses WA magic-link instead of logged-in dashboard. */
+export function unitUsesWaDispatch(emergency: any): boolean {
+  const data = emergency?.emergencyData ?? emergency;
+  if (!data) return false;
+  if (data.wa_dispatch === true) return true;
+  if (data.wa_dispatch === false) return false;
+  const org = String(data.organization_type || "").toLowerCase();
+  if (org === "rumah_sakit" || org === "rs" || org.includes("hospital")) return false;
+  return data.dashboard_access === false;
 }

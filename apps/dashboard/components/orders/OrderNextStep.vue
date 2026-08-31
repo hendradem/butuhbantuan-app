@@ -150,6 +150,8 @@ type Phase = {
   showShare?: boolean;
   /** Compact Live status once link already exists. */
   showTrackStatus?: boolean;
+  /** ShareTrackLink in copy-only row (arrive step) vs full create/WA. */
+  shareCompact?: boolean;
   secondary: { action: NextStepAction; label: string }[];
 };
 
@@ -229,17 +231,13 @@ const phase = computed<Phase>(() => {
 
   if (!o?.arrived_at) {
     const needsShare = !trackActive.value;
-    // Share step only — full link controls live here, not on arrive.
+    // Share step only — link controls live here; "Sudah Sampai" is the next checklist step.
     if (needsShare && (status === "accepted" || status === "in_progress")) {
       return {
         key: "share",
         title: "Bagikan lokasi petugas",
         hint: "Buat link GPS untuk HP lapangan. Pelapor melihat posisi di e-tiket.",
         showShare: true,
-        // Allow arrive without share so list/ops aren't soft-locked if GPS link skipped.
-        primary: isUnit
-          ? { action: "arrive", label: "Sudah Sampai", icon: "lucide:map-pin-check" }
-          : undefined,
         secondary: isUnit
           ? reassignSecondary
           : [
@@ -252,10 +250,10 @@ const phase = computed<Phase>(() => {
       return {
         key: "dispatch",
         title: "Petugas menuju lokasi",
-        hint: "Salin / kirim link ke HP lapangan, lalu konfirmasi saat sampai.",
+        hint: "Tekan Sudah Sampai saat di lokasi.",
         primary: { action: "arrive", label: "Sudah Sampai", icon: "lucide:map-pin-check" },
-        // Keep copy/WA after create — previously jumped away and hid the link.
         showShare: true,
+        shareCompact: true,
         showTrackStatus: trackActive.value,
         secondary: reassignSecondary,
       };
@@ -264,19 +262,18 @@ const phase = computed<Phase>(() => {
       key: "enroute",
       title: "Petugas menuju lokasi",
       hint: isUnit
-        ? "Link aktif di bawah. Tekan Sudah Sampai saat di lokasi."
-        : "Pantau unit. Alihkan jika macet.",
+        ? "Tekan Sudah Sampai saat di lokasi."
+        : "Konfirmasi saat unit tiba.",
       primary: isUnit
         ? { action: "arrive", label: "Sudah Sampai", icon: "lucide:map-pin-check" }
-        : canReassign
-          ? { action: "reassign", label: "Alihkan unit", icon: "lucide:git-branch" }
-          : { action: "arrive", label: "Tandai sudah sampai", icon: "lucide:map-pin-check" },
+        : { action: "arrive", label: "Tandai sudah sampai", icon: "lucide:map-pin-check" },
       showShare: trackActive.value || !!o?.track_enabled_at || !!o?.track_token,
+      shareCompact: true,
       showTrackStatus: trackActive.value,
       secondary: isUnit
         ? reassignSecondary
         : [
-            { action: "arrive", label: "Tandai sudah sampai" },
+            ...reassignSecondary,
             { action: "cancel", label: "Batalkan kejadian" },
           ],
     };
@@ -558,7 +555,7 @@ function onSecondary(action: NextStepAction) {
               </template>
 
               <div
-                v-if="showFieldActions && contactLinks.length && !phase.showShare"
+                v-if="showFieldActions && contactLinks.length && !phase.showShare && !phase.showTrackStatus"
                 class="flex gap-2"
               >
                 <a
@@ -576,7 +573,12 @@ function onSecondary(action: NextStepAction) {
 
               <!-- Share / copy link while creating OR after link is live (until arrived) -->
               <div v-if="phase.showShare">
-                <ShareTrackLink :order="order" :mode="mode" @refreshed="emit('refreshed')" />
+                <ShareTrackLink
+                  :order="order"
+                  :mode="mode"
+                  :compact="!!phase.shareCompact"
+                  @refreshed="emit('refreshed')"
+                />
               </div>
               <div
                 v-else-if="phase.showTrackStatus && !hasFieldGps"

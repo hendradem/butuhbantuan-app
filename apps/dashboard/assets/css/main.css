@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  html,
+  body,
+  #__nuxt {
+    height: 100%;
+  }
+
+  /* Top route progress bar — full viewport (above sidebar + header) */
+  .nuxt-loading-indicator {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    @apply z-[9999] pointer-events-none;
+    box-shadow: 0 0 6px rgba(225, 29, 72, 0.35);
+  }
+}
+
 /**
  * Untitled UI–style data table tokens.
  * Use: <table class="ui-table"> … </table>
@@ -73,6 +92,96 @@
     @apply inline-flex items-center gap-1;
   }
 
+  .ui-table.ui-table--orders {
+    min-width: 68rem;
+  }
+
+  .ui-table.ui-table--orders th,
+  .ui-table.ui-table--orders td {
+    @apply px-4 py-3;
+  }
+
+  .ui-table.ui-table--orders .ui-col-ticket {
+    @apply whitespace-nowrap;
+  }
+
+  .ui-table.ui-table--orders .ui-col-time {
+    @apply whitespace-nowrap text-xs text-neutral-500;
+  }
+
+  .ui-table.ui-table--orders .ui-col-phone {
+    @apply whitespace-nowrap font-mono text-xs text-neutral-600;
+  }
+
+  .ui-table.ui-table--orders .ui-col-eta {
+    @apply whitespace-nowrap tabular-nums text-sm font-medium text-neutral-900;
+  }
+
+  .ui-table.ui-table--orders .ui-col-location {
+    @apply max-w-[12rem] truncate;
+  }
+
+  .ui-table.ui-table--orders th.ui-th-actions,
+  .ui-table.ui-table--orders td.ui-td-actions {
+    @apply sticky right-0 z-10 bg-white shadow-[-6px_0_10px_-8px_rgba(0,0,0,0.12)];
+  }
+
+  .ui-table.ui-table--orders tbody tr:nth-child(even) td.ui-td-actions {
+    @apply bg-neutral-50/90;
+  }
+
+  .ui-table.ui-table--orders tbody tr:hover td.ui-td-actions {
+    @apply bg-neutral-100;
+  }
+
+  /* Clean expandable orders table */
+  .ui-table.ui-table--orders-v2 {
+    min-width: 48rem;
+  }
+
+  .ui-table.ui-table--orders-v2 .ui-col-eta {
+    @apply whitespace-nowrap tabular-nums text-sm font-medium text-neutral-800;
+  }
+
+  .ui-table.ui-table--orders-v2 thead th {
+    @apply px-3 py-2.5 text-[11px] font-medium uppercase tracking-wide text-neutral-400
+      border-b border-neutral-200 bg-neutral-50/60;
+  }
+
+  .ui-table.ui-table--orders-v2 tbody td {
+    @apply px-3 py-3 align-middle;
+  }
+
+  .ui-table.ui-table--orders-v2 tbody tr.orders-row {
+    @apply border-b border-neutral-100 transition-colors;
+  }
+
+  .ui-table.ui-table--orders-v2 tbody tr.orders-row:hover {
+    @apply bg-neutral-50/70;
+  }
+
+  .ui-table.ui-table--orders-v2 tbody tr.orders-row.is-expanded {
+    @apply bg-neutral-50;
+  }
+
+  .ui-table.ui-table--orders-v2 tbody tr.orders-expand-row td {
+    @apply p-0 border-b border-neutral-200;
+  }
+
+  .ui-table.ui-table--orders-v2 th.ui-th-actions,
+  .ui-table.ui-table--orders-v2 td.ui-td-actions {
+    @apply sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.08)];
+  }
+
+  .ui-table.ui-table--orders-v2 tbody tr.orders-row:hover td.ui-td-actions,
+  .ui-table.ui-table--orders-v2 tbody tr.orders-row.is-expanded td.ui-td-actions {
+    @apply bg-neutral-50;
+  }
+
+  .ui-table.ui-table--emergencies tbody td {
+    @apply py-2.5;
+  }
+
   /* Soft skeleton — gentle shimmer, avoids harsh pulse flash */
   .soft-skel {
     @apply rounded-md bg-neutral-100/80;
@@ -119,6 +228,16 @@
   /* Keep Leaflet panes below sticky page chrome */
   .leaflet-container {
     z-index: 0;
+  }
+
+  /* Dashboard shell: single scroll region in layout <main> */
+  [data-dashboard-scroll="main"] {
+    @apply min-h-0;
+    overscroll-behavior: contain;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
 

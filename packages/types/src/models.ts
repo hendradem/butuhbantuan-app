@@ -29,7 +29,33 @@ export interface EmergencyDataType {
   coordinates: [number, number];
   typeOfService: string;
   partner_tier?: PartnerTier;
+  /** false = unit tanpa login dashboard; citizen kirim WA + /dispatch */
+  dashboard_access?: boolean;
+  wa_dispatch?: boolean;
+  organization_type?: string;
   readiness?: PartnerReadiness;
+  compliance?: {
+    declared_category: string;
+    category_label: string;
+    completeness_pct: number;
+    required_total: number;
+    required_met: number;
+    groups: Array<{
+      code: string;
+      label: string;
+      items: Array<{ code: string; label: string; required: boolean; status: string; photo_url?: string }>;
+    }>;
+    disclaimer: string;
+    reference?: { org: string; title: string; year: number };
+    verification?: {
+      status: string;
+      is_verified: boolean;
+      verified_category?: string;
+      verified_category_label?: string;
+      verified_at?: string;
+      expires_at?: string;
+    };
+  };
   address: { district: string; regency: string; province: string; fullAddress: string };
   contact: { whatsapp: string; phone: string };
   operational: OperationalStatus;
@@ -58,8 +84,18 @@ export interface OrderTicket {
   unit_name: string;
   requester_name: string;
   requester_phone: string;
+  jenis_pelayanan?: string;
   location: string;
   condition: string;
+  /** Structured initial assessment from citizen checklist (optional). */
+  assessment?: {
+    template_code: string;
+    template_version: number;
+    answers: Array<{ code: string; label: string; value: "yes" | "no" | "unknown" }>;
+    acuity: "green" | "yellow" | "red" | "unknown";
+    notes?: string;
+  };
+  assessment_acuity?: "green" | "yellow" | "red" | "unknown";
   photo_url?: string;
   requester_lat: number;
   requester_lng: number;
@@ -75,6 +111,7 @@ export interface OrderTicket {
   dispatch_status?: "searching" | "assigned" | "exhausted" | "";
   unit_phone?: string;
   unit_whatsapp?: string;
+  wa_dispatch?: boolean;
   unit_lat?: number;
   unit_lng?: number;
   eta_minutes?: number;
@@ -96,6 +133,7 @@ export interface OrderTicket {
   accepted_at?: string | null;
   arrived_at?: string | null;
   track_token?: string;
+  public_token?: string;
   track_enabled_at?: string | null;
   track_expires_at?: string | null;
   responder_lat?: number;

@@ -19,6 +19,8 @@ type EmergencyUseCase interface {
 	UpdateFleet(id string, fleet domain.FleetStatus) error
 	UpdateActive(id string, isActive bool) error
 	UpdateWilayah(id string, addr domain.Address) error
+	GetIncidentReportTemplate(id string) (*domain.IncidentReportTemplate, error)
+	UpdateIncidentReportTemplate(id string, tpl domain.IncidentReportTemplate) (*domain.IncidentReportTemplate, error)
 }
 
 // PushUseCase handles Web Push subscriptions and notification delivery.
@@ -57,6 +59,7 @@ type OrderUseCase interface {
 	Create(o domain.OrderTicket) (*domain.OrderTicket, error)
 	GetByID(id string) (*domain.OrderTicket, error)
 	GetByTicketNumber(number string) (*domain.OrderTicket, error)
+	GetByPublicToken(token string) (*domain.OrderTicket, error)
 	GetAll() ([]domain.OrderTicket, error)
 	GetByUnit(emergencyUUID, unitName string) ([]domain.OrderTicket, error)
 	GetByWilayahScope(regencyID, provinceID string, provinceWide bool) ([]domain.OrderTicket, error)
@@ -67,6 +70,7 @@ type OrderUseCase interface {
 	RecordEvent(ev domain.OrderEvent) error
 	GetHistory(orderID string) ([]domain.OrderEvent, error)
 	EnableTrack(id string, actor string) (*domain.OrderTicket, error)
+	RefreshTrackTTL(id string) (*domain.OrderTicket, error)
 	DisableTrack(id string, actor string) (*domain.OrderTicket, error)
 	GetByTrackToken(token string) (*domain.OrderTicket, error)
 	PingTrackLocation(token string, lat, lng float64) (*domain.OrderTicket, error)
@@ -112,4 +116,22 @@ type RegionUseCase interface {
 	GetRegenciesByProvince(provinceID string) ([]domain.Regency, error)
 	GetCoveredProvinces() ([]domain.Province, error)
 	GetCoveredRegenciesByProvince(provinceID string) ([]domain.Regency, error)
+}
+
+// AssessmentUseCase resolves citizen report checklists (master templates).
+type AssessmentUseCase interface {
+	GetTemplateForEmergency(emergencyUUID string) (*domain.AssessmentTemplate, error)
+	GetTemplateForOrder(emergencyUUID, jenisPelayanan string) (*domain.AssessmentTemplate, error)
+	GetDefaultTemplate() (*domain.AssessmentTemplate, error)
+	ListTemplates() ([]domain.AssessmentTemplate, error)
+	GetTemplateByID(id uint) (*domain.AssessmentTemplate, error)
+	CreateTemplate(t domain.AssessmentTemplate) (*domain.AssessmentTemplate, error)
+	UpdateTemplate(t domain.AssessmentTemplate) (*domain.AssessmentTemplate, error)
+	DeleteTemplate(id uint) error
+	ListBindings() ([]domain.AssessmentBinding, error)
+	UpsertBinding(b domain.AssessmentBinding) (*domain.AssessmentBinding, error)
+	DeleteBinding(emergencyTypeID uint) error
+	ListJenisBindings() ([]domain.AssessmentJenisBinding, error)
+	UpsertJenisBinding(b domain.AssessmentJenisBinding) (*domain.AssessmentJenisBinding, error)
+	DeleteJenisBinding(jenisPelayanan string) error
 }

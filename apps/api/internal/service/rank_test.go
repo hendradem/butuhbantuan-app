@@ -38,7 +38,7 @@ func TestRankCandidates_HardFiltersByType(t *testing.T) {
 		},
 	}
 
-	ranked := RankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil)
+	ranked := RankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil, RankContext{})
 	if len(ranked) != 2 {
 		t.Fatalf("expected 2 same-type candidates, got %d", len(ranked))
 	}
@@ -71,7 +71,7 @@ func TestRankCandidates_FamilyBlocksIDMismatch(t *testing.T) {
 			IsDispatcher:  true,
 		},
 	}
-	ranked := RankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil)
+	ranked := RankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil, RankContext{})
 	if len(ranked) != 1 || ranked[0].Emergency.ID != "psc" {
 		t.Fatalf("expected only PSC, got %+v", rankedIDs(ranked))
 	}
@@ -102,7 +102,7 @@ func TestRankCandidates_PrefersCloserOverFarPSC(t *testing.T) {
 			Fleet:         domain.FleetStatus{Total: 1, Available: 1},
 		},
 	}
-	ranked := RankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil)
+	ranked := RankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil, RankContext{})
 	if len(ranked) == 0 || ranked[0].Emergency.ID != "ambulance-near" {
 		t.Fatalf("expected nearer ambulance over far PSC, got %+v", rankedIDs(ranked))
 	}
@@ -130,7 +130,7 @@ func TestRankCandidates_VerifiedTieBreakWhenClose(t *testing.T) {
 			Fleet:         domain.FleetStatus{Total: 1, Available: 1},
 		},
 	}
-	ranked := RankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil)
+	ranked := RankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil, RankContext{})
 	if len(ranked) < 2 || ranked[0].Emergency.ID != "verified" {
 		t.Fatalf("expected verified tie-break when equal distance, got %+v", rankedIDs(ranked))
 	}
@@ -158,7 +158,7 @@ func TestRankCandidates_ReadinessDoesNotBeatDistance(t *testing.T) {
 		Readiness:     domain.Readiness{TrainedDriver: true, HasOxygen: true, HasStretcher: true},
 	}
 
-	ranked := RankCandidates([]domain.Emergency{farReady, closerBare}, -7.0, 110.0, 1, "Ambulance", nil)
+	ranked := RankCandidates([]domain.Emergency{farReady, closerBare}, -7.0, 110.0, 1, "Ambulance", nil, RankContext{})
 	if len(ranked) < 2 || ranked[0].Emergency.ID != "bare" {
 		t.Fatalf("closer bare unit must beat far equipped unit, got %+v", rankedIDs(ranked))
 	}
@@ -182,7 +182,7 @@ func TestRankCandidates_ExcludesTriedUnits(t *testing.T) {
 		},
 	}
 	exclude := map[string]struct{}{"a": {}}
-	ranked := RankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", exclude)
+	ranked := RankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", exclude, RankContext{})
 	if len(ranked) != 1 || ranked[0].Emergency.ID != "b" {
 		t.Fatalf("expected only b, got %+v", ranked)
 	}
@@ -215,7 +215,7 @@ func TestRankCandidates_HardSkipsZeroFleetAndClosed(t *testing.T) {
 			Fleet:         domain.FleetStatus{Total: 1, Available: 1},
 		},
 	}
-	ranked := RankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil)
+	ranked := RankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil, RankContext{})
 	if len(ranked) != 1 || ranked[0].Emergency.ID != "ready" {
 		t.Fatalf("expected only ready unit, got %+v", rankedIDs(ranked))
 	}
@@ -232,7 +232,7 @@ func TestRankCandidates_UnknownFleetStillEligible(t *testing.T) {
 			Fleet:         domain.FleetStatus{Total: 0, Available: 0},
 		},
 	}
-	ranked := RankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil)
+	ranked := RankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil, RankContext{})
 	if len(ranked) != 1 {
 		t.Fatalf("unknown fleet must remain eligible, got %+v", rankedIDs(ranked))
 	}
@@ -250,11 +250,11 @@ func TestRankCandidates_SoftFallbackWhenPoolEmpty(t *testing.T) {
 			Fleet:         domain.FleetStatus{Total: 1, Available: 0},
 		},
 	}
-	strict := rankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil, true)
+	strict := rankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil, true, RankContext{})
 	if len(strict) != 0 {
 		t.Fatalf("strict must skip empty fleet, got %+v", rankedIDs(strict))
 	}
-	soft := rankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil, false)
+	soft := rankCandidates(candidates, -7.0, 110.0, 1, "Ambulance", nil, false, RankContext{})
 	if len(soft) != 1 || soft[0].Emergency.ID != "only-empty" {
 		t.Fatalf("soft fallback must keep empty-fleet unit, got %+v", rankedIDs(soft))
 	}
@@ -519,7 +519,7 @@ func TestWalkCascade_BorderCloserOtherKabFirst(t *testing.T) {
 
 	svc := &DispatchService{}
 	borderLat, borderLng := -7.86, 110.34
-	ranked := svc.walkCascadeTiers(tiers, borderLat, borderLng, 1, "Ambulance", nil, true)
+	ranked := svc.walkCascadeTiers(tiers, borderLat, borderLng, 1, "Ambulance", nil, true, RankContext{})
 	ids := rankedIDs(ranked)
 	if len(ids) == 0 || ids[0] != "pmi-bantul-near" {
 		t.Fatalf("closer Bantul must be first, got %+v", ids)
@@ -560,7 +560,7 @@ func TestWalkCascade_DistanceFirst_SameKabStillWinsWhenCloser(t *testing.T) {
 		},
 	}
 	svc := &DispatchService{}
-	ranked := svc.walkCascadeTiers(tiers, -7.76, 110.38, 1, "Ambulance", nil, true)
+	ranked := svc.walkCascadeTiers(tiers, -7.76, 110.38, 1, "Ambulance", nil, true, RankContext{})
 	if len(ranked) < 2 || ranked[0].Emergency.ID != "mpd-near" {
 		t.Fatalf("closer Sleman must win over far Bantul, got %+v", rankedIDs(ranked))
 	}
@@ -598,7 +598,7 @@ func TestWalkCascade_TuriPrefersCloserDispatcherPMI(t *testing.T) {
 		},
 	}
 	svc := &DispatchService{}
-	ranked := svc.walkCascadeTiers(tiers, -7.696535388181718, 110.35303115844727, 1, "Ambulance", nil, true)
+	ranked := svc.walkCascadeTiers(tiers, -7.696535388181718, 110.35303115844727, 1, "Ambulance", nil, true, RankContext{})
 	ids := rankedIDs(ranked)
 	if len(ids) < 3 {
 		t.Fatalf("expected 3 candidates, got %+v", ids)
@@ -637,7 +637,7 @@ func TestRankCandidates_DistanceBeatsFleetAndReadiness(t *testing.T) {
 		},
 	}
 	lat, lng := -7.696535388181718, 110.35303115844727
-	ranked := RankCandidates(candidates, lat, lng, 1, "Ambulance", map[string]struct{}{"pmi-sleman": {}})
+	ranked := RankCandidates(candidates, lat, lng, 1, "Ambulance", map[string]struct{}{"pmi-sleman": {}}, RankContext{})
 	if len(ranked) < 2 || ranked[0].Emergency.ID != "psc-ses" {
 		t.Fatalf("PSC SES must win after PMI reject, got %+v scores=%v",
 			rankedIDs(ranked),
@@ -677,7 +677,7 @@ func TestWalkCascade_AfterExcludePMI_PrefersSESOverMPD(t *testing.T) {
 	}
 	svc := &DispatchService{}
 	exclude := map[string]struct{}{"pmi-sleman": {}}
-	ranked := svc.walkCascadeTiers(tiers, -7.696535388181718, 110.35303115844727, 1, "Ambulance", exclude, true)
+	ranked := svc.walkCascadeTiers(tiers, -7.696535388181718, 110.35303115844727, 1, "Ambulance", exclude, true, RankContext{})
 	if len(ranked) == 0 || ranked[0].Emergency.ID != "psc-ses" {
 		t.Fatalf("after PMI reject, SES must be next (not MPD), got %+v", rankedIDs(ranked))
 	}
@@ -736,7 +736,7 @@ func TestWalkCascade_ProvinceBeforeNearbyCommand_Pogung(t *testing.T) {
 	}
 
 	svc := &DispatchService{}
-	ranked := svc.walkCascadeTiers(tiers, -7.76, 110.38, 1, "Ambulance", nil, true)
+	ranked := svc.walkCascadeTiers(tiers, -7.76, 110.38, 1, "Ambulance", nil, true, RankContext{})
 	ids := rankedIDs(ranked)
 	pos := func(id string) int {
 		for i, v := range ids {
@@ -944,6 +944,40 @@ func TestChoosePreferredOrBest_OverridesFarListPick(t *testing.T) {
 	got = choosePreferredOrBest(ranked, "")
 	if got == nil || got.Emergency.ID != "pmi-sleman" {
 		t.Fatalf("empty prefer must pick closest, got %+v", got)
+	}
+}
+
+func TestRankCandidates_VerifiedComplianceNudgeOnRedAcuity(t *testing.T) {
+	verified := domain.Emergency{
+		ID:            "verified-near",
+		Name:          "PMI Verified",
+		Coordinates:   [2]string{"110.01", "-7.01"},
+		EmergencyType: domain.EmergencyType{ID: 1, Name: "Ambulance"},
+		Operational:   domain.OperationalStatus{IsActive: true, Is24Hours: true},
+		Fleet:         domain.FleetStatus{Total: 2, Available: 1},
+		Compliance: &domain.AmbulanceComplianceView{
+			CompletenessPct: 90,
+			Verification: &domain.ComplianceVerificationView{
+				Status:     domain.ComplianceVerificationVerified,
+				IsVerified: true,
+			},
+		},
+	}
+	bare := domain.Emergency{
+		ID:            "bare-same-distance",
+		Name:          "Bare Unit",
+		Coordinates:   [2]string{"110.01", "-7.01"},
+		EmergencyType: domain.EmergencyType{ID: 1, Name: "Ambulance"},
+		Operational:   domain.OperationalStatus{IsActive: true, Is24Hours: true},
+		Fleet:         domain.FleetStatus{Total: 1, Available: 1},
+	}
+	ctx := RankContext{AssessmentAcuity: "red"}
+	ranked := RankCandidates([]domain.Emergency{bare, verified}, -7.0, 110.0, 1, "Ambulance", nil, ctx)
+	if len(ranked) < 2 {
+		t.Fatalf("expected 2 ranked, got %d", len(ranked))
+	}
+	if ranked[0].Emergency.ID != "verified-near" {
+		t.Fatalf("verified compliance should win close tie on red acuity, got %+v", rankedIDs(ranked))
 	}
 }
 

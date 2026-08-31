@@ -8,6 +8,7 @@ const userLocationStore = useUserLocationStore();
 const leaflet = useLeafletStore();
 const detailSheet = useDetailSheetStore();
 const appError = useAppErrorStore();
+const { clearRoute } = useMapRouting();
 const { loadEmergencyData } = useEmergencyApi();
 const { getCurrentLocation, applyFix } = useGeolocation();
 const toast = appToast();
@@ -30,13 +31,11 @@ async function handleGetCurrentLocation(e: Event) {
 
   userLocationStore.updateIsGetCurrentLocation(true);
   detailSheet.onClose();
-  leaflet.resetLeafletRouting();
+  clearRoute();
   toast.loading("Mencari GPS...");
+  let toastSettled = false;
 
   try {
-    // Give map time to clear its background watch before we start ours
-    await new Promise((r) => setTimeout(r, 50));
-
     const fix = await getCurrentLocation({
       preferGps: true,
       onSample: (sample) => {
@@ -50,6 +49,7 @@ async function handleGetCurrentLocation(e: Event) {
 
     if (fix.errorCode === 1 && !fix.fromGps) {
       toast.dismiss();
+      toastSettled = true;
       appError.setErrorMessage("permission_denied");
       appError.onOpenSheet();
       return;
@@ -60,6 +60,7 @@ async function handleGetCurrentLocation(e: Event) {
         "GPS belum dapat kunci. Geser pin biru di peta, atau coba lagi di HP (luar ruangan).",
         { duration: 5000 },
       );
+      toastSettled = true;
       return;
     }
 
@@ -83,13 +84,15 @@ async function handleGetCurrentLocation(e: Event) {
     } else {
       toast.success("Lokasi diperbarui", { duration: 2500 });
     }
+    toastSettled = true;
 
-    void applyFix(fix, { force: true });
     void loadEmergencyData(fix.lat, fix.long);
   } catch {
     toast.error("Gagal mengambil lokasi");
+    toastSettled = true;
   } finally {
     userLocationStore.updateIsGetCurrentLocation(false);
+    if (!toastSettled) toast.dismiss();
   }
 }
 </script>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
 import { isUnitDispatcher, canAcceptTicket, type UnitProfile } from "~/composables/useUnitOps";
+import { compareOrdersByAcuity } from "~/utils/triage";
 
 definePageMeta({ layout: "unit", title: "Antrian Wilayah", keepalive: true });
 
@@ -41,7 +42,7 @@ const orders = computed(() => data.value ?? []);
 const pendingOrders = computed(() =>
   orders.value
     .filter((o: any) => o.status === "pending")
-    .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+    .sort(compareOrdersByAcuity),
 );
 
 const exhaustedOrders = computed(() =>
@@ -236,6 +237,7 @@ useOrderNotification(
                   <p class="text-sm font-medium text-neutral-900 truncate mt-0.5">{{ o.requester_name }}</p>
                 </div>
                 <div class="flex flex-col items-end gap-1 shrink-0">
+                  <OrderTriageBadge :acuity="o.assessment_acuity" />
                   <span :class="['text-[10px] font-semibold tabular-nums', ageTone(o.created_at)]">
                     {{ ageLabel(o.created_at) }}
                   </span>

@@ -1,13 +1,39 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import {
+  buildIncidentReportMessage,
+  defaultIncidentReportTemplate,
+  genericIncidentReportTemplate,
+  pmiSlemanIncidentReportTemplate,
+  whatsAppShareUrl,
+  type IncidentReportFormData,
+  type IncidentReportTemplate,
+  INCIDENT_REPORT_PRESET_GENERIC,
+  INCIDENT_REPORT_PRESET_PMI,
+} from "@butuhbantuan/utils";
 import type { HospitalOption } from "~/components/orders/HospitalPicker.vue";
+import { toast } from "~/utils/appToast";
 
 const props = defineProps<{
   unitName?: string;
+  orgName?: string;
+  regency?: string;
+  emergencyUuid?: string;
   storageKey?: string;
   ticket?: any;
-  /** Persist to API so unit & admin share the same report. */
   mode?: "admin" | "unit";
+}>();
+
+const emit = defineEmits<{
+  status: [payload: {
+    savedLocalAt: string | null;
+    savedRemoteAt: string | null;
+    savingRemote: boolean;
+    copied: boolean;
+    dirty: boolean;
+    saveError: string;
+  }];
+  saved: [];
 }>();
 
 const config = useRuntimeConfig();
@@ -15,72 +41,160 @@ const baseUrl = config.public.apiBaseUrl as string;
 const { token: adminToken } = useAuth();
 const { unitHeaders } = useUnitAuth();
 
-// ── Report data persistence (per-ticket) ────────────────────────────────────────
-const REPORT_KEY = computed(() =>
-  props.ticket?.ticket_number ? `bb-report-${props.ticket.ticket_number}` : null
+const pad = (n: number) => String(n).padStart(2, "0");
+
+const template = ref<IncidentReportTemplate>(
+  defaultIncidentReportTemplate({
+    unitName: props.unitName,
+    orgName: props.orgName,
+    regency: props.regency,
+  }),
 );
-const savedAt = ref<string | null>(null);
+const templateSaving = ref(false);
+const templateSaved = ref(false);
+const templateLoading = ref(false);
+
+const presetSelectOptions = [
+  { value: INCIDENT_REPORT_PRESET_PMI, label: "PMI Sleman" },
+  { value: INCIDENT_REPORT_PRESET_GENERIC, label: "Umum" },
+];
+
+const presetId = ref(INCIDENT_REPORT_PRESET_GENERIC);
+
+function applyPreset(id: string) {
+  presetId.value = id;
+  if (id === INCIDENT_REPORT_PRESET_PMI) {
+    template.value = { ...pmiSlemanIncidentReportTemplate() };
+  } else {
+    template.value = { ...genericIncidentReportTemplate(props.unitName) };
+  }
+}
+
+watch(presetId, (id) => {
+  if (template.value.preset_id !== id) applyPreset(id);
+});
+
+function authHeaders(): Record<string, string> {
+  if (props.mode === "admin") {
+    return adminToken.value ? { "X-Admin-Key": adminToken.value } : {};
+  }
+  if (props.mode === "unit") return unitHeaders();
+  return {};
+}
+
+async function loadTemplateFromServer() {
+  if (!props.mode) return;
+  templateLoading.value = true;
+  try {
+    const url =
+      props.mode === "unit"
+        ? `${baseUrl}/api/v1/unit/report-template`
+        : `${baseUrl}/api/v1/admin/emergencies/${props.emergencyUuid || props.ticket?.emergency_uuid}/report-template`;
+    const res = await $fetch<{ data: IncidentReportTemplate }>(url, { headers: authHeaders() });
+    if (res?.data) {
+      template.value = { ...res.data };
+      presetId.value = res.data.preset_id || INCIDENT_REPORT_PRESET_GENERIC;
+    }
+  } catch {
+    template.value = defaultIncidentReportTemplate({
+      unitName: props.unitName,
+      orgName: props.orgName,
+      regency: props.regency,
+    });
+    presetId.value = template.value.preset_id || INCIDENT_REPORT_PRESET_GENERIC;
+  } finally {
+    templateLoading.value = false;
+  }
+}
+
+async function saveTemplateToServer() {
+  if (props.mode !== "unit") {
+    toast.success("Template disimpan untuk sesi ini");
+    templateSaved.value = true;
+    setTimeout(() => { templateSaved.value = false; }, 2000);
+    return;
+  }
+  templateSaving.value = true;
+  try {
+    const body = { ...template.value, preset_id: presetId.value };
+    const res = await $fetch<{ data: IncidentReportTemplate }>(
+      `${baseUrl}/api/v1/unit/report-template`,
+      { method: "PUT", headers: { ...authHeaders(), "Content-Type": "application/json" }, body },
+    );
+    if (res?.data) {
+      template.value = { ...res.data };
+      presetId.value = res.data.preset_id || INCIDENT_REPORT_PRESET_GENERIC;
+    }
+    templateSaved.value = true;
+    setTimeout(() => { templateSaved.value = false; }, 2000);
+    toast.success("Template laporan disimpan");
+  } catch {
+    toast.error("Gagal menyimpan template");
+  } finally {
+    templateSaving.value = false;
+  }
+}
+
+onMounted(() => {
+  void loadTemplateFromServer();
+  if (import.meta.client) {
+    window.addEventListener("beforeunload", syncLocalDraft);
+  }
+  nextTick(() => { isMounting.value = false; });
+});
+
+onBeforeUnmount(() => {
+  if (import.meta.client) {
+    window.removeEventListener("beforeunload", syncLocalDraft);
+  }
+  void flushSave();
+});
+
+watch(
+  () => props.ticket?.ticket_number,
+  (num, prev) => {
+    if (num && num !== prev) void loadTemplateFromServer();
+  },
+);
+
+const REPORT_KEY = computed(() =>
+  props.ticket?.ticket_number ? `bb-report-${props.ticket.ticket_number}` : null,
+);
+const savedLocalAt = ref<string | null>(null);
+const savedRemoteAt = ref<string | null>(null);
+const dirty = ref(false);
 const isMounting = ref(true);
 const savingRemote = ref(false);
 const saveError = ref("");
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
-// ── Template (localStorage) ────────────────────────────────────────────────────
-const TPL_KEY = computed(() => `bb-report-tpl-${props.storageKey ?? "default"}`);
-const showTemplate = ref(false);
-const templateSaved = ref(false);
-
-const header = ref("");
-const volunteerTitle = ref("");
-const closing = ref("");
-const footer = ref("");
-
-function defaultHeader() {
-  return props.unitName
-    ? `*${props.unitName.toUpperCase()}*\n*INFORMASI KEJADIAN EMERGENCY / NON EMERGENCY* 🚑`
-    : `*NAMA UNIT*\n*INFORMASI KEJADIAN EMERGENCY / NON EMERGENCY* 🚑`;
-}
-function defaultVolunteerTitle() {
-  return props.unitName ? `RELAWAN ${props.unitName.toUpperCase()}` : "RELAWAN";
-}
-const DEFAULT_CLOSING = "Demikian laporan yang dapat kami sampaikan, bila ada kejadian yang bersifat Emergency akan kami sampaikan kembali.";
-
-function applyTemplate(obj: any) {
-  header.value = obj.header ?? defaultHeader();
-  volunteerTitle.value = obj.volunteerTitle ?? defaultVolunteerTitle();
-  closing.value = obj.closing ?? DEFAULT_CLOSING;
-  footer.value = obj.footer ?? "";
-}
-
-watch(() => props.unitName, () => {
-  if (!localStorage.getItem(TPL_KEY.value)) applyTemplate({});
-});
-
-function saveTemplate() {
-  localStorage.setItem(TPL_KEY.value, JSON.stringify({
-    header: header.value, volunteerTitle: volunteerTitle.value,
-    closing: closing.value, footer: footer.value,
-  }));
-  templateSaved.value = true;
-  setTimeout(() => { templateSaved.value = false; }, 2000);
-}
-
-function resetTemplate() {
-  localStorage.removeItem(TPL_KEY.value);
-  applyTemplate({});
-}
-
-// ── Event data ─────────────────────────────────────────────────────────────────
 const now = new Date();
-const pad = (n: number) => String(n).padStart(2, "0");
 const dateStr = ref(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`);
-const timeStr = ref(`${pad(now.getHours())}:${pad(now.getMinutes())}`);
+const timeIncident = ref(`${pad(now.getHours())}:${pad(now.getMinutes())}`);
+const timeArrivedScene = ref("");
+const timeArrivedHospital = ref("");
 const incidentType = ref("");
 const location = ref("");
 const maleCount = ref("");
 const femaleCount = ref("");
 
-// ── RS Rujukan ─────────────────────────────────────────────────────────────────
+interface Victim { id: string; name: string; age: string; gender: string; address: string; conditions: string; treatments: string }
+function newVictim(): Victim {
+  return { id: Math.random().toString(36).slice(2), name: "", age: "", gender: "Laki-laki", address: "", conditions: "", treatments: "" };
+}
+const victims = ref<Victim[]>([newVictim()]);
+function addVictim() { victims.value.push(newVictim()); }
+function removeVictim(id: string) { if (victims.value.length > 1) victims.value = victims.value.filter((v) => v.id !== id); }
+
+const sources = ref("Masyarakat");
+const parties = ref("");
+
+interface Vol { id: string; name: string; role: string }
+const volunteers = ref<Vol[]>([{ id: Math.random().toString(36).slice(2), name: "", role: "" }]);
+function addVol() { volunteers.value.push({ id: Math.random().toString(36).slice(2), name: "", role: "" }); }
+function removeVol(id: string) { if (volunteers.value.length > 1) volunteers.value = volunteers.value.filter((v) => v.id !== id); }
+
+const vehicle = ref("");
 const referralHospitalId = ref("");
 const referralHospitalName = ref("");
 const hospitalOptions = ref<HospitalOption[]>([]);
@@ -113,57 +227,44 @@ watch(referralHospitalId, (id) => {
   referralHospitalName.value = hospitalOptions.value.find((h) => h.id === id)?.name ?? "";
 });
 
-watch(
-  () => props.ticket?.regency_id,
-  (id) => { if (id && !hospitalOptions.value.length) fetchHospitals(); },
-  { immediate: true },
-);
+watch(() => props.ticket?.regency_id, (id) => { if (id && !hospitalOptions.value.length) fetchHospitals(); }, { immediate: true });
 
-// ── Victims ────────────────────────────────────────────────────────────────────
-interface Victim { id: string; name: string; age: string; gender: string; address: string; conditions: string; treatments: string }
-function newVictim(): Victim {
-  return { id: Math.random().toString(36).slice(2), name: "", age: "", gender: "Laki-laki", address: "", conditions: "", treatments: "" };
+function timeFromIso(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
-const victims = ref<Victim[]>([newVictim()]);
-function addVictim() { victims.value.push(newVictim()); }
-function removeVictim(id: string) { if (victims.value.length > 1) victims.value = victims.value.filter(v => v.id !== id); }
 
-// ── Info ───────────────────────────────────────────────────────────────────────
-const sources = ref("Masyarakat");
-const parties = ref("");
-
-// ── Volunteers ─────────────────────────────────────────────────────────────────
-interface Vol { id: string; name: string; role: string }
-const volunteers = ref<Vol[]>([{ id: Math.random().toString(36).slice(2), name: "", role: "" }]);
-function addVol() { volunteers.value.push({ id: Math.random().toString(36).slice(2), name: "", role: "" }); }
-function removeVol(id: string) { if (volunteers.value.length > 1) volunteers.value = volunteers.value.filter(v => v.id !== id); }
-
-const vehicle = ref("");
-
-// ── Import from ticket ─────────────────────────────────────────────────────────
 function applyTicket(t: any) {
   if (!t) return;
   const d = new Date(t.created_at);
   if (!Number.isNaN(d.getTime())) {
     dateStr.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    timeStr.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    if (!timeIncident.value) timeIncident.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
   if (t.location) location.value = t.location;
   if (victims.value.length === 0) victims.value = [newVictim()];
-  // Prefill ringan dari e-tiket (bukan laporan lama tiket lain)
   if (!victims.value[0].name) victims.value[0].name = t.requester_name ?? "";
   if (!victims.value[0].conditions) victims.value[0].conditions = t.condition ?? "";
+  if (!timeArrivedScene.value) timeArrivedScene.value = timeFromIso(t.accepted_at || t.arrived_at);
+  if (!timeArrivedHospital.value && t.referral_hospital_name) {
+    timeArrivedHospital.value = timeFromIso(t.completed_at);
+  }
+  if (t.referral_hospital_id) referralHospitalId.value = String(t.referral_hospital_id);
+  if (t.referral_hospital_name) referralHospitalName.value = t.referral_hospital_name;
   if (!sources.value || sources.value === "Masyarakat") {
-    sources.value = t.ticket_number
-      ? `Masyarakat (No. Tiket: ${t.ticket_number})`
-      : "Masyarakat";
+    sources.value = t.ticket_number ? `Masyarakat (No. Tiket: ${t.ticket_number})` : "Masyarakat";
   }
 }
 
 function applyReportData(data: any) {
   if (!data || typeof data !== "object") return;
   if (data.dateStr !== undefined) dateStr.value = String(data.dateStr || "");
-  if (data.timeStr !== undefined) timeStr.value = String(data.timeStr || "");
+  if (data.timeIncident !== undefined) timeIncident.value = String(data.timeIncident || "");
+  else if (data.timeStr !== undefined) timeIncident.value = String(data.timeStr || "");
+  if (data.timeArrivedScene !== undefined) timeArrivedScene.value = String(data.timeArrivedScene || "");
+  if (data.timeArrivedHospital !== undefined) timeArrivedHospital.value = String(data.timeArrivedHospital || "");
   if (data.incidentType !== undefined) incidentType.value = String(data.incidentType || "");
   if (data.location !== undefined) location.value = String(data.location || "");
   if (data.maleCount !== undefined) maleCount.value = String(data.maleCount || "");
@@ -191,13 +292,15 @@ function applyReportData(data: any) {
   if (data.vehicle !== undefined) vehicle.value = String(data.vehicle || "");
   if (data.referralHospitalId !== undefined) referralHospitalId.value = String(data.referralHospitalId || "");
   if (data.referralHospitalName !== undefined) referralHospitalName.value = String(data.referralHospitalName || "");
-  if (data._savedAt) savedAt.value = String(data._savedAt);
+  if (data._savedAt) savedLocalAt.value = String(data._savedAt);
 }
 
 function resetEventFields() {
-  const now = new Date();
-  dateStr.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-  timeStr.value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const n = new Date();
+  dateStr.value = `${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(n.getDate())}`;
+  timeIncident.value = `${pad(n.getHours())}:${pad(n.getMinutes())}`;
+  timeArrivedScene.value = "";
+  timeArrivedHospital.value = "";
   incidentType.value = "";
   location.value = "";
   maleCount.value = "";
@@ -209,17 +312,10 @@ function resetEventFields() {
   vehicle.value = "";
   referralHospitalId.value = "";
   referralHospitalName.value = "";
-  savedAt.value = null;
+  savedLocalAt.value = null;
+  savedRemoteAt.value = null;
+  dirty.value = false;
   saveError.value = "";
-}
-
-function loadTemplate() {
-  const savedTpl = localStorage.getItem(TPL_KEY.value);
-  if (savedTpl) {
-    try { applyTemplate(JSON.parse(savedTpl)); } catch { applyTemplate({}); }
-  } else {
-    applyTemplate({});
-  }
 }
 
 function hydrateFromTicket(t: any) {
@@ -229,7 +325,6 @@ function hydrateFromTicket(t: any) {
   }
   isMounting.value = true;
   resetEventFields();
-  loadTemplate();
 
   const fromServer = t.incident_report;
   const savedLocal = (() => {
@@ -238,12 +333,22 @@ function hydrateFromTicket(t: any) {
 
   if (fromServer && typeof fromServer === "object") {
     applyReportData(fromServer);
+    savedRemoteAt.value = t.incident_report_at
+      ? timeFromIso(t.incident_report_at)
+      : savedLocalAt.value;
+    dirty.value = false;
   } else if (typeof fromServer === "string" && fromServer) {
-    try { applyReportData(JSON.parse(fromServer)); } catch { applyTicket(t); }
+    try {
+      applyReportData(JSON.parse(fromServer));
+      dirty.value = false;
+    } catch {
+      applyTicket(t);
+    }
   } else if (savedLocal) {
     try {
       applyReportData(JSON.parse(savedLocal));
-      nextTick(() => { void persistReport(); });
+      dirty.value = true;
+      nextTick(() => { void flushSave(); });
     } catch {
       applyTicket(t);
     }
@@ -254,18 +359,19 @@ function hydrateFromTicket(t: any) {
   nextTick(() => { isMounting.value = false; });
 }
 
-// ── Auto-save (debounced 1.5s) ─────────────────────────────────────────────────
-const formSnapshot = computed(() => ({
+const formSnapshot = computed<IncidentReportFormData>(() => ({
   dateStr: dateStr.value,
-  timeStr: timeStr.value,
+  timeIncident: timeIncident.value,
+  timeArrivedScene: timeArrivedScene.value,
+  timeArrivedHospital: timeArrivedHospital.value,
   incidentType: incidentType.value,
   location: location.value,
   maleCount: maleCount.value,
   femaleCount: femaleCount.value,
-  victims: victims.value.map(v => ({ ...v })),
+  victims: victims.value.map((v) => ({ ...v })),
   sources: sources.value,
   parties: parties.value,
-  volunteers: volunteers.value.map(v => ({ ...v })),
+  volunteers: volunteers.value.map((v) => ({ ...v })),
   vehicle: vehicle.value,
   referralHospitalId: referralHospitalId.value,
   referralHospitalName: referralHospitalName.value,
@@ -273,44 +379,47 @@ const formSnapshot = computed(() => ({
 
 watch(formSnapshot, () => {
   if (isMounting.value) return;
+  dirty.value = true;
   if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    void persistReport();
-  }, 1500);
+  saveTimer = setTimeout(() => { void flushSave(); }, 1200);
 }, { deep: true });
-
-function authHeaders(): Record<string, string> {
-  if (props.mode === "admin") {
-    return adminToken.value ? { "X-Admin-Key": adminToken.value } : {};
-  }
-  if (props.mode === "unit") return unitHeaders();
-  return {};
-}
 
 function apiPrefix() {
   return props.mode === "admin" ? "/api/v1/admin/orders" : "/api/v1/unit/orders";
 }
 
-async function persistReport() {
-  if (!REPORT_KEY.value) return;
-  const orderId = props.ticket?.id;
-  // Jangan simpan draft ke key tiket lain — pastikan ticket_number di key cocok
-  const ticketNo = props.ticket?.ticket_number;
-  if (!ticketNo || REPORT_KEY.value !== `bb-report-${ticketNo}`) return;
-
+function buildPayload() {
   const n = new Date();
   const at = `${pad(n.getHours())}:${pad(n.getMinutes())}`;
-  const payload = { ...formSnapshot.value, _savedAt: at };
+  return { ...formSnapshot.value, _savedAt: at };
+}
+
+function syncLocalDraft() {
+  if (!REPORT_KEY.value || isMounting.value) return;
+  const ticketNo = props.ticket?.ticket_number;
+  if (!ticketNo || REPORT_KEY.value !== `bb-report-${ticketNo}`) return;
+  const payload = buildPayload();
   try {
     localStorage.setItem(REPORT_KEY.value, JSON.stringify(payload));
-  } catch {
-    /* ignore */
-  }
-  savedAt.value = at;
+    savedLocalAt.value = payload._savedAt;
+  } catch { /* ignore */ }
+}
 
-  if (!orderId || !props.mode) return;
+async function persistReport(): Promise<boolean> {
+  if (!REPORT_KEY.value) return false;
+  const orderId = props.ticket?.id;
+  const ticketNo = props.ticket?.ticket_number;
+  if (!ticketNo || REPORT_KEY.value !== `bb-report-${ticketNo}`) return false;
+
+  const payload = buildPayload();
+  try {
+    localStorage.setItem(REPORT_KEY.value, JSON.stringify(payload));
+  } catch { /* ignore */ }
+  savedLocalAt.value = payload._savedAt;
+
+  if (!orderId || !props.mode) return true;
   const headers = authHeaders();
-  if (!Object.keys(headers).length) return;
+  if (!Object.keys(headers).length) return true;
 
   savingRemote.value = true;
   saveError.value = "";
@@ -320,19 +429,41 @@ async function persistReport() {
       headers,
       body: { report: payload },
     });
+    savedRemoteAt.value = payload._savedAt;
+    dirty.value = false;
+    emit("saved");
+    return true;
   } catch (e: any) {
     saveError.value = e?.data?.message || "Gagal menyimpan ke server (draft lokal tetap ada).";
+    return false;
   } finally {
     savingRemote.value = false;
   }
 }
 
-// ── Mount / ticket change ──────────────────────────────────────────────────────
+async function flushSave(): Promise<boolean> {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  return persistReport();
+}
+
+const saveStatusLabel = computed(() => {
+  if (savingRemote.value) return "Menyimpan ke server…";
+  if (saveError.value) return saveError.value;
+  if (dirty.value && !savedRemoteAt.value) {
+    return savedLocalAt.value ? `Draft lokal ${savedLocalAt.value} · belum ke server` : "Ada perubahan belum disimpan";
+  }
+  if (savedRemoteAt.value) return `Tersimpan server ${savedRemoteAt.value}`;
+  if (savedLocalAt.value) return `Draft lokal ${savedLocalAt.value}`;
+  return "";
+});
+
 watch(
   () => [props.ticket?.id, props.ticket?.ticket_number] as const,
   ([_id, number], prev) => {
     if (!number) return;
-    // Remount-equivalent when ticket identity changes (keepalive-safe)
     if (prev && prev[1] && prev[1] !== number) {
       hydrateFromTicket(props.ticket);
       return;
@@ -342,418 +473,437 @@ watch(
   { immediate: true },
 );
 
-onMounted(() => {
-  if (!props.ticket?.ticket_number) {
-    loadTemplate();
-  }
-  nextTick(() => { isMounting.value = false; });
-});
+const message = computed(() => buildIncidentReportMessage(formSnapshot.value, template.value));
 
-// ── Message builder ────────────────────────────────────────────────────────────
-const NUM_EMOJI = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"];
-const DAYS = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
-const MONTHS = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
-
-function parseReportDate(date: string, time: string): Date | null {
-  const raw = `${date || ""}T${time || "00:00"}`;
-  const d = new Date(raw);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-const message = computed(() => {
-  const d = parseReportDate(dateStr.value, timeStr.value);
-  const dateFmt = d
-    ? `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
-    : (dateStr.value || "-");
-  const timeFmt = timeStr.value ? timeStr.value.replace(":", ".") + " WIB" : "-";
-  const dayName = d ? DAYS[d.getDay()] : "-";
-
-  const L: string[] = [];
-
-  if (header.value.trim()) { L.push(header.value.trim()); L.push(""); }
-
-  L.push("🔍 *HARI/TANGGAL:*");
-  L.push(` •   ${dayName}, ${dateFmt}`);
-  L.push("");
-
-  L.push("⏰ *PUKUL:*");
-  L.push(`- ${timeFmt}`);
-  L.push(" ");
-
-  L.push("📝 *JENIS KEJADIAN:*");
-  L.push(`- ${incidentType.value.trim() || "..."}`);
-  L.push("");
-
-  L.push("📍 *LOKASI:*");
-  L.push(`- ${location.value.trim() || "..."}`);
-  L.push("");
-
-  L.push("*JUMLAH KORBAN/PASIEN*");
-  L.push(`  L.  : ${maleCount.value || "-"}`);
-  L.push(`  P. : ${femaleCount.value || "-"}`);
-  L.push("");
-
-  victims.value.forEach((v, i) => {
-    L.push(`👤${NUM_EMOJI[i] ?? String(i + 1)}`);
-    L.push("*IDENTITAS KORBAN/PASIEN :*");
-    L.push(`- Nama   : ${v.name || "-"}`);
-    L.push(`- Umur    : ${v.age ? v.age + " th" : "-"}`);
-    L.push(`- Jenis Kelamin : ${v.gender}`);
-    L.push(`- Alamat : ${v.address || "-"}`);
-    L.push("");
-
-    const conds = v.conditions.split("\n").map(s => s.trim()).filter(Boolean);
-    if (conds.length) {
-      L.push("*KONDISI KORBAN/PASIEN :*");
-      conds.forEach((c, j) => L.push(`${j + 1}. ${c}`));
-      L.push("");
-    }
-
-    const treats = v.treatments.split("\n").map(s => s.trim()).filter(Boolean);
-    if (treats.length) {
-      L.push("*PENANGANAN KORBAN/PASIEN*");
-      treats.forEach((t, j) => L.push(`${j + 1}. ${t}`));
-      L.push("");
-    }
-  });
-
-  const srcs = sources.value.split("\n").map(s => s.trim()).filter(Boolean);
-  if (srcs.length) {
-    L.push("*SUMBER INFORMASI*");
-    srcs.forEach(s => L.push(`• ${s}`));
-    L.push("");
-  }
-
-  const pts = parties.value.split("\n").map(s => s.trim()).filter(Boolean);
-  if (pts.length) {
-    L.push("*PIHAK YANG TERLIBAT*");
-    pts.forEach((p, j) => L.push(`${j + 1}. ${p}`));
-    L.push("");
-  }
-
-  const vols = volunteers.value.filter(v => v.name.trim());
-  if (vols.length && volunteerTitle.value.trim()) {
-    L.push(`*${volunteerTitle.value.trim()}*`);
-    vols.forEach((v, i) => {
-      const role = v.role.trim() ? ` (${v.role.trim()})` : "";
-      L.push(`${i + 1}. ${v.name}${role}`);
-    });
-    L.push("");
-  }
-
-  if (vehicle.value.trim()) {
-    L.push("*ARMADA KENDARAAN:*");
-    L.push(`  ${vehicle.value.trim()}`);
-    L.push("");
-  }
-
-  if (referralHospitalName.value.trim()) {
-    L.push("🏥 *RS RUJUKAN:*");
-    L.push(`- ${referralHospitalName.value.trim()}`);
-    L.push("");
-  }
-
-  if (closing.value.trim()) { L.push(closing.value.trim()); L.push(""); }
-  if (footer.value.trim()) L.push(footer.value.trim());
-
-  return L.join("\n");
-});
-
-// ── Copy ───────────────────────────────────────────────────────────────────────
 const copied = ref(false);
+
+watch([savedLocalAt, savedRemoteAt, savingRemote, copied, dirty, saveError], () => {
+  emit("status", {
+    savedLocalAt: savedLocalAt.value,
+    savedRemoteAt: savedRemoteAt.value,
+    savingRemote: savingRemote.value,
+    copied: copied.value,
+    dirty: dirty.value,
+    saveError: saveError.value,
+  });
+}, { immediate: true });
+
 async function copyMessage() {
   try {
     await navigator.clipboard.writeText(message.value);
     copied.value = true;
+    toast.success("Laporan disalin");
     setTimeout(() => { copied.value = false; }, 2000);
   } catch {
-    /* ignore */
+    toast.error("Gagal menyalin");
   }
 }
 
-// ── Mobile tab (local only — jangan ganggu ?ticket= di URL) ────────────────────
-const mobileTab = ref<"form" | "preview">("form");
-function setMobileTab(t: "form" | "preview") {
-  mobileTab.value = t;
+function shareWhatsApp() {
+  const url = whatsAppShareUrl(message.value);
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
-const prefillHint = computed(() => {
-  if (!props.ticket?.ticket_number) return "";
-  if (props.ticket?.has_incident_report || props.ticket?.incident_report) {
-    return "Menampilkan laporan tersimpan untuk tiket ini.";
+type ReportSection = "waktu" | "kejadian" | "korban" | "informasi" | "tim" | "template";
+
+const sections: { id: ReportSection; label: string; icon: string; hint: string }[] = [
+  { id: "waktu", label: "Waktu", icon: "lucide:clock", hint: "Tanggal & pukul kejadian" },
+  { id: "kejadian", label: "Kejadian", icon: "lucide:map-pin", hint: "Jenis, lokasi, rujukan RS" },
+  { id: "korban", label: "Korban", icon: "lucide:users", hint: "Identitas & penanganan" },
+  { id: "informasi", label: "Informasi", icon: "lucide:info", hint: "Sumber & pihak terlibat" },
+  { id: "tim", label: "Tim & armada", icon: "lucide:truck", hint: "Petugas & kendaraan" },
+  { id: "template", label: "Template WA", icon: "lucide:layout-template", hint: "Header & footer pesan" },
+];
+
+const activeSection = ref<ReportSection>("waktu");
+const mobilePane = ref<"nav" | "form">("form");
+
+const activeSectionMeta = computed(
+  () => sections.find((s) => s.id === activeSection.value) ?? sections[0],
+);
+
+function sectionFilled(id: ReportSection): boolean {
+  switch (id) {
+    case "waktu":
+      return !!(dateStr.value && timeIncident.value);
+    case "kejadian":
+      return !!(incidentType.value.trim() || location.value.trim());
+    case "korban":
+      return victims.value.some((v) => v.name.trim() || v.conditions.trim());
+    case "informasi":
+      return !!(sources.value.trim() || parties.value.trim());
+    case "tim":
+      return volunteers.value.some((v) => v.name.trim()) || !!vehicle.value.trim();
+    case "template":
+      return !!(template.value.header.trim() || template.value.footer.trim());
+    default:
+      return false;
   }
-  try {
-    if (REPORT_KEY.value && localStorage.getItem(REPORT_KEY.value)) {
-      return "Draft lokal untuk tiket ini dimuat ulang.";
-    }
-  } catch { /* ignore */ }
-  return "Sebagian field diisi dari data e-tiket — lengkapi sebelum salin/kirim.";
-});
+}
+
+const filledCount = computed(() => sections.filter((s) => sectionFilled(s.id)).length);
+
+function goToSection(id: ReportSection) {
+  void flushSave();
+  activeSection.value = id;
+  mobilePane.value = "form";
+}
+
+function sectionIndex(id: ReportSection) {
+  return sections.findIndex((s) => s.id === id);
+}
+
+function goPrevSection() {
+  void flushSave();
+  const i = sectionIndex(activeSection.value);
+  if (i > 0) activeSection.value = sections[i - 1].id;
+}
+
+function goNextSection() {
+  void flushSave();
+  const i = sectionIndex(activeSection.value);
+  if (i < sections.length - 1) activeSection.value = sections[i + 1].id;
+}
+
+defineExpose({ copyMessage, shareWhatsApp, saveNow: flushSave });
 </script>
 
 <template>
-  <!-- Mobile tabs -->
-  <div class="lg:hidden sticky top-0 z-10 flex border-b border-neutral-200 bg-white">
-    <button
-      v-for="t in ['form', 'preview'] as const" :key="t"
-      :class="['flex-1 py-2.5 text-sm font-medium transition-colors border-b-2', mobileTab === t ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500']"
-      @click="setMobileTab(t)"
-    >
-      {{ t === 'form' ? 'Form Isian' : 'Preview Pesan' }}
-    </button>
-  </div>
-
-  <!-- Desktop: side-by-side. Mobile: stacked tabs -->
-  <div class="flex items-start">
-
-    <!-- ── Form panel ──────────────────────────────────────────────────────── -->
-    <div :class="['flex-1 min-w-0 p-4 sm:p-6 space-y-5', mobileTab === 'preview' ? 'hidden lg:block' : '']">
-
-      <!-- Ticket info banner -->
-      <div v-if="ticket" class="bg-primary-50 rounded-xl border border-primary-200 px-4 py-3 space-y-1.5">
-        <div class="flex items-center gap-3">
-          <Icon icon="lucide:ticket" class="text-primary-500 shrink-0 text-lg" />
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-semibold text-primary-800 font-mono">{{ ticket.ticket_number }}</p>
-            <p class="text-xs text-primary-600 truncate mt-0.5">{{ ticket.requester_name }}</p>
-          </div>
-          <div v-if="savedAt" class="text-[10px] text-primary-600 shrink-0 flex items-center gap-1">
-            <Icon :icon="savingRemote ? 'lucide:loader-2' : 'lucide:check-circle'" :class="savingRemote && 'animate-spin'" />
-            {{ savingRemote ? "Menyimpan…" : `Tersimpan ${savedAt}` }}
-          </div>
-        </div>
-        <p v-if="prefillHint" class="text-xs text-primary-700/80 pl-8">{{ prefillHint }}</p>
-        <p v-if="saveError" class="text-xs text-red-600 pl-8">{{ saveError }}</p>
-      </div>
-
-      <!-- Template settings -->
-      <div class="bg-white rounded-xl border border-neutral-200">
-        <button
-          class="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors rounded-xl"
-          @click="showTemplate = !showTemplate"
-        >
-          <span class="flex items-center gap-2">
-            <Icon icon="lucide:settings-2" class="text-neutral-400" />
-            Template Header & Footer
-          </span>
-          <Icon :icon="showTemplate ? 'lucide:chevron-up' : 'lucide:chevron-down'" class="text-neutral-400 text-sm" />
-        </button>
-        <div v-if="showTemplate" class="px-4 pb-4 space-y-3 border-t border-neutral-100">
-          <div class="mt-3">
-            <label class="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Header</label>
-            <UiTextarea v-model="header" :rows="3" placeholder="Nama unit dan judul laporan..." class="font-mono" />
-          </div>
-          <div>
-            <label class="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Judul Seksi Relawan</label>
-            <UiInput v-model="volunteerTitle" placeholder="RELAWAN PMI SLEMAN" />
-          </div>
-          <div>
-            <label class="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Kalimat Penutup</label>
-            <UiTextarea v-model="closing" :rows="2" />
-          </div>
-          <div>
-            <label class="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Footer (Kontak & Info Posko)</label>
-            <UiTextarea v-model="footer" :rows="6" placeholder="*POSKO ...*&#10;🏥 Alamat&#10;☎ Call Center: ...&#10;📱 WA: ..." class="font-mono" />
-          </div>
-          <div class="flex items-center gap-2 pt-1">
-            <UiButton size="sm" @click="saveTemplate">
-              <Icon :icon="templateSaved ? 'lucide:check' : 'lucide:save'" class="text-sm" />
-              {{ templateSaved ? 'Tersimpan!' : 'Simpan Template' }}
-            </UiButton>
-            <UiButton size="sm" variant="ghost" @click="resetTemplate">
-              <Icon icon="lucide:rotate-ccw" class="text-sm" />
-              Reset
-            </UiButton>
-          </div>
-        </div>
-      </div>
-
-      <!-- Waktu kejadian -->
-      <div class="bg-white rounded-xl border border-neutral-200 p-4 space-y-3">
-        <p class="text-sm font-semibold text-neutral-700 flex items-center gap-2">
-          <Icon icon="lucide:clock" class="text-neutral-400" />
-          Waktu Kejadian
-        </p>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-xs text-neutral-500 font-medium block mb-1">Tanggal</label>
-            <UiInput v-model="dateStr" type="date" />
-          </div>
-          <div>
-            <label class="text-xs text-neutral-500 font-medium block mb-1">Pukul (WIB)</label>
-            <UiInput v-model="timeStr" type="time" />
-          </div>
-        </div>
-      </div>
-
-      <!-- Detail kejadian -->
-      <div class="bg-white rounded-xl border border-neutral-200 p-4 space-y-3">
-        <p class="text-sm font-semibold text-neutral-700 flex items-center gap-2">
-          <Icon icon="lucide:file-text" class="text-neutral-400" />
-          Detail Kejadian
-        </p>
-        <div>
-          <label class="text-xs text-neutral-500 font-medium block mb-1">Jenis Kejadian</label>
-          <UiInput v-model="incidentType" placeholder="KLL, Kebakaran, Tenggelam..." />
-        </div>
-        <div>
-          <label class="text-xs text-neutral-500 font-medium block mb-1">Lokasi Kejadian</label>
-          <UiInput v-model="location" placeholder="Nama jalan, dusun, kelurahan, kecamatan..." />
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-xs text-neutral-500 font-medium block mb-1">Korban Laki-laki</label>
-            <UiInput v-model="maleCount" placeholder="1" />
-          </div>
-          <div>
-            <label class="text-xs text-neutral-500 font-medium block mb-1">Korban Perempuan</label>
-            <UiInput v-model="femaleCount" placeholder="-" />
-          </div>
-        </div>
-        <div>
-          <label class="text-xs text-neutral-500 font-medium block mb-1">
-            RS Rujukan
-            <span class="text-neutral-400 font-normal">(opsional)</span>
-          </label>
-          <HospitalPicker
-            v-model="referralHospitalId"
-            :options="hospitalOptions"
-            :loading="loadingHospitals"
+  <div class="p-4 sm:p-6 pb-24 lg:pb-6">
+    <div class="max-w-6xl mx-auto">
+      <div
+        v-if="saveStatusLabel || dirty || savingRemote"
+        class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3.5 py-2.5 text-sm"
+        :class="saveError ? 'border-red-200 bg-red-50 text-red-700' : 'border-neutral-200 bg-neutral-50 text-neutral-600'"
+      >
+        <span class="flex items-center gap-2 min-w-0">
+          <Icon
+            :icon="savingRemote ? 'lucide:loader-2' : dirty ? 'lucide:hard-drive' : 'lucide:cloud-check'"
+            :class="['shrink-0', savingRemote && 'animate-spin', !saveError && !dirty && savedRemoteAt && 'text-emerald-600']"
           />
-        </div>
-      </div>
-
-      <!-- Korban / Pasien -->
-      <div class="space-y-3">
-        <div class="flex items-center justify-between">
-          <p class="text-sm font-semibold text-neutral-700 flex items-center gap-2">
-            <Icon icon="lucide:users" class="text-neutral-400" />
-            Korban / Pasien
-          </p>
-          <UiButton size="sm" variant="secondary" @click="addVictim">
-            <Icon icon="lucide:plus" class="text-sm" />
-            Tambah Korban
-          </UiButton>
-        </div>
-
-        <div v-for="(v, i) in victims" :key="v.id" class="bg-white rounded-xl border border-neutral-200 p-4 space-y-3">
-          <div class="flex items-center justify-between">
-            <p class="text-xs font-bold text-neutral-500 uppercase tracking-wide">
-              Korban / Pasien {{ NUM_EMOJI[i] ?? i + 1 }}
-            </p>
-            <button v-if="victims.length > 1" class="text-neutral-300 hover:text-red-400 transition-colors" @click="removeVictim(v.id)">
-              <Icon icon="lucide:x" class="text-sm" />
-            </button>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div class="col-span-2">
-              <label class="text-xs text-neutral-500 font-medium block mb-1">Nama</label>
-              <UiInput v-model="v.name" placeholder="Nama lengkap" />
-            </div>
-            <div>
-              <label class="text-xs text-neutral-500 font-medium block mb-1">Umur (tahun)</label>
-              <UiInput v-model="v.age" placeholder="45" />
-            </div>
-            <div>
-              <label class="text-xs text-neutral-500 font-medium block mb-1">Jenis Kelamin</label>
-              <UiSelect v-model="v.gender">
-                <option value="Laki-laki">Laki-laki</option>
-                <option value="Perempuan">Perempuan</option>
-              </UiSelect>
-            </div>
-            <div class="col-span-2">
-              <label class="text-xs text-neutral-500 font-medium block mb-1">Alamat</label>
-              <UiInput v-model="v.address" placeholder="Dusun, kelurahan..." />
-            </div>
-            <div class="col-span-2">
-              <label class="text-xs text-neutral-500 font-medium block mb-1">
-                Kondisi Korban <span class="text-neutral-400 font-normal">(satu kondisi per baris)</span>
-              </label>
-              <UiTextarea v-model="v.conditions" :rows="3" placeholder="Respon&#10;Pendarahan pada hidung..." />
-            </div>
-            <div class="col-span-2">
-              <label class="text-xs text-neutral-500 font-medium block mb-1">
-                Penanganan <span class="text-neutral-400 font-normal">(satu tindakan per baris)</span>
-              </label>
-              <UiTextarea v-model="v.treatments" :rows="3" placeholder="Fiksasi&#10;Pemberhentian Pendarahan&#10;Evakuasi rujuk..." />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Informasi -->
-      <div class="bg-white rounded-xl border border-neutral-200 p-4 space-y-3">
-        <p class="text-sm font-semibold text-neutral-700 flex items-center gap-2">
-          <Icon icon="lucide:info" class="text-neutral-400" />
-          Informasi Laporan
-        </p>
-        <div>
-          <label class="text-xs text-neutral-500 font-medium block mb-1">Sumber Informasi <span class="text-neutral-400 font-normal">(satu per baris)</span></label>
-          <UiTextarea v-model="sources" :rows="2" placeholder="Masyarakat" />
-        </div>
-        <div>
-          <label class="text-xs text-neutral-500 font-medium block mb-1">Pihak yang Terlibat <span class="text-neutral-400 font-normal">(satu per baris)</span></label>
-          <UiTextarea v-model="parties" :rows="3" placeholder="PMI Kabupaten Sleman&#10;Masyarakat&#10;SES" />
-        </div>
-      </div>
-
-      <!-- Tim & Kendaraan -->
-      <div class="bg-white rounded-xl border border-neutral-200 p-4 space-y-4 pb-8">
-        <p class="text-sm font-semibold text-neutral-700 flex items-center gap-2">
-          <Icon icon="lucide:users-round" class="text-neutral-400" />
-          Tim & Armada
-        </p>
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <label class="text-xs text-neutral-500 font-medium">Relawan / Petugas</label>
-            <button class="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1 transition-colors" @click="addVol">
-              <Icon icon="lucide:plus" class="text-[11px]" /> Tambah
-            </button>
-          </div>
-          <div class="space-y-2">
-            <div v-for="(v, i) in volunteers" :key="v.id" class="flex gap-2 items-center">
-              <span class="text-xs text-neutral-400 w-5 shrink-0 text-right">{{ i + 1 }}.</span>
-              <UiInput v-model="v.name" placeholder="Nama" class="flex-1" />
-              <UiInput v-model="v.role" placeholder="Peran (Driver, Crew…)" class="flex-1" />
-              <button v-if="volunteers.length > 1" class="text-neutral-300 hover:text-red-400 transition-colors shrink-0" @click="removeVol(v.id)">
-                <Icon icon="lucide:x" class="text-sm" />
-              </button>
-            </div>
-          </div>
-        </div>
-        <div>
-          <label class="text-xs text-neutral-500 font-medium block mb-1">Armada Kendaraan</label>
-          <UiInput v-model="vehicle" placeholder="AMBULANCE AB 9041 E" />
-        </div>
-      </div>
-
-    </div>
-
-    <!-- ── Preview panel (desktop: sticky; mobile: tab) ─────────────────── -->
-    <div :class="[
-      'border-l border-neutral-200 bg-neutral-50',
-      'lg:w-[420px] xl:w-[480px] lg:shrink-0',
-      'lg:sticky lg:top-0 lg:max-h-[calc(100svh-60px)] lg:overflow-hidden lg:flex lg:flex-col',
-      mobileTab === 'preview' ? 'flex-1 flex flex-col min-h-[60vh]' : 'hidden lg:flex',
-    ]">
-      <div class="flex items-center justify-between px-4 py-3 bg-white border-b border-neutral-200 shrink-0">
-        <p class="text-sm font-semibold text-neutral-700 flex items-center gap-2">
-          <Icon icon="mdi:whatsapp" class="text-green-500" />
-          Preview Pesan WA
-        </p>
-        <UiButton size="sm" @click="copyMessage">
-          <Icon :icon="copied ? 'lucide:check' : 'lucide:copy'" class="text-sm" />
-          {{ copied ? 'Tersalin!' : 'Salin Pesan' }}
+          <span class="truncate">{{ saveStatusLabel }}</span>
+        </span>
+        <UiButton
+          size="sm"
+          variant="secondary"
+          :loading="savingRemote"
+          :disabled="!dirty && !!savedRemoteAt"
+          @click="flushSave()"
+        >
+          Simpan
         </UiButton>
       </div>
-      <div class="flex-1 overflow-y-auto p-4">
-        <div class="bg-[#e5ddd5] rounded-xl p-3 min-h-full">
-          <div class="bg-white rounded-lg px-3.5 py-3 shadow-sm max-w-[92%]">
-            <pre class="text-[12.5px] leading-relaxed text-neutral-800 whitespace-pre-wrap break-words font-sans">{{ message }}</pre>
-          </div>
+
+      <!-- Mobile: Nav | Form -->
+      <div class="lg:hidden sticky top-[4.25rem] z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 mb-3 bg-neutral-50/95 backdrop-blur border-b border-neutral-100">
+        <div class="grid grid-cols-2 p-0.5 rounded-lg bg-neutral-200/70">
+          <button
+            type="button"
+            :class="[
+              'py-2.5 rounded-md text-sm font-medium transition-colors',
+              mobilePane === 'nav' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500',
+            ]"
+            @click="mobilePane = 'nav'"
+          >
+            Bagian
+          </button>
+          <button
+            type="button"
+            :class="[
+              'py-2.5 rounded-md text-sm font-medium transition-colors',
+              mobilePane === 'form' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500',
+            ]"
+            @click="mobilePane = 'form'"
+          >
+            Form
+          </button>
         </div>
       </div>
-    </div>
 
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
+        <!-- Nav kiri -->
+        <aside
+          :class="[
+            'lg:col-span-4 xl:col-span-4 lg:sticky lg:top-24 lg:self-start z-10',
+            mobilePane === 'form' ? 'hidden lg:block' : 'block',
+          ]"
+        >
+          <nav class="bg-white rounded-xl border border-neutral-200 overflow-hidden shadow-sm">
+            <div class="px-4 py-3.5 border-b border-neutral-100 flex items-center justify-between gap-2">
+              <p class="text-sm font-semibold text-neutral-700">Bagian laporan</p>
+              <span class="text-sm text-neutral-500 tabular-nums">{{ filledCount }}/{{ sections.length }}</span>
+            </div>
+            <ul class="p-2 space-y-1">
+              <li v-for="(sec, idx) in sections" :key="sec.id">
+                <button
+                  type="button"
+                  :class="[
+                    'w-full flex items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors',
+                    activeSection === sec.id
+                      ? 'bg-primary-50 text-primary-900 ring-1 ring-inset ring-primary-100'
+                      : 'text-neutral-800 hover:bg-neutral-50',
+                  ]"
+                  @click="goToSection(sec.id)"
+                >
+                  <span
+                    :class="[
+                      'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
+                      activeSection === sec.id ? 'bg-primary-100 text-primary-700' : 'bg-neutral-100 text-neutral-500',
+                    ]"
+                  >
+                    <Icon :icon="sec.icon" class="text-lg" />
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-base font-semibold leading-tight">{{ sec.label }}</span>
+                    <span class="block text-sm text-neutral-500 truncate mt-0.5">{{ sec.hint }}</span>
+                  </span>
+                  <Icon
+                    v-if="sectionFilled(sec.id)"
+                    icon="lucide:check-circle"
+                    class="text-emerald-500 text-lg shrink-0"
+                  />
+                  <span
+                    v-else
+                    class="text-sm font-medium text-neutral-400 shrink-0 w-6 text-center"
+                  >
+                    {{ idx + 1 }}
+                  </span>
+                </button>
+              </li>
+            </ul>
+          </nav>
+        </aside>
+
+        <!-- Form kanan -->
+        <section
+          :class="[
+            'lg:col-span-8 xl:col-span-8 min-w-0',
+            mobilePane === 'nav' ? 'hidden lg:block' : 'block',
+          ]"
+        >
+          <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+            <div class="px-4 sm:px-5 py-4 border-b border-neutral-100 flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <h2 class="text-base font-semibold text-neutral-900">{{ activeSectionMeta.label }}</h2>
+                <p class="text-sm text-neutral-500 mt-0.5">{{ activeSectionMeta.hint }}</p>
+              </div>
+              <span class="text-xs text-neutral-400 shrink-0 tabular-nums pt-0.5">
+                {{ sectionIndex(activeSection) + 1 }}/{{ sections.length }}
+              </span>
+            </div>
+
+            <div class="p-4 sm:p-5 space-y-4">
+              <!-- Waktu -->
+              <div v-show="activeSection === 'waktu'" class="space-y-4">
+                <UiFormField label="Tanggal kejadian">
+                  <UiInput v-model="dateStr" type="date" />
+                </UiFormField>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <UiFormField label="Waktu kejadian">
+                    <UiInput v-model="timeIncident" type="time" />
+                  </UiFormField>
+                  <UiFormField label="Tiba lokasi">
+                    <UiInput v-model="timeArrivedScene" type="time" />
+                  </UiFormField>
+                  <UiFormField label="Tiba di RS">
+                    <UiInput v-model="timeArrivedHospital" type="time" />
+                  </UiFormField>
+                </div>
+              </div>
+
+              <!-- Kejadian -->
+              <div v-show="activeSection === 'kejadian'" class="space-y-4">
+                <UiFormField label="Jenis kejadian">
+                  <UiInput v-model="incidentType" placeholder="KLL, kebakaran, tenggelam…" />
+                </UiFormField>
+                <UiFormField label="Lokasi">
+                  <UiTextarea v-model="location" :rows="3" placeholder="Alamat lengkap kejadian" />
+                </UiFormField>
+                <div class="grid grid-cols-2 gap-3 max-w-md">
+                  <UiFormField label="Korban L">
+                    <UiInput v-model="maleCount" placeholder="0" inputmode="numeric" />
+                  </UiFormField>
+                  <UiFormField label="Korban P">
+                    <UiInput v-model="femaleCount" placeholder="-" inputmode="numeric" />
+                  </UiFormField>
+                </div>
+                <UiFormField label="RS rujukan">
+                  <HospitalPicker
+                    v-model="referralHospitalId"
+                    :options="hospitalOptions"
+                    :loading="loadingHospitals"
+                  />
+                </UiFormField>
+              </div>
+
+              <!-- Korban -->
+              <div v-show="activeSection === 'korban'" class="space-y-4">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-sm text-neutral-500">{{ victims.length }} korban dicatat</p>
+                  <UiButton size="sm" variant="secondary" @click="addVictim">
+                    <Icon icon="lucide:plus" class="text-sm" />
+                    Tambah
+                  </UiButton>
+                </div>
+                <div
+                  v-for="(v, i) in victims"
+                  :key="v.id"
+                  class="rounded-lg border border-neutral-200 p-4 space-y-3"
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wide">Korban {{ i + 1 }}</p>
+                    <button
+                      v-if="victims.length > 1"
+                      type="button"
+                      class="text-neutral-400 hover:text-red-500 p-1"
+                      @click="removeVictim(v.id)"
+                    >
+                      <Icon icon="lucide:trash-2" class="text-sm" />
+                    </button>
+                  </div>
+                  <UiFormField label="Nama">
+                    <UiInput v-model="v.name" placeholder="Nama lengkap" />
+                  </UiFormField>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <UiFormField label="Umur (th)">
+                      <UiInput v-model="v.age" placeholder="18" inputmode="numeric" />
+                    </UiFormField>
+                    <UiFormField label="Jenis kelamin">
+                      <UiSelect
+                        v-model="v.gender"
+                        :options="[
+                          { value: 'Laki-laki', label: 'Laki-laki' },
+                          { value: 'Perempuan', label: 'Perempuan' },
+                        ]"
+                      />
+                    </UiFormField>
+                  </div>
+                  <UiFormField label="Alamat">
+                    <UiInput v-model="v.address" placeholder="Alamat korban" />
+                  </UiFormField>
+                  <UiFormField label="Kondisi" hint="Satu kondisi per baris">
+                    <UiTextarea v-model="v.conditions" :rows="2" placeholder="Sadar&#10;Luka pipi kanan" />
+                  </UiFormField>
+                  <UiFormField label="Penanganan" hint="Satu tindakan per baris">
+                    <UiTextarea v-model="v.treatments" :rows="2" placeholder="Pembersihan luka&#10;Evakuasi rujuk ke RS" />
+                  </UiFormField>
+                </div>
+              </div>
+
+              <!-- Informasi -->
+              <div v-show="activeSection === 'informasi'" class="space-y-4">
+                <UiFormField label="Sumber informasi" hint="Satu per baris">
+                  <UiTextarea v-model="sources" :rows="4" placeholder="PSC SES 119" />
+                </UiFormField>
+                <UiFormField label="Pihak terlibat" hint="Satu per baris">
+                  <UiTextarea v-model="parties" :rows="4" placeholder="PMI Kabupaten Sleman&#10;PSC Sleman&#10;Warga" />
+                </UiFormField>
+              </div>
+
+              <!-- Tim & armada -->
+              <div v-show="activeSection === 'tim'" class="space-y-4">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-sm font-medium text-neutral-700">Relawan / petugas</p>
+                  <button type="button" class="text-xs text-primary-600 font-medium" @click="addVol">
+                    + Tambah petugas
+                  </button>
+                </div>
+                <div class="space-y-2">
+                  <div
+                    v-for="(vol, i) in volunteers"
+                    :key="vol.id"
+                    class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-start"
+                  >
+                    <UiInput v-model="vol.name" :placeholder="`Petugas ${i + 1}`" />
+                    <UiInput v-model="vol.role" placeholder="Driver, Crew…" />
+                    <button
+                      v-if="volunteers.length > 1"
+                      type="button"
+                      class="h-9 w-9 flex items-center justify-center rounded-lg border border-neutral-200 text-neutral-400 hover:text-red-500 hover:border-red-200"
+                      @click="removeVol(vol.id)"
+                    >
+                      <Icon icon="lucide:x" class="text-sm" />
+                    </button>
+                  </div>
+                </div>
+                <UiFormField label="Armada kendaraan" hint="Satu kendaraan per baris">
+                  <UiTextarea v-model="vehicle" :rows="3" placeholder="Ambulans L300 (Nopol: AB 9041 E)" />
+                </UiFormField>
+              </div>
+
+              <!-- Template -->
+              <div v-show="activeSection === 'template'" class="space-y-4">
+                <p v-if="mode === 'unit'" class="text-sm text-neutral-500 rounded-lg bg-neutral-50 border border-neutral-100 px-3 py-2.5">
+                  Format pesan WA untuk semua laporan unit. Pengaturan permanen ada di
+                  <NuxtLink to="/unit/settings" class="text-primary-600 font-medium hover:underline">Pengaturan unit</NuxtLink>.
+                </p>
+                <p v-else class="text-sm text-neutral-500 rounded-lg bg-neutral-50 border border-neutral-100 px-3 py-2.5">
+                  Template format pesan WA untuk unit ini.
+                </p>
+                <UiFormField label="Preset">
+                  <UiSelect
+                    v-model="presetId"
+                    :disabled="templateLoading"
+                    :options="presetSelectOptions"
+                  />
+                </UiFormField>
+                <UiFormField label="Header">
+                  <UiTextarea v-model="template.header" :rows="4" class="font-mono text-xs" />
+                </UiFormField>
+                <UiFormField label="Judul seksi relawan">
+                  <UiInput v-model="template.volunteer_title" />
+                </UiFormField>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <UiFormField label="Penutup">
+                    <UiTextarea v-model="template.closing" :rows="3" />
+                  </UiFormField>
+                  <UiFormField label="Footer (kontak posko)">
+                    <UiTextarea v-model="template.footer" :rows="5" class="font-mono text-xs" />
+                  </UiFormField>
+                </div>
+                <UiButton
+                  v-if="mode === 'unit'"
+                  size="sm"
+                  :loading="templateSaving"
+                  @click="saveTemplateToServer"
+                >
+                  {{ templateSaved ? "Tersimpan!" : "Simpan template unit" }}
+                </UiButton>
+              </div>
+            </div>
+
+            <div class="px-4 sm:px-5 py-3 border-t border-neutral-100 bg-neutral-50/80 flex items-center justify-between gap-2">
+              <UiButton
+                variant="ghost"
+                size="sm"
+                :disabled="sectionIndex(activeSection) === 0"
+                @click="goPrevSection"
+              >
+                <Icon icon="lucide:chevron-left" class="text-sm" />
+                Sebelumnya
+              </UiButton>
+              <UiButton
+                v-if="sectionIndex(activeSection) < sections.length - 1"
+                size="sm"
+                @click="goNextSection"
+              >
+                Lanjut
+                <Icon icon="lucide:chevron-right" class="text-sm" />
+              </UiButton>
+              <div v-else class="flex items-center gap-2">
+                <UiButton variant="secondary" size="sm" @click="copyMessage">
+                  <Icon icon="lucide:copy" class="text-sm" />
+                  Salin WA
+                </UiButton>
+                <UiButton size="sm" @click="shareWhatsApp">
+                  <Icon icon="mdi:whatsapp" class="text-sm" />
+                  Bagikan
+                </UiButton>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
   </div>
 </template>

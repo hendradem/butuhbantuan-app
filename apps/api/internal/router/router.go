@@ -5,13 +5,11 @@ import (
 
 	"github.com/butuhbantuan/api/internal/handler"
 	"github.com/butuhbantuan/api/internal/middleware"
-	"github.com/butuhbantuan/api/internal/modules/sar"
 	"github.com/butuhbantuan/api/internal/repository"
 	"github.com/butuhbantuan/api/internal/service"
 	"github.com/butuhbantuan/api/pkg/config"
 	"github.com/butuhbantuan/api/pkg/hub"
 	"github.com/gofiber/fiber/v2"
-	"gorm.io/gorm"
 )
 
 func Register(
@@ -30,9 +28,10 @@ func Register(
 	mapTilesSvc service.MapTilesUseCase,
 	wilayah *service.WilayahResolver,
 	hospitalSvc service.HospitalUseCase,
+	assessmentSvc service.AssessmentUseCase,
+	complianceSvc service.AmbulanceComplianceUseCase,
 	cfg *config.Config,
 	eventHub *hub.Hub,
-	db *gorm.DB,
 ) {
 	emergency := handler.NewEmergencyHandler(emergencySvc, emergencyTypeSvc)
 	region := handler.NewRegionHandler(regionSvc)
@@ -40,8 +39,14 @@ func Register(
 	geocoding := handler.NewGeocodingHandler(cfg, emergencySvc)
 	authH := handler.NewAuthHandler(cfg)
 	feedbackH := handler.NewFeedbackHandler(feedbackSvc).WithOrders(orderSvc)
-	orderH := handler.NewOrderHandler(orderSvc, emergencySvc).WithDispatch(dispatchSvc).WithWilayah(wilayah)
+	orderH := handler.NewOrderHandler(orderSvc, emergencySvc).WithDispatch(dispatchSvc).WithWilayah(wilayah).WithWaDispatch(service.NewWaDispatchResolver(unitCredRepo))
+	if assessmentSvc != nil {
+		orderH = orderH.WithAssessment(assessmentSvc)
+	}
 	unitH := handler.NewUnitHandler(unitAuthSvc, orderSvc, emergencySvc, feedbackSvc).WithDispatch(dispatchSvc).WithWilayah(wilayah).WithAnalytics(analyticsSvc)
+	if assessmentSvc != nil {
+		unitH = unitH.WithAssessment(assessmentSvc)
+	}
 	sosH := handler.NewSOSHandler(sosSvc).WithWilayah(wilayah)
 	pushH := handler.NewPushHandler(pushSvc)
 	streamH := handler.NewStreamHandler(eventHub).WithEmergency(emergencySvc)
@@ -51,6 +56,14 @@ func Register(
 	var hospitalH *handler.HospitalHandler
 	if hospitalSvc != nil {
 		hospitalH = handler.NewHospitalHandler(hospitalSvc, emergencySvc)
+	}
+	var assessmentH *handler.AssessmentHandler
+	if assessmentSvc != nil {
+		assessmentH = handler.NewAssessmentHandler(assessmentSvc)
+	}
+	var complianceH *handler.AmbulanceComplianceHandler
+	if complianceSvc != nil {
+		complianceH = handler.NewAmbulanceComplianceHandler(complianceSvc)
 	}
 
 	adminAuth := middleware.AdminAuth(cfg.AdminAPIKey)
@@ -88,6 +101,11 @@ func Register(
 	em.Get("/dispatcher/:regencyID/:provinceID", emergency.GetDispatchers)
 	em.Get("/by-type/:emergencyTypeID", emergency.GetByType)
 	em.Post("/", adminAuth, emergency.Create)
+	if complianceH != nil {
+		em.Get("/:id/compliance", complianceH.GetForEmergency)
+		em.Put("/:id/compliance", adminAuth, complianceH.UpdateForEmergency)
+		em.Post("/:id/compliance/verify", adminAuth, complianceH.VerifyForEmergency)
+	}
 	em.Get("/:id", emergency.GetByID)
 	em.Put("/:id", adminAuth, emergency.Update)
 	em.Delete("/:id", adminAuth, emergency.Delete)
@@ -127,7 +145,21 @@ func Register(
 
 	ord := v1.Group("/order")
 	ord.Post("/", limitOrder, orderH.Create)
+	ord.Get("/view/:token", orderH.GetByViewToken)
+	ord.Post("/view/:token/verify-phone", limitOrder, orderH.VerifyViewTokenPhone)
 	ord.Get("/ticket/:number", orderH.GetByTicketNumber)
+	ord.Post("/ticket/:number/verify-phone", limitOrder, orderH.VerifyTicketPhone)
+
+	if assessmentH != nil {
+		assess := v1.Group("/assessment")
+		assess.Get("/template", assessmentH.GetTemplate)
+	}
+
+	if complianceH != nil {
+		comp := v1.Group("/compliance/ambulance")
+		comp.Get("/categories", complianceH.ListCategories)
+		comp.Get("/template", complianceH.GetTemplate)
+	}
 
 	track := v1.Group("/track")
 	track.Get("/:token/offer", orderH.GetOfferSession)
@@ -160,6 +192,12 @@ func Register(
 	unit.Patch("/fleet", unitAuth, unitH.UpdateFleet)
 	unit.Patch("/availability", unitAuth, unitH.UpdateAvailability)
 	unit.Patch("/wilayah", unitAuth, unitH.UpdateWilayah)
+	if complianceH != nil {
+		unit.Put("/compliance", unitAuth, complianceH.UpdateForUnit)
+	}
+	unit.Patch("/jenis-pelayanan", unitAuth, unitH.UpdateJenisPelayanan)
+	unit.Get("/report-template", unitAuth, unitH.GetReportTemplate)
+	unit.Put("/report-template", unitAuth, unitH.UpdateReportTemplate)
 	unit.Get("/stream", unitAuth, streamH.Stream)
 
 	// Dispatcher wilayah ops — gated server-side (403 if not dispatcher).
@@ -178,6 +216,7 @@ func Register(
 
 	admin := v1.Group("/admin")
 	admin.Get("/emergencies", adminAuth, emergency.GetAllAdmin)
+	admin.Get("/emergencies/:id/report-template", adminAuth, unitH.GetReportTemplateForAdmin)
 	admin.Get("/units/credentials", adminAuth, unitH.ListCredentials)
 	admin.Get("/units/:uuid/credentials", adminAuth, unitH.GetCredential)
 	admin.Post("/units/:uuid/credentials", adminAuth, unitH.SetCredentials)
@@ -201,6 +240,26 @@ func Register(
 	admin.Get("/maps/tiles", adminAuth, mapTilesH.Status)
 	admin.Get("/stream", adminAuth, streamH.AdminStream)
 
+	if assessmentH != nil {
+		adminAssess := admin.Group("/assessment")
+		adminAssess.Get("/triage-levels", adminAuth, assessmentH.ListTriageLevels)
+		adminAssess.Get("/templates", adminAuth, assessmentH.ListTemplates)
+		adminAssess.Get("/templates/:id", adminAuth, assessmentH.GetTemplateByID)
+		adminAssess.Post("/templates", adminAuth, assessmentH.CreateTemplate)
+		adminAssess.Put("/templates/:id", adminAuth, assessmentH.UpdateTemplate)
+		adminAssess.Delete("/templates/:id", adminAuth, assessmentH.DeleteTemplate)
+		adminAssess.Get("/bindings", adminAuth, assessmentH.ListBindings)
+		adminAssess.Put("/bindings", adminAuth, assessmentH.UpsertBinding)
+		adminAssess.Delete("/bindings/:typeId", adminAuth, assessmentH.DeleteBinding)
+		adminAssess.Get("/jenis-bindings", adminAuth, assessmentH.ListJenisBindings)
+		adminAssess.Put("/jenis-bindings", adminAuth, assessmentH.UpsertJenisBinding)
+		adminAssess.Delete("/jenis-bindings/:jenis", adminAuth, assessmentH.DeleteJenisBinding)
+	}
+
+	if complianceH != nil {
+		admin.Get("/compliance/queue", adminAuth, complianceH.ListVerificationQueue)
+	}
+
 	if hospitalH != nil {
 		hosp := admin.Group("/hospitals")
 		hosp.Get("/provider", adminAuth, hospitalH.Provider)
@@ -214,14 +273,4 @@ func Register(
 		unitHosp.Post("/sync", hospitalH.Sync)
 		unitHosp.Post("/import", hospitalH.Import)
 	}
-
-	// Apps — separate modules (SAR / SMC). Prefer MySQL when db is available.
-	sarH := sar.NewHandler(sar.NewStore(db))
-	sar.Mount(v1.Group("/apps/sar", adminAuth), sarH)
-	// Public view-only share (stakeholder board) — rate-limited.
-	limitSarShare := middleware.RateLimit(60, time.Minute)
-	sar.MountPublic(v1.Group("/sar/share", limitSarShare), sarH)
-	// Field GPS live track for SRU — rate-limited (pings).
-	limitSarTrack := middleware.RateLimit(120, time.Minute)
-	sar.MountLiveTrack(v1.Group("/sar/track", limitSarTrack), sarH)
 }

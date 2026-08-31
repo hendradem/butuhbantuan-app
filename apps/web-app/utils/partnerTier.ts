@@ -18,7 +18,7 @@ export function partnerTierLabel(tier: PartnerTier): string {
     case "psc":
       return "Resmi";
     case "verified":
-      return "Terverifikasi";
+      return "Swasta";
     default:
       return "Komunitas";
   }

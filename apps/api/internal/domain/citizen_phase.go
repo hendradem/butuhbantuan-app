@@ -60,9 +60,10 @@ func ResolveCitizenPhase(o OrderTicket) string {
 		if o.ArrivedAt != nil {
 			return CitizenPhaseOnScene
 		}
-		// Live share / en-route GPS counts as OTW even while status stays "accepted"
-		// until petugas taps Sampai Lokasi.
-		if o.Status == "in_progress" || o.TrackEnabledAt != nil || o.ResponderLat != 0 || o.ResponderLng != 0 {
+		// Live GPS ping counts as OTW even while status stays "accepted"
+		// until petugas taps Sampai Lokasi. track_enabled_at alone is set when
+		// the WA magic link is minted — before accept or GPS share.
+		if o.Status == "in_progress" || o.ResponderLat != 0 || o.ResponderLng != 0 {
 			return CitizenPhaseInProgress
 		}
 		return CitizenPhaseAccepted

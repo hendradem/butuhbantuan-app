@@ -54,7 +54,10 @@ const selectedEmergency = computed(() =>
 );
 
 const unitName = computed(() => selectedEmergency.value?.name ?? "");
+const orgName = computed(() => selectedEmergency.value?.organization_name ?? "");
+const regency = computed(() => selectedEmergency.value?.address?.regency ?? "");
 const storageKey = computed(() => selectedTicket.value?.emergency_uuid ?? "admin-default");
+const emergencyUuid = computed(() => selectedTicket.value?.emergency_uuid ?? "");
 
 // ── List mode filters ──────────────────────────────────────────────────────────
 const filterStatus = usePersistedQueryParam("bb-admin-reports-status", "status");
@@ -90,67 +93,131 @@ function formatDate(d: string) {
     hour: "2-digit", minute: "2-digit",
   });
 }
+
+const reportFormRef = ref<{
+  copyMessage: () => Promise<void>;
+  shareWhatsApp: () => void;
+  saveNow: () => Promise<boolean>;
+} | null>(null);
+const formStatus = ref({
+  savedLocalAt: null as string | null,
+  savedRemoteAt: null as string | null,
+  savingRemote: false,
+  copied: false,
+  dirty: false,
+  saveError: "",
+});
+
+async function onReportSaved() {
+  await refreshOrders();
+  if (ticketNumber.value) {
+    await refreshNuxtData(`admin-report-ticket-${ticketNumber.value}`);
+  }
+}
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div>
     <!-- Header -->
     <div class="page-subheader shrink-0">
-      <div class="flex items-center gap-3">
-        <NuxtLink
-          :to="ticketNumber ? `/orders/${ticketNumber}` : '/settings'"
-          class="flex items-center justify-center w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 transition-colors shrink-0"
-        >
-          <Icon icon="lucide:arrow-left" class="text-neutral-700 text-sm" />
-        </NuxtLink>
-        <div>
-          <h1 class="page-subheader-title">
-            {{ ticketNumber ? "Laporan Kejadian" : "Arsip Laporan" }}
-          </h1>
-          <p v-if="!ticketNumber" class="page-subheader-desc">
-            Daftar laporan per e-tiket · biasanya dari detail pesanan
-          </p>
-          <p v-else class="page-subheader-desc font-mono">{{ ticketNumber }}</p>
+      <div class="flex items-center justify-between gap-3 min-w-0 w-full">
+        <div class="flex items-center gap-3 min-w-0">
+          <NuxtLink
+            :to="ticketNumber ? `/orders/${ticketNumber}` : '/settings'"
+            class="flex items-center justify-center w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 transition-colors shrink-0"
+          >
+            <Icon icon="lucide:arrow-left" class="text-neutral-700 text-sm" />
+          </NuxtLink>
+          <div class="min-w-0">
+            <h1 class="page-subheader-title">
+              {{ ticketNumber ? "Laporan Kejadian" : "Arsip Laporan" }}
+            </h1>
+            <p v-if="!ticketNumber" class="page-subheader-desc">
+              Daftar laporan per e-tiket · biasanya dari detail pesanan
+            </p>
+            <p v-else class="page-subheader-desc">
+              <span class="font-mono">{{ ticketNumber }}</span>
+              <template v-if="selectedTicket?.requester_name">
+                · {{ selectedTicket.requester_name }}
+              </template>
+            </p>
+          </div>
+        </div>
+        <div v-if="ticketNumber && selectedTicket" class="flex items-center gap-2 shrink-0">
+          <span
+            v-if="formStatus.savingRemote || formStatus.savedRemoteAt || (formStatus.dirty && formStatus.savedLocalAt)"
+            class="hidden md:inline text-[11px] tabular-nums"
+            :class="formStatus.saveError ? 'text-red-500' : formStatus.dirty ? 'text-amber-600' : 'text-neutral-400'"
+          >
+            <Icon
+              :icon="formStatus.savingRemote ? 'lucide:loader-2' : formStatus.savedRemoteAt ? 'lucide:cloud-check' : 'lucide:hard-drive'"
+              :class="['inline text-xs', formStatus.savingRemote && 'animate-spin']"
+            />
+            {{
+              formStatus.savingRemote
+                ? "Menyimpan…"
+                : formStatus.savedRemoteAt
+                  ? `Server ${formStatus.savedRemoteAt}`
+                  : `Draft ${formStatus.savedLocalAt}`
+            }}
+          </span>
+          <UiButton
+            variant="ghost"
+            size="sm"
+            :loading="formStatus.savingRemote"
+            @click="reportFormRef?.saveNow()"
+          >
+            Simpan
+          </UiButton>
+          <UiButton variant="secondary" size="sm" @click="reportFormRef?.copyMessage()">
+            <Icon :icon="formStatus.copied ? 'lucide:check' : 'lucide:copy'" class="text-sm" />
+            <span class="hidden sm:inline">{{ formStatus.copied ? "Tersalin" : "Salin WA" }}</span>
+          </UiButton>
+          <UiButton size="sm" @click="reportFormRef?.shareWhatsApp()">
+            <Icon icon="mdi:whatsapp" class="text-sm" />
+            <span class="hidden sm:inline">Bagikan</span>
+          </UiButton>
         </div>
       </div>
     </div>
 
     <!-- List mode -->
-    <div v-if="!ticketNumber" data-dashboard-scroll class="flex-1 overflow-y-auto">
-      <!-- Filters -->
-      <div class="px-4 sm:px-6 py-3 bg-white border-b border-neutral-100 flex flex-wrap gap-2.5 items-center">
-        <UiSearchInput
-          v-model="search"
-          placeholder="Cari tiket, nama, unit..."
-          class="flex-1 min-w-[160px] max-w-xs"
-        />
-        <UiSelect v-model="filterStatus" class="!w-auto">
-          <option value="">Semua Status</option>
-          <option value="pending">Pending</option>
-          <option value="accepted">Diterima</option>
-          <option value="in_progress">Diproses</option>
-          <option value="completed">Selesai</option>
-          <option value="cancelled">Dibatal</option>
-        </UiSelect>
-        <p class="text-xs text-neutral-400 ml-auto shrink-0">{{ filteredOrders.length }} hasil</p>
-        <button
-          type="button"
-          class="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1 transition-colors disabled:opacity-50"
-          :disabled="pending && !!ordersData"
-          @click="refresh()"
-        >
-          <Icon icon="lucide:refresh-cw" :class="['text-[11px]', pending && 'animate-spin']" />
-          Refresh
-        </button>
-      </div>
+    <div v-if="!ticketNumber" class="p-4 sm:p-6">
+      <UiTableCard
+        title="Daftar Laporan"
+        :badge="filteredOrders.length"
+        description="Laporan kejadian per e-tiket"
+      >
+        <template #actions>
+          <UiSearchInput
+            v-model="search"
+            placeholder="Cari..."
+            class="w-28 sm:w-36 shrink-0"
+          />
+          <UiSelect v-model="filterStatus" class="!w-auto shrink-0">
+            <option value="">Semua</option>
+            <option value="pending">Pending</option>
+            <option value="accepted">Diterima</option>
+            <option value="in_progress">Diproses</option>
+            <option value="completed">Selesai</option>
+            <option value="cancelled">Dibatal</option>
+          </UiSelect>
+          <button
+            type="button"
+            class="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-neutral-200 text-neutral-500 hover:text-neutral-800 hover:border-neutral-300 transition-colors shrink-0"
+            :disabled="pending && !!ordersData"
+            aria-label="Refresh"
+            @click="refresh()"
+          >
+            <Icon icon="lucide:refresh-cw" class="text-sm" :class="{ 'animate-spin': pending }" />
+          </button>
+        </template>
 
-      <!-- Order list -->
-      <div class="p-4 sm:p-6 space-y-3">
         <template v-if="showSkeleton">
           <div
             v-for="i in 4"
             :key="`skel-${i}`"
-            class="bg-white rounded-xl border border-neutral-200 p-4"
+            class="px-4 sm:px-5 py-4 border-b border-neutral-100 last:border-0"
           >
             <div class="flex items-start justify-between gap-3">
               <div class="space-y-2 flex-1 min-w-0">
@@ -176,54 +243,60 @@ function formatDate(d: string) {
         </div>
 
         <template v-else>
-          <NuxtLink
-            v-for="order in filteredOrders"
-            :key="order.id"
-            :to="`/reports?ticket=${order.ticket_number}`"
-            class="block bg-white rounded-xl border border-neutral-200 p-4 hover:border-primary-300 hover:shadow-sm transition-all"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0">
-                <p class="font-mono text-xs font-semibold text-primary-700">{{ order.ticket_number }}</p>
-                <p class="font-semibold text-neutral-900 mt-0.5 truncate">{{ order.requester_name }}</p>
-                <p class="text-sm text-neutral-500 truncate mt-0.5">{{ order.unit_name }}</p>
-                <p class="text-xs text-neutral-400 mt-1">{{ formatDate(order.created_at) }}</p>
+          <div class="divide-y divide-neutral-100">
+            <NuxtLink
+              v-for="order in filteredOrders"
+              :key="order.id"
+              :to="`/reports?ticket=${order.ticket_number}`"
+              class="block px-4 sm:px-5 py-4 hover:bg-neutral-50 transition-colors"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="font-mono text-xs font-semibold text-primary-700">{{ order.ticket_number }}</p>
+                  <p class="font-semibold text-neutral-900 mt-0.5 truncate">{{ order.requester_name }}</p>
+                  <p class="text-sm text-neutral-500 truncate mt-0.5">{{ order.unit_name }}</p>
+                  <p class="text-xs text-neutral-400 mt-1">{{ formatDate(order.created_at) }}</p>
+                </div>
+                <div class="flex flex-col items-end gap-1.5 shrink-0">
+                  <UiStatusBadge :status="order.status" />
+                  <span
+                    v-if="hasReport(order)"
+                    class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 flex items-center gap-1"
+                  >
+                    <Icon icon="lucide:check-circle" class="text-[10px]" />
+                    Ada Laporan
+                  </span>
+                  <span
+                    v-else
+                    class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-neutral-50 text-neutral-400 border border-neutral-200"
+                  >
+                    Belum Ada Laporan
+                  </span>
+                </div>
               </div>
-              <div class="flex flex-col items-end gap-1.5 shrink-0">
-                <UiStatusBadge :status="order.status" />
-                <span
-                  v-if="hasReport(order)"
-                  class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 flex items-center gap-1"
-                >
-                  <Icon icon="lucide:check-circle" class="text-[10px]" />
-                  Ada Laporan
-                </span>
-                <span
-                  v-else
-                  class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-neutral-50 text-neutral-400 border border-neutral-200"
-                >
-                  Belum Ada Laporan
-                </span>
-              </div>
-            </div>
-          </NuxtLink>
+            </NuxtLink>
+          </div>
         </template>
-      </div>
+      </UiTableCard>
     </div>
 
     <!-- Form mode -->
-    <div v-else class="flex-1 min-h-0 overflow-y-auto">
-      <div v-if="!selectedTicket" class="p-8 text-center text-sm text-neutral-500">
-        Memuat data tiket…
-      </div>
-      <IncidentReportForm
-        v-else
-        :key="ticketNumber"
-        :unit-name="unitName"
-        :storage-key="storageKey"
-        :ticket="selectedTicket"
-        mode="admin"
-      />
+    <div v-else-if="!selectedTicket" class="p-8 text-center text-sm text-neutral-500">
+      Memuat data tiket…
     </div>
+    <IncidentReportForm
+      v-else
+      ref="reportFormRef"
+      :key="ticketNumber"
+      :unit-name="unitName"
+      :org-name="orgName"
+      :regency="regency"
+      :emergency-uuid="emergencyUuid"
+      :storage-key="storageKey"
+      :ticket="selectedTicket"
+      mode="admin"
+      @status="formStatus = $event"
+      @saved="onReportSaved"
+    />
   </div>
 </template>

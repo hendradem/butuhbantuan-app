@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { etaFromEmergency, formatEta } from "~/utils/eta";
-import { placeAnchoredMenu } from "~/utils/placeAnchoredMenu";
+import { etaFromEmergency } from "~/utils/eta";
+import { placeAnchoredMenu, refineAnchoredMenuTop } from "~/utils/placeAnchoredMenu";
+import { triageMeta } from "~/utils/triage";
+import { jenisPelayananLabel, JENIS_PELAYANAN_FILTER_OPTIONS, matchesJenisPelayananFilter } from "~/utils/jenisPelayanan";
 
 definePageMeta({ title: "Pesanan Masuk", keepalive: true });
 
 const { get, authGet } = useApi();
-const showCreateTicket = ref(false);
+
+function openCreateTicket() {
+  rememberOrderDetailBack("/orders");
+  void navigateTo("/orders/new");
+}
 
 // ── Fetch ────────────────────────────────────────────────────────────────────
 const { data: ordersData, pending: ordersPending, refresh: refreshOrders } = await useAsyncData(
@@ -33,6 +39,10 @@ const { tab: listView, setTab: setListView } = usePersistedTab(
 );
 const { pendingSos } = useOpsAlerts();
 
+function onAdminOrderLive() {
+  void refresh();
+}
+
 onActivated(() => {
   rememberOrderDetailBack("/orders");
   refreshOrders();
@@ -40,6 +50,14 @@ onActivated(() => {
 
 onMounted(() => {
   rememberOrderDetailBack("/orders");
+  if (import.meta.client) {
+    window.addEventListener("bb:admin-order-live", onAdminOrderLive);
+  }
+});
+onUnmounted(() => {
+  if (import.meta.client) {
+    window.removeEventListener("bb:admin-order-live", onAdminOrderLive);
+  }
 });
 
 const orders = computed(() => ordersData.value?.data ?? []);
@@ -49,6 +67,7 @@ const types = computed(() => typesData.value?.data ?? []);
 // ── Filters (persisted so back dari detail tetap di filter terakhir) ───────────
 const filterStatus = usePersistedQueryParam("bb-admin-orders-status", "status");
 const filterType = usePersistedQueryParam("bb-admin-orders-type", "type");
+const filterJenis = usePersistedQueryParam("bb-admin-orders-jenis", "jenis");
 const filterProvince = usePersistedQueryParam("bb-admin-orders-province", "province");
 const search = usePersistedQueryParam("bb-admin-orders-q", "q", "", { syncQuery: false });
 const page = ref(1);
@@ -94,6 +113,7 @@ const filtered = computed(() => {
   let list = inPeriod.value;
   if (filterStatus.value) list = list.filter((o: any) => o.status === filterStatus.value);
   if (filterType.value) list = list.filter((o: any) => String(o._emergency?.emergency_type?.id) === filterType.value);
+  if (filterJenis.value) list = list.filter((o: any) => matchesJenisPelayananFilter(o.jenis_pelayanan, filterJenis.value));
   if (filterProvince.value) {
     list = list.filter((o: any) =>
       o._emergency?.address?.province_id === filterProvince.value
@@ -117,7 +137,38 @@ const filtered = computed(() => {
   });
 });
 
-watch([filterStatus, filterType, filterProvince, search, datePeriod, customFrom, customTo], () => { page.value = 1; });
+watch([filterStatus, filterType, filterJenis, filterProvince, search, datePeriod, customFrom, customTo], () => { page.value = 1; });
+
+const filterMenuOpen = ref(false);
+
+const moreFilterCount = computed(() => {
+  let n = 0;
+  if (filterType.value) n += 1;
+  if (filterJenis.value) n += 1;
+  if (filterProvince.value) n += 1;
+  if (isCustomDate.value) n += 1;
+  return n;
+});
+
+const hasExtraFilters = computed(
+  () =>
+    !!filterType.value ||
+    !!filterJenis.value ||
+    !!filterProvince.value ||
+    isCustomDate.value,
+);
+
+function clearExtraFilters() {
+  filterType.value = "";
+  filterJenis.value = "";
+  filterProvince.value = "";
+  setDatePeriod("1");
+  filterMenuOpen.value = false;
+}
+
+watch(datePeriod, (v) => {
+  if (v === "custom") filterMenuOpen.value = true;
+});
 
 const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize.value)));
 const paginated = computed(() => {
@@ -205,7 +256,9 @@ function exportCSV() {
     { header: "No. HP", key: "requester_phone" },
     { header: "Unit", key: "unit_name" },
     { header: "Lokasi", key: "location" },
+    { header: "Jenis", key: "jenis_pelayanan" },
     { header: "Kondisi", key: "condition" },
+    { header: "Triase", key: "assessment_acuity" },
     { header: "Status", key: "status" },
     { header: "Petugas", key: "handler_name" },
     { header: "Catatan", key: "handling_notes" },
@@ -217,6 +270,8 @@ function exportCSV() {
     cols.map(c => {
       if (c.key === "created_at") return escape(formatDate(o[c.key]));
       if (c.key === "status") return escape(statusLabel(o[c.key]));
+      if (c.key === "assessment_acuity") return escape(triageMeta(o[c.key])?.label ?? "");
+      if (c.key === "jenis_pelayanan") return escape(jenisPelayananLabel(o[c.key] || ""));
       return escape(o[c.key]);
     }).join(",")
   );
@@ -311,25 +366,40 @@ async function onRejectConfirm(payload: { reason: string; note: string }) {
 // ── Row dropdown ──────────────────────────────────────────────────────────────
 const dropdownOrder = ref<any>(null);
 const dropdownPos = ref({ top: 0, right: 0, openUp: false });
+const dropdownEl = ref<HTMLElement | null>(null);
+const dropdownTriggerRect = ref<DOMRect | null>(null);
 
-function toggleDropdown(order: any, event: MouseEvent) {
+async function toggleDropdown(order: any, event: MouseEvent) {
   if (dropdownOrder.value?.id === order.id) {
     dropdownOrder.value = null;
+    dropdownTriggerRect.value = null;
     return;
   }
   const btn = event.currentTarget as HTMLElement;
   const rect = btn.getBoundingClientRect();
-  const pos = placeAnchoredMenu(rect, { menuHeight: 280, alignRight: true });
+  dropdownTriggerRect.value = rect;
+  // Tall when pending (dispatch actions) — toast stack is z-9999 on the right
+  const pos = placeAnchoredMenu(rect, { menuHeight: 420, alignRight: true });
   dropdownPos.value = { top: pos.top, right: pos.right, openUp: pos.openUp };
   dropdownOrder.value = order;
+  await nextTick();
+  if (dropdownEl.value && dropdownTriggerRect.value) {
+    const refined = refineAnchoredMenuTop(
+      dropdownTriggerRect.value,
+      dropdownEl.value,
+      dropdownPos.value.openUp,
+    );
+    dropdownPos.value = {
+      ...dropdownPos.value,
+      top: refined.top,
+      openUp: refined.openUp,
+    };
+  }
 }
 </script>
 
 <template>
   <div>
-    <!-- Dropdown overlay -->
-    <div v-if="dropdownOrder" class="fixed inset-0 z-[98]" @click="dropdownOrder = null" />
-
     <!-- Page header -->
     <div class="page-subheader">
       <div class="flex items-start justify-between gap-4">
@@ -344,7 +414,7 @@ function toggleDropdown(order: any, event: MouseEvent) {
           </p>
         </div>
         <div v-if="listView === 'orders'" class="flex items-center gap-2">
-          <UiButton variant="primary" @click="showCreateTicket = true">
+          <UiButton variant="primary" @click="openCreateTicket">
             <Icon icon="lucide:ticket-plus" class="text-sm" />
             Buat E-Tiket
           </UiButton>
@@ -395,13 +465,6 @@ function toggleDropdown(order: any, event: MouseEvent) {
       </div>
     </div>
 
-    <CreateOrderModal
-      v-model:open="showCreateTicket"
-      mode="admin"
-      :emergencies="emergencies"
-      @created="refresh()"
-    />
-
     <div v-if="listView === 'sos'" class="p-4 sm:p-6">
       <SosAlertsPanel :orders="orders" @go-orders="setListView('orders')" />
     </div>
@@ -415,168 +478,114 @@ function toggleDropdown(order: any, event: MouseEvent) {
 
       <div class="p-4 sm:p-6 space-y-5">
 
-      <UiTableCard>
-        <template #toolbar>
-          <div class="flex flex-wrap items-center gap-2.5">
-            <UiSearchInput
-              v-model="search"
-              placeholder="Cari nama, tiket, unit..."
-              class="flex-1 min-w-[160px] max-w-xs"
-            />
-            <OrderPeriodFilter
-              compact
-              :period="datePeriod"
-              :presets="datePresets"
-              :is-custom="isCustomDate"
-              :custom-from="customFrom"
-              :custom-to="customTo"
-              @update:period="setDatePeriod"
-              @update:custom-from="customFrom = $event"
-              @update:custom-to="customTo = $event"
-            />
-            <UiSelect v-model="filterStatus" class="!w-auto">
-              <option value="">Semua Status</option>
-              <option value="pending">Pending</option>
-              <option value="accepted">Diterima</option>
-              <option value="in_progress">Diproses</option>
-              <option value="completed">Selesai</option>
-              <option value="cancelled">Dibatal</option>
-            </UiSelect>
-            <UiSelect v-model="filterType" class="!w-auto">
-              <option value="">Semua Jenis</option>
-              <option v-for="t in types" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
-            </UiSelect>
-            <UiSelect v-model="filterProvince" class="!w-auto">
-              <option value="">Semua Provinsi (tercakup)</option>
-              <option v-for="p in provinces" :key="p.id" :value="p.id">{{ p.name }}</option>
-            </UiSelect>
-          </div>
+      <UiTableCard
+        title="Daftar Pesanan"
+        :badge="filtered.length"
+        description="Daftar live — filter & periode mengikuti statistik di atas"
+      >
+        <template #actions>
+          <UiSearchInput
+            v-model="search"
+            placeholder="Cari..."
+            class="w-28 sm:w-36 shrink-0"
+          />
+          <UiSelect v-model="filterStatus" class="!w-auto shrink-0">
+            <option value="">Semua</option>
+            <option value="pending">Pending</option>
+            <option value="accepted">Diterima</option>
+            <option value="in_progress">Diproses</option>
+            <option value="completed">Selesai</option>
+            <option value="cancelled">Dibatal</option>
+          </UiSelect>
+          <UiSelect
+            class="!w-auto shrink-0"
+            :model-value="datePeriod"
+            @update:model-value="setDatePeriod"
+          >
+            <option v-for="opt in datePresets" :key="opt.id" :value="opt.id">
+              {{ opt.label }}
+            </option>
+          </UiSelect>
+
+          <TableMoreFilters v-model:open="filterMenuOpen" :active-count="moreFilterCount">
+            <div>
+              <p class="text-[11px] font-medium text-neutral-400 mb-1.5">Jenis layanan</p>
+              <UiSelect v-model="filterType" class="w-full">
+                <option value="">Semua layanan</option>
+                <option v-for="t in types" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
+              </UiSelect>
+            </div>
+            <div>
+              <p class="text-[11px] font-medium text-neutral-400 mb-1.5">Jenis pelayanan</p>
+              <UiSelect v-model="filterJenis" class="w-full">
+                <option value="">Semua jenis</option>
+                <option
+                  v-for="opt in JENIS_PELAYANAN_FILTER_OPTIONS"
+                  :key="opt.code"
+                  :value="opt.code"
+                >
+                  {{ opt.label }}
+                </option>
+                <option value="__empty__">Belum diisi</option>
+              </UiSelect>
+            </div>
+            <div>
+              <p class="text-[11px] font-medium text-neutral-400 mb-1.5">Provinsi</p>
+              <UiSelect v-model="filterProvince" class="w-full">
+                <option value="">Semua provinsi</option>
+                <option v-for="p in provinces" :key="p.id" :value="p.id">{{ p.name }}</option>
+              </UiSelect>
+            </div>
+            <div v-if="isCustomDate" class="space-y-2">
+              <p class="text-[11px] font-medium text-neutral-400">Rentang kustom</p>
+              <UiInput
+                type="date"
+                class="w-full"
+                :model-value="customFrom"
+                @update:model-value="customFrom = $event"
+              />
+              <UiInput
+                type="date"
+                class="w-full"
+                :model-value="customTo"
+                :min="customFrom || undefined"
+                @update:model-value="customTo = $event"
+              />
+            </div>
+            <template v-if="hasExtraFilters" #footer>
+              <button
+                type="button"
+                class="w-full text-xs font-medium text-neutral-600 hover:text-neutral-900 py-2 rounded-lg hover:bg-neutral-50 transition-colors"
+                @click="clearExtraFilters"
+              >
+                Reset filter tambahan
+              </button>
+            </template>
+          </TableMoreFilters>
         </template>
 
         <!-- Table -->
-        <UiTable>
-            <thead>
-              <tr>
-                <th class="ui-th-sortable" @click="sortBy('created_at')">
-                  <span class="ui-th-label">
-                    Tiket
-                    <Icon :icon="sortCol==='created_at'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='created_at'?'text-neutral-700':'text-neutral-300']" />
-                  </span>
-                </th>
-                <th class="ui-th-sortable" @click="sortBy('requester_name')">
-                  <span class="ui-th-label">
-                    Pelapor
-                    <Icon :icon="sortCol==='requester_name'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='requester_name'?'text-neutral-700':'text-neutral-300']" />
-                  </span>
-                </th>
-                <th class="ui-th-sortable hidden md:table-cell" @click="sortBy('unit_name')">
-                  <span class="ui-th-label">
-                    Unit
-                    <Icon :icon="sortCol==='unit_name'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='unit_name'?'text-neutral-700':'text-neutral-300']" />
-                  </span>
-                </th>
-                <th class="hidden sm:table-cell">ETA</th>
-                <th class="ui-th-sortable" @click="sortBy('status')">
-                  <span class="ui-th-label">
-                    Status
-                    <Icon :icon="sortCol==='status'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='status'?'text-neutral-700':'text-neutral-300']" />
-                  </span>
-                </th>
-                <th class="ui-th-right"><span class="sr-only">Aksi</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="showOrdersSkeleton" v-for="i in 4" :key="`skel-${i}`">
-                <td>
-                  <div class="soft-skel h-4 w-32 mb-2" />
-                  <div class="soft-skel h-3.5 w-24" />
-                </td>
-                <td>
-                  <div class="soft-skel h-4 w-36 mb-2" />
-                  <div class="soft-skel h-3.5 w-28" />
-                </td>
-                <td class="hidden md:table-cell">
-                  <div class="soft-skel h-4 w-28 mb-2" />
-                  <div class="soft-skel h-3.5 w-20" />
-                </td>
-                <td class="hidden sm:table-cell">
-                  <div class="soft-skel h-4 w-14" />
-                </td>
-                <td>
-                  <div class="soft-skel h-6 rounded-full w-20" />
-                </td>
-                <td class="ui-td-right">
-                  <div class="inline-flex justify-end gap-1.5">
-                    <div class="soft-skel h-8 rounded-lg w-8" />
-                  </div>
-                </td>
-              </tr>
-              <tr v-else-if="!paginated.length">
-                <td colspan="6">
-                  <UiEmptyState title="Tidak ada pesanan" description="Belum ada pesanan yang cocok dengan filter.">
-                    <template #icon>
-                      <Icon icon="lucide:inbox" class="text-neutral-400 text-2xl" />
-                    </template>
-                  </UiEmptyState>
-                </td>
-              </tr>
-              <tr v-else v-for="order in paginated" :key="order.id">
-                <td>
-                  <div class="flex items-center gap-2">
-                    <span class="ui-cell-mono">{{ order.ticket_number }}</span>
-                    <span
-                      v-if="order.source === 'sos'"
-                      class="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs font-medium text-emergency-700 ring-1 ring-inset ring-emergency-200"
-                    >
-                      <span class="h-1.5 w-1.5 rounded-full bg-emergency-500 animate-pulse" />
-                      SOS
-                    </span>
-                  </div>
-                  <p class="ui-cell-desc">{{ formatDate(order.created_at) }}</p>
-                </td>
-
-                <td>
-                  <p class="ui-cell-title">{{ order.requester_name }}</p>
-                  <p class="ui-cell-desc">{{ order.requester_phone }}</p>
-                </td>
-
-                <td class="hidden md:table-cell">
-                  <p class="ui-cell-title">{{ order.unit_name || "—" }}</p>
-                  <p v-if="order._emergency?.address?.regency" class="ui-cell-desc">
-                    {{ order._emergency.address.regency }}
-                  </p>
-                </td>
-
-                <td class="hidden sm:table-cell">
-                  <p class="ui-cell-title tabular-nums">{{ formatEta(order._eta) }}</p>
-                  <p class="ui-cell-desc">ke lokasi</p>
-                </td>
-
-                <td>
-                  <UiStatusBadge :status="order.status" />
-                </td>
-
-                <td class="ui-td-right">
-                  <div class="inline-flex items-center justify-end gap-2">
-                    <NuxtLink
-                      :to="`/orders/${order.ticket_number}`"
-                      class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-neutral-700 bg-white rounded-lg shadow-sm ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50 transition-colors"
-                    >
-                      <Icon icon="lucide:external-link" class="text-sm text-neutral-500" />
-                      Detail
-                    </NuxtLink>
-                    <button
-                      type="button"
-                      class="inline-flex items-center justify-center w-9 h-9 text-neutral-600 bg-white rounded-lg shadow-sm ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50 transition-colors"
-                      @click.stop="toggleDropdown(order, $event)"
-                    >
-                      <Icon icon="lucide:more-vertical" class="text-sm" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-        </UiTable>
+        <OrdersExpandableTable
+          :orders="paginated"
+          :loading="showOrdersSkeleton"
+          variant="admin"
+          :sort-col="sortCol"
+          :sort-dir="sortDir"
+          detail-base-path="/orders"
+          :get-eta="(o) => o._eta"
+          @sort="sortBy"
+        >
+          <template #row-actions="{ order }">
+            <button
+              type="button"
+              class="inline-flex items-center justify-center w-8 h-8 text-neutral-500 rounded-lg hover:bg-neutral-100 hover:text-neutral-800 transition-colors opacity-70 group-hover:opacity-100"
+              aria-label="Aksi lainnya"
+              @click="toggleDropdown(order, $event)"
+            >
+              <Icon icon="lucide:more-horizontal" class="text-base" />
+            </button>
+          </template>
+        </OrdersExpandableTable>
 
         <template v-if="filtered.length" #footer>
           <UiPagination
@@ -639,9 +648,13 @@ function toggleDropdown(order: any, event: MouseEvent) {
             Buka di Google Maps
           </a>
         </div>
-        <div v-if="detailOrder.condition">
-          <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">Kondisi</p>
-          <p class="text-neutral-700">{{ detailOrder.condition }}</p>
+        <div v-if="detailOrder.assessment?.answers?.length || detailOrder.assessment_acuity || detailOrder.condition">
+          <OrderAssessmentBlock
+            compact
+            :assessment="detailOrder.assessment"
+            :acuity="detailOrder.assessment_acuity"
+            :condition="detailOrder.condition"
+          />
         </div>
         <div v-if="detailOrder.handler_name">
           <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">Penanganan</p>
@@ -658,18 +671,20 @@ function toggleDropdown(order: any, event: MouseEvent) {
       </div>
     </UiModal>
 
-    <!-- Aksi dropdown (teleported to avoid overflow clipping) -->
+    <!-- Aksi dropdown: above toast stack (z-9999) so menus stay usable when pesanan masuk -->
     <Teleport to="body">
-      <div
-        v-if="dropdownOrder"
-        class="fixed z-[99] w-56 bg-white rounded-lg shadow-lg border border-neutral-200 overflow-hidden"
-        :style="{
-          top: dropdownPos.top + 'px',
-          right: dropdownPos.right + 'px',
-          transform: dropdownPos.openUp ? 'translateY(-100%)' : undefined,
-        }"
-        @click.stop
-      >
+      <template v-if="dropdownOrder">
+        <div class="fixed inset-0 z-[10050]" @click="dropdownOrder = null" />
+        <div
+          ref="dropdownEl"
+          class="fixed z-[10051] w-56 max-h-[min(70vh,28rem)] overflow-y-auto bg-white rounded-lg shadow-lg border border-neutral-200"
+          :style="{
+            top: dropdownPos.top + 'px',
+            right: dropdownPos.right + 'px',
+            transform: dropdownPos.openUp ? 'translateY(-100%)' : undefined,
+          }"
+          @click.stop
+        >
         <div v-if="['pending', 'accepted'].includes(dropdownOrder.status)" class="py-1">
           <p class="px-4 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">Dispatch</p>
           <button
@@ -746,7 +761,8 @@ function toggleDropdown(order: any, event: MouseEvent) {
             Batalkan kejadian
           </button>
         </div>
-      </div>
+        </div>
+      </template>
     </Teleport>
 
     <ReassignModal

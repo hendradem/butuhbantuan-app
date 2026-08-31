@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { convertPhoneNumber } from "~/utils/convertPhoneNumber";
+import { unitUsesWaDispatch } from "~/utils/waContact";
 
 const props = defineProps<{ data: any }>();
 
@@ -8,6 +9,7 @@ const { rememberFromEmergency } = useRecentUnits();
 
 const emergencyData = computed(() => props.data?.emergencyData);
 const isHospital = computed(() => emergencyData.value?.organization_type === "rumah_sakit");
+const waDispatch = computed(() => unitUsesWaDispatch(props.data));
 
 function onHubungi() {
   // Hospitals don't use the dispatch/order flow — call IGD directly.
@@ -25,6 +27,7 @@ function onHubungi() {
     emergencyData.value?.name ?? "",
     "whatsapp",
     wa,
+    { waDispatch: waDispatch.value },
   );
 }
 

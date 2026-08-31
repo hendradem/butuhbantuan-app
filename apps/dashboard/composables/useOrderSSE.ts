@@ -3,7 +3,7 @@ import { toast } from "~/utils/appToast";
 type OrderSSEHandlers = {
   onNewOrder?: (order?: any) => void;
   onArrived?: (order: any) => void;
-  onReassigned?: () => void;
+  onReassigned?: (order?: any) => void;
   /** Status / wilayah ops refresh (accept, exhausted, location, etc.). */
   onOrderUpdated?: (order?: any) => void;
   /** Skip built-in toast (use custom UI instead). */
@@ -22,6 +22,16 @@ export function useOrderSSE(
 ) {
   const opts: OrderSSEHandlers =
     typeof handlers === "function" ? { onNewOrder: handlers } : handlers;
+
+  function emitUpdate(order?: any) {
+    if (opts.onOrderUpdated) opts.onOrderUpdated(order);
+    else opts.onNewOrder?.(order);
+  }
+
+  function emitReassigned(order?: any) {
+    if (opts.onReassigned) opts.onReassigned(order);
+    else emitUpdate(order);
+  }
 
   let es: EventSource | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -49,28 +59,32 @@ export function useOrderSSE(
       }
     });
 
-    es.addEventListener("order_reassigned", () => {
+    es.addEventListener("order_reassigned", (e: MessageEvent) => {
       if (!opts.silentToast) {
         toast("Tiket dialihkan ke unit lain", { duration: 4000 });
       }
-      opts.onReassigned?.() ?? opts.onNewOrder?.();
+      let payload: any;
+      try {
+        payload = JSON.parse(e.data);
+      } catch {
+        payload = undefined;
+      }
+      emitReassigned(payload);
     });
 
     es.addEventListener("order_dispatch_exhausted", (e: MessageEvent) => {
       try {
-        const order = JSON.parse(e.data);
-        opts.onOrderUpdated?.(order) ?? opts.onNewOrder?.(order);
+        emitUpdate(JSON.parse(e.data));
       } catch {
-        opts.onOrderUpdated?.() ?? opts.onNewOrder?.();
+        emitUpdate();
       }
     });
 
     es.addEventListener("order_updated", (e: MessageEvent) => {
       try {
-        const order = JSON.parse(e.data);
-        opts.onOrderUpdated?.(order) ?? opts.onNewOrder?.(order);
+        emitUpdate(JSON.parse(e.data));
       } catch {
-        opts.onOrderUpdated?.() ?? opts.onNewOrder?.();
+        emitUpdate();
       }
     });
 

@@ -2,17 +2,22 @@
 import { Icon } from "@iconify/vue";
 import { toast } from "~/utils/appToast";
 import { estimateEtaMinutes, formatEta } from "~/utils/eta";
-import { placeAnchoredMenu } from "~/utils/placeAnchoredMenu";
+import { placeAnchoredMenu, refineAnchoredMenuTop } from "~/utils/placeAnchoredMenu";
+import { compareOrdersByAcuity, formatTriageSummary } from "~/utils/triage";
+import { JENIS_PELAYANAN_FILTER_OPTIONS, matchesJenisPelayananFilter } from "~/utils/jenisPelayanan";
 import UnitOpsStats from "~/components/unit/UnitOpsStats.vue";
 import type { HeatPoint } from "~/components/analytics/HeatmapViz.vue";
 
 definePageMeta({ layout: "unit", title: "Pesanan Masuk", keepalive: true });
 
-const { unitHeaders, logout, emergencyUUID } = useUnitAuth();
+const { unitHeaders, logout } = useUnitAuth();
 const config = useRuntimeConfig();
 const baseUrl = config.public.apiBaseUrl as string;
 const webAppUrl = (config.public.webAppUrl as string) || "http://localhost:3000";
-const showCreateTicket = ref(false);
+
+function openCreateTicket() {
+  void navigateTo("/unit/orders/new");
+}
 
 const STATUS_VALUES = ["all", "pending", "in_progress", "completed"] as const;
 const { tab: statusFilter, setTab: setStatusFilter } = usePersistedTab(
@@ -107,6 +112,7 @@ const orders = computed(() => data.value?.data ?? []);
 
 const search = usePersistedQueryParam("bb-unit-orders-q", "q", "", { syncQuery: false });
 const sourceFilter = usePersistedQueryParam("bb-unit-orders-src", "src", "", { syncQuery: false });
+const jenisFilter = usePersistedQueryParam("bb-unit-orders-jenis", "jenis", "", { syncQuery: false });
 const gpsOnly = usePersistedQueryParam("bb-unit-orders-gps", "gps", "", { syncQuery: false });
 
 const {
@@ -140,6 +146,9 @@ const filtered = computed(() => {
       (o: any) => Number(o.requester_lat) && Number(o.requester_lng),
     );
   }
+  if (jenisFilter.value) {
+    base = base.filter((o: any) => matchesJenisPelayananFilter(o.jenis_pelayanan, jenisFilter.value));
+  }
   const q = search.value.trim().toLowerCase();
   if (!q) return base;
   return base.filter(
@@ -152,29 +161,49 @@ const filtered = computed(() => {
   );
 });
 
-type UnitSortCol = 'ticket_number' | 'requester_name' | 'created_at' | 'status';
-const sortCol = ref<UnitSortCol>('created_at');
-const sortDir = ref<'asc' | 'desc'>('desc');
+type UnitSortCol = "ticket_number" | "requester_name" | "created_at" | "status" | "assessment_acuity";
+const sortCol = ref<UnitSortCol>("created_at");
+const sortDir = ref<"asc" | "desc">("desc");
+
+watch(
+  statusFilter,
+  (v) => {
+    if (v === "pending") {
+      sortCol.value = "assessment_acuity";
+      sortDir.value = "asc";
+    }
+  },
+  { immediate: true },
+);
 
 function sortBy(col: UnitSortCol) {
-  if (sortCol.value === col) sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
-  else { sortCol.value = col; sortDir.value = col === 'created_at' ? 'desc' : 'asc'; }
+  if (sortCol.value === col) sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
+  else {
+    sortCol.value = col;
+    sortDir.value = col === "created_at" ? "desc" : "asc";
+  }
   page.value = 1;
 }
 
 const sortedFiltered = computed(() =>
   [...filtered.value].sort((a: any, b: any) => {
-    const va = String(a[sortCol.value] ?? '');
-    const vb = String(b[sortCol.value] ?? '');
+    if (sortCol.value === "assessment_acuity") {
+      const cmp = compareOrdersByAcuity(a, b);
+      return sortDir.value === "asc" ? cmp : -cmp;
+    }
+    const va = String(a[sortCol.value] ?? "");
+    const vb = String(b[sortCol.value] ?? "");
     const cmp = va.localeCompare(vb);
-    return sortDir.value === 'asc' ? cmp : -cmp;
-  })
+    return sortDir.value === "asc" ? cmp : -cmp;
+  }),
 );
 
 const page = ref(1);
 const pageSize = ref(20);
-watch([statusFilter, search, datePeriod, customFrom, customTo, sourceFilter, gpsOnly], () => {
+const mobileExpanded = ref<string | null>(null);
+watch([statusFilter, search, datePeriod, customFrom, customTo, sourceFilter, jenisFilter, gpsOnly], () => {
   page.value = 1;
+  mobileExpanded.value = null;
 });
 const totalPages = computed(() => Math.max(1, Math.ceil(sortedFiltered.value.length / pageSize.value)));
 const paginated = computed(() => {
@@ -200,6 +229,7 @@ const hasExtraFilters = computed(
     statusFilter.value !== "all" ||
     !!search.value.trim() ||
     !!sourceFilter.value ||
+    !!jenisFilter.value ||
     gpsOnly.value === "1" ||
     datePeriod.value !== "1",
 );
@@ -208,25 +238,13 @@ const hasExtraFilters = computed(
 const moreFilterCount = computed(() => {
   let n = 0;
   if (sourceFilter.value) n += 1;
+  if (jenisFilter.value) n += 1;
   if (gpsOnly.value === "1") n += 1;
   if (datePeriod.value === "custom") n += 1;
   return n;
 });
 
 const filterMenuOpen = ref(false);
-const filterMenuRef = ref<HTMLElement | null>(null);
-
-function onFilterMenuOutside(e: MouseEvent) {
-  if (!filterMenuOpen.value || !filterMenuRef.value) return;
-  if (!filterMenuRef.value.contains(e.target as Node)) filterMenuOpen.value = false;
-}
-
-onMounted(() => {
-  if (import.meta.client) document.addEventListener("mousedown", onFilterMenuOutside);
-});
-onUnmounted(() => {
-  if (import.meta.client) document.removeEventListener("mousedown", onFilterMenuOutside);
-});
 
 watch(datePeriod, (v) => {
   if (v === "custom") filterMenuOpen.value = true;
@@ -236,6 +254,7 @@ function clearExtraFilters() {
   setStatusFilter("all");
   search.value = "";
   sourceFilter.value = "";
+  jenisFilter.value = "";
   gpsOnly.value = "";
   setDatePeriod("1");
   filterMenuOpen.value = false;
@@ -243,7 +262,7 @@ function clearExtraFilters() {
 
 /** Points for interactive sebaran — ikut filter status / sumber / GPS / cari */
 const mapPoints = computed<HeatPoint[]>(() =>
-  filtered.value.map((o: any) => ({
+  sortedFiltered.value.map((o: any) => ({
     lat: Number(o.requester_lat) || 0,
     lng: Number(o.requester_lng) || 0,
     count: 1,
@@ -251,9 +270,13 @@ const mapPoints = computed<HeatPoint[]>(() =>
     ticket_number: o.ticket_number,
     status: o.status,
     requester_name: o.requester_name,
+    requester_phone: o.requester_phone,
     unit_name: o.unit_name,
     condition: o.condition,
     location: o.location,
+    jenis_pelayanan: o.jenis_pelayanan,
+    assessment_acuity: o.assessment_acuity,
+    assessment: o.assessment,
     created_at: formatDate(o.created_at),
     regency: o.regency || "",
     province: o.province || "",
@@ -446,17 +469,34 @@ watch(showDetail, (v) => { if (!v) resetHistory(); });
 // ── Row dropdown ──────────────────────────────────────────────────────────────
 const dropdownOrder = ref<any>(null);
 const dropdownPos = ref({ top: 0, right: 0, openUp: false });
+const dropdownEl = ref<HTMLElement | null>(null);
+const dropdownTriggerRect = ref<DOMRect | null>(null);
 
-function toggleDropdown(order: any, event: MouseEvent) {
+async function toggleDropdown(order: any, event: MouseEvent) {
   if (dropdownOrder.value?.id === order.id) {
     dropdownOrder.value = null;
+    dropdownTriggerRect.value = null;
     return;
   }
   const btn = event.currentTarget as HTMLElement;
   const rect = btn.getBoundingClientRect();
-  const pos = placeAnchoredMenu(rect, { menuHeight: 280, alignRight: true });
+  dropdownTriggerRect.value = rect;
+  const pos = placeAnchoredMenu(rect, { menuHeight: 420, alignRight: true });
   dropdownPos.value = { top: pos.top, right: pos.right, openUp: pos.openUp };
   dropdownOrder.value = order;
+  await nextTick();
+  if (dropdownEl.value && dropdownTriggerRect.value) {
+    const refined = refineAnchoredMenuTop(
+      dropdownTriggerRect.value,
+      dropdownEl.value,
+      dropdownPos.value.openUp,
+    );
+    dropdownPos.value = {
+      ...dropdownPos.value,
+      top: refined.top,
+      openUp: refined.openUp,
+    };
+  }
 }
 
 // ── WA follow-up (for active orders) ─────────────────────────────────────────
@@ -474,7 +514,9 @@ function sendFollowUpWA(order: any) {
     ``,
     `📋 *No. Tiket:* ${order.ticket_number}`,
     order.location ? `📍 *Lokasi:* ${order.location}` : null,
-    order.condition ? `🚨 *Kondisi:* ${order.condition}` : null,
+    formatTriageSummary(order.assessment, order.condition)
+      ? `🚨 *Kondisi:* ${formatTriageSummary(order.assessment, order.condition)}`
+      : null,
     ``,
     `Pantau status laporan Anda secara langsung di:`,
     webUrl,
@@ -523,7 +565,7 @@ function sendFollowUpWA(order: any) {
               Tabel
             </button>
           </div>
-          <UiButton variant="primary" class="flex-1 sm:flex-none justify-center" @click="showCreateTicket = true">
+          <UiButton variant="primary" class="flex-1 sm:flex-none justify-center" @click="openCreateTicket">
             <Icon icon="lucide:ticket-plus" class="text-sm" />
             <span class="sm:inline">Buat E-Tiket</span>
           </UiButton>
@@ -571,14 +613,6 @@ function sendFollowUpWA(order: any) {
         />
       </div>
     </div>
-    <CreateOrderModal
-      v-model:open="showCreateTicket"
-      mode="unit"
-      :emergency-uuid="emergencyUUID || undefined"
-      :unit-name="(profile as any)?.name"
-      @created="refresh()"
-    />
-
     <!-- Fetch error banner (non-auth errors) -->
     <div v-if="fetchError" class="mx-4 mt-4 sm:mx-6 flex items-center gap-2 rounded-xl bg-emergency-50 border border-emergency-200 px-4 py-3 text-sm text-emergency-700">
       <Icon icon="lucide:alert-circle" class="text-base shrink-0" />
@@ -619,71 +653,62 @@ function sendFollowUpWA(order: any) {
             </option>
           </UiSelect>
 
-          <div ref="filterMenuRef" class="relative shrink-0">
-            <button
-              type="button"
-              class="inline-flex items-center gap-1.5 h-9 px-2.5 text-xs font-medium rounded-lg border transition-colors"
-              :class="filterMenuOpen || moreFilterCount
-                ? 'bg-neutral-900 text-white border-neutral-900'
-                : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'"
-              :aria-expanded="filterMenuOpen"
-              aria-label="Filter lainnya"
-              @click="filterMenuOpen = !filterMenuOpen"
-            >
-              <Icon icon="lucide:sliders-horizontal" class="text-sm" />
-              <span class="hidden md:inline">Lainnya</span>
-              <span
-                v-if="moreFilterCount"
-                class="inline-flex items-center justify-center min-w-[1.1rem] h-4 px-1 rounded-full text-[10px] font-bold"
-                :class="filterMenuOpen || moreFilterCount ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-700'"
-              >{{ moreFilterCount }}</span>
-            </button>
-
-            <div
-              v-if="filterMenuOpen"
-              class="absolute right-0 top-full mt-1.5 z-[60] w-64 rounded-xl border border-neutral-200 bg-white shadow-lg p-3 space-y-3"
-            >
-              <div>
-                <p class="text-[11px] font-medium text-neutral-400 mb-1.5">Sumber</p>
-                <UiSelect v-model="sourceFilter" class="w-full">
-                  <option value="">Semua sumber</option>
-                  <option value="sos">SOS</option>
-                  <option value="regular">Non-SOS</option>
-                </UiSelect>
-              </div>
-              <div>
-                <p class="text-[11px] font-medium text-neutral-400 mb-1.5">Lokasi</p>
-                <UiSelect v-model="gpsOnly" class="w-full">
-                  <option value="">Semua lokasi</option>
-                  <option value="1">Ada GPS</option>
-                </UiSelect>
-              </div>
-              <div v-if="isCustomDate" class="space-y-2">
-                <p class="text-[11px] font-medium text-neutral-400">Rentang kustom</p>
-                <UiInput
-                  type="date"
-                  class="w-full"
-                  :model-value="customFrom"
-                  @update:model-value="customFrom = $event"
-                />
-                <UiInput
-                  type="date"
-                  class="w-full"
-                  :model-value="customTo"
-                  :min="customFrom || undefined"
-                  @update:model-value="customTo = $event"
-                />
-              </div>
+          <TableMoreFilters v-model:open="filterMenuOpen" :active-count="moreFilterCount">
+            <div>
+              <p class="text-[11px] font-medium text-neutral-400 mb-1.5">Jenis pelayanan</p>
+              <UiSelect v-model="jenisFilter" class="w-full">
+                <option value="">Semua jenis</option>
+                <option
+                  v-for="opt in JENIS_PELAYANAN_FILTER_OPTIONS"
+                  :key="opt.code"
+                  :value="opt.code"
+                >
+                  {{ opt.label }}
+                </option>
+                <option value="__empty__">Belum diisi</option>
+              </UiSelect>
+            </div>
+            <div>
+              <p class="text-[11px] font-medium text-neutral-400 mb-1.5">Sumber</p>
+              <UiSelect v-model="sourceFilter" class="w-full">
+                <option value="">Semua sumber</option>
+                <option value="sos">SOS</option>
+                <option value="regular">Non-SOS</option>
+              </UiSelect>
+            </div>
+            <div>
+              <p class="text-[11px] font-medium text-neutral-400 mb-1.5">Lokasi</p>
+              <UiSelect v-model="gpsOnly" class="w-full">
+                <option value="">Semua lokasi</option>
+                <option value="1">Ada GPS</option>
+              </UiSelect>
+            </div>
+            <div v-if="isCustomDate" class="space-y-2">
+              <p class="text-[11px] font-medium text-neutral-400">Rentang kustom</p>
+              <UiInput
+                type="date"
+                class="w-full"
+                :model-value="customFrom"
+                @update:model-value="customFrom = $event"
+              />
+              <UiInput
+                type="date"
+                class="w-full"
+                :model-value="customTo"
+                :min="customFrom || undefined"
+                @update:model-value="customTo = $event"
+              />
+            </div>
+            <template v-if="hasExtraFilters" #footer>
               <button
-                v-if="hasExtraFilters"
                 type="button"
                 class="w-full text-xs font-medium text-neutral-600 hover:text-neutral-900 py-2 rounded-lg hover:bg-neutral-50 transition-colors"
                 @click="clearExtraFilters"
               >
                 Reset semua filter
               </button>
-            </div>
-          </div>
+            </template>
+          </TableMoreFilters>
 
           <div v-if="viewMode === 'map'" class="flex items-center gap-2 shrink-0">
             <span class="text-xs font-medium hidden lg:inline" :class="showHeat ? 'text-neutral-700' : 'text-neutral-400'">Heatmap</span>
@@ -740,14 +765,10 @@ function sendFollowUpWA(order: any) {
               </div>
               <div class="soft-skel h-3.5 w-28" />
               <div class="soft-skel h-3 w-full" />
-              <div class="flex gap-2">
-                <div class="soft-skel h-9 rounded-lg flex-1" />
-                <div class="soft-skel h-9 rounded-lg w-9" />
-              </div>
             </div>
           </template>
 
-          <div v-else-if="!filtered.length" class="py-2">
+          <div v-else-if="!paginated.length" class="py-2">
             <UiEmptyState title="Tidak ada pesanan" description="Belum ada pesanan di kategori ini.">
               <template #icon>
                 <Icon icon="lucide:inbox" class="text-neutral-400 text-2xl" />
@@ -755,173 +776,77 @@ function sendFollowUpWA(order: any) {
             </UiEmptyState>
           </div>
 
-          <div
-            v-else
-            v-for="order in paginated"
-            :key="order.id"
-            class="p-4 space-y-3"
-          >
-            <div class="flex items-start justify-between gap-2">
-              <div class="flex items-center gap-2 min-w-0">
-                <NuxtLink
-                  :to="`/unit/orders/${order.ticket_number}`"
-                  class="font-mono text-sm font-semibold text-primary-700 truncate hover:underline"
-                  @click.stop
-                >
-                  {{ order.ticket_number }}
-                </NuxtLink>
-                <span
-                  v-if="order.source === 'sos'"
-                  class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emergency-600 text-white uppercase tracking-wide animate-pulse shrink-0"
-                >
-                  <Icon icon="lucide:siren" class="text-[10px]" />
-                  SOS
-                </span>
-              </div>
-              <UiStatusBadge :status="order.status" class="shrink-0" />
-            </div>
-            <div>
-              <p class="text-sm font-semibold text-neutral-900 truncate">{{ order.requester_name }}</p>
-              <p class="text-sm text-neutral-500">{{ order.requester_phone }}</p>
-            </div>
-            <p v-if="order.location" class="text-sm text-neutral-600 line-clamp-2">{{ order.location }}</p>
-            <p class="text-xs text-neutral-400">{{ formatDate(order.created_at) }}</p>
-            <div class="flex gap-2">
-              <NuxtLink
-                :to="`/unit/orders/${order.ticket_number}`"
-                class="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold text-neutral-700 bg-white rounded-lg shadow-sm ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50 transition-colors"
-              >
-                <Icon icon="lucide:external-link" class="text-sm text-neutral-500" />
-                Detail
-              </NuxtLink>
+          <template v-else>
+            <div v-for="order in paginated" :key="order.id">
               <button
                 type="button"
-                class="inline-flex items-center justify-center w-10 h-10 text-neutral-600 bg-white rounded-lg shadow-sm ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50 transition-colors"
-                @click.stop="toggleDropdown(order, $event)"
+                class="w-full text-left p-3.5 flex items-start gap-2 hover:bg-neutral-50/80 transition-colors"
+                @click="mobileExpanded = mobileExpanded === order.id ? null : order.id"
               >
-                <Icon icon="lucide:more-vertical" class="text-sm" />
+                <Icon
+                  icon="lucide:chevron-right"
+                  class="mt-0.5 shrink-0 text-neutral-400 text-base transition-transform"
+                  :class="mobileExpanded === order.id && 'rotate-90'"
+                />
+                <div class="min-w-0 flex-1 space-y-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <p class="text-sm font-semibold text-neutral-900 truncate">{{ order.requester_name }}</p>
+                    <UiStatusBadge :status="order.status" size="sm" />
+                  </div>
+                  <p class="font-mono text-[11px] text-neutral-500">{{ order.ticket_number }}</p>
+                  <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <OrderJenisBadge :code="order.jenis_pelayanan" fallback="emergency" show-empty compact />
+                    <OrderTriageBadge
+                      :acuity="order.assessment_acuity"
+                      :jenis-pelayanan="order.jenis_pelayanan"
+                      emergency-only
+                      compact
+                    />
+                    <span
+                      v-if="orderEta(order)"
+                      class="text-[11px] font-medium tabular-nums text-neutral-600"
+                    >
+                      ETA {{ formatEta(orderEta(order)) }}
+                    </span>
+                  </div>
+                  <p v-if="order.location" class="text-xs text-neutral-500 truncate pt-0.5">{{ order.location }}</p>
+                </div>
               </button>
+              <div v-if="mobileExpanded === order.id" class="border-t border-neutral-100 bg-neutral-50/50">
+                <OrderListExpandPanel
+                  :order="order"
+                  variant="unit"
+                  :detail-path="`/unit/orders/${order.ticket_number}`"
+                  :eta-minutes="orderEta(order)"
+                />
+              </div>
             </div>
-          </div>
+          </template>
         </div>
 
         <!-- Desktop table -->
-        <UiTable wrapper-class="hidden md:block">
-            <thead>
-              <tr>
-                <th class="ui-th-sortable" @click="sortBy('created_at')">
-                  <span class="ui-th-label">
-                    Tiket
-                    <Icon :icon="sortCol==='created_at'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='created_at'?'text-neutral-700':'text-neutral-300']" />
-                  </span>
-                </th>
-                <th class="ui-th-sortable" @click="sortBy('requester_name')">
-                  <span class="ui-th-label">
-                    Pelapor
-                    <Icon :icon="sortCol==='requester_name'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='requester_name'?'text-neutral-700':'text-neutral-300']" />
-                  </span>
-                </th>
-                <th>Lokasi</th>
-                <th class="hidden sm:table-cell">ETA</th>
-                <th class="ui-th-sortable" @click="sortBy('status')">
-                  <span class="ui-th-label">
-                    Status
-                    <Icon :icon="sortCol==='status'?(sortDir==='asc'?'lucide:chevron-up':'lucide:chevron-down'):'lucide:chevrons-up-down'" :class="['text-xs',sortCol==='status'?'text-neutral-700':'text-neutral-300']" />
-                  </span>
-                </th>
-                <th class="ui-th-right"><span class="sr-only">Aksi</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="showOrdersSkeleton" v-for="i in 4" :key="`skel-${i}`">
-                <td>
-                  <div class="soft-skel h-4 w-32 mb-2" />
-                  <div class="soft-skel h-3.5 w-24" />
-                </td>
-                <td>
-                  <div class="soft-skel h-4 w-36 mb-2" />
-                  <div class="soft-skel h-3.5 w-28" />
-                </td>
-                <td>
-                  <div class="soft-skel h-4 w-40" />
-                </td>
-                <td class="hidden sm:table-cell">
-                  <div class="soft-skel h-4 w-14" />
-                </td>
-                <td>
-                  <div class="soft-skel h-6 rounded-full w-20" />
-                </td>
-                <td class="ui-td-right">
-                  <div class="inline-flex justify-end gap-1.5">
-                    <div class="soft-skel h-8 rounded-lg w-8" />
-                  </div>
-                </td>
-              </tr>
-              <tr v-else-if="!paginated.length">
-                <td colspan="6">
-                  <UiEmptyState title="Tidak ada pesanan" description="Belum ada pesanan di kategori ini.">
-                    <template #icon>
-                      <Icon icon="lucide:inbox" class="text-neutral-400 text-2xl" />
-                    </template>
-                  </UiEmptyState>
-                </td>
-              </tr>
-              <tr v-else v-for="order in paginated" :key="order.id">
-                <td>
-                  <div class="flex items-center gap-1.5">
-                    <NuxtLink
-                      :to="`/unit/orders/${order.ticket_number}`"
-                      class="ui-cell-title font-mono text-primary-700 hover:underline"
-                      @click.stop
-                    >
-                      {{ order.ticket_number }}
-                    </NuxtLink>
-                    <span
-                      v-if="order.source === 'sos'"
-                      class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emergency-600 text-white uppercase tracking-wide animate-pulse shrink-0"
-                    >
-                      <Icon icon="lucide:siren" class="text-[10px]" />
-                      SOS
-                    </span>
-                  </div>
-                  <p class="ui-cell-desc">{{ formatDate(order.created_at) }}</p>
-                </td>
-                <td>
-                  <p class="ui-cell-title">{{ order.requester_name }}</p>
-                  <p class="ui-cell-desc">{{ order.requester_phone }}</p>
-                </td>
-                <td>
-                  <p class="ui-cell-title line-clamp-2 max-w-[14rem]">{{ order.location || "—" }}</p>
-                  <p v-if="order.condition" class="ui-cell-desc line-clamp-1">{{ order.condition }}</p>
-                </td>
-                <td class="hidden sm:table-cell">
-                  <p class="ui-cell-title tabular-nums">{{ formatEta(orderEta(order)) }}</p>
-                  <p class="ui-cell-desc">ke lokasi</p>
-                </td>
-                <td>
-                  <UiStatusBadge :status="order.status" />
-                </td>
-                <td class="ui-td-right">
-                  <div class="inline-flex items-center justify-end gap-2">
-                    <NuxtLink
-                      :to="`/unit/orders/${order.ticket_number}`"
-                      class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-neutral-700 bg-white rounded-lg shadow-sm ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50 transition-colors relative z-10"
-                    >
-                      <Icon icon="lucide:external-link" class="text-sm text-neutral-500" />
-                      Detail
-                    </NuxtLink>
-                    <button
-                      type="button"
-                      class="inline-flex items-center justify-center w-9 h-9 text-neutral-600 bg-white rounded-lg shadow-sm ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50 transition-colors"
-                      @click.stop="toggleDropdown(order, $event)"
-                    >
-                      <Icon icon="lucide:more-vertical" class="text-sm" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-        </UiTable>
+        <OrdersExpandableTable
+          wrapper-class="hidden md:block"
+          :orders="paginated"
+          :loading="showOrdersSkeleton"
+          variant="unit"
+          :sort-col="sortCol"
+          :sort-dir="sortDir"
+          detail-base-path="/unit/orders"
+          :get-eta="orderEta"
+          @sort="sortBy"
+        >
+          <template #row-actions="{ order }">
+            <button
+              type="button"
+              class="inline-flex items-center justify-center w-8 h-8 text-neutral-500 rounded-lg hover:bg-neutral-100 hover:text-neutral-800 transition-colors opacity-70 group-hover:opacity-100"
+              aria-label="Aksi lainnya"
+              @click="toggleDropdown(order, $event)"
+            >
+              <Icon icon="lucide:more-horizontal" class="text-base" />
+            </button>
+          </template>
+        </OrdersExpandableTable>
         </template>
 
         <template v-if="viewMode === 'table' && sortedFiltered.length" #footer>
@@ -935,16 +860,18 @@ function sendFollowUpWA(order: any) {
       </UiTableCard>
     </div>
     <Teleport to="body">
-      <div
-        v-if="dropdownOrder"
-        class="fixed z-[99] w-52 bg-white rounded-lg shadow-lg border border-neutral-200 overflow-hidden"
-        :style="{
-          top: dropdownPos.top + 'px',
-          right: dropdownPos.right + 'px',
-          transform: dropdownPos.openUp ? 'translateY(-100%)' : undefined,
-        }"
-        @click.stop
-      >
+      <template v-if="dropdownOrder">
+        <div class="fixed inset-0 z-[10050]" @click="dropdownOrder = null" />
+        <div
+          ref="dropdownEl"
+          class="fixed z-[10051] w-56 max-h-[min(70vh,28rem)] overflow-y-auto bg-white rounded-lg shadow-lg border border-neutral-200"
+          :style="{
+            top: dropdownPos.top + 'px',
+            right: dropdownPos.right + 'px',
+            transform: dropdownPos.openUp ? 'translateY(-100%)' : undefined,
+          }"
+          @click.stop
+        >
         <!-- Status actions -->
         <div v-if="['pending','accepted','in_progress'].includes(dropdownOrder.status)" class="py-1">
           <p class="px-4 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">Tindakan</p>
@@ -1070,7 +997,8 @@ function sendFollowUpWA(order: any) {
             {{ orderHasReport(dropdownOrder) ? 'Lihat Laporan' : 'Buat Laporan' }}
           </NuxtLink>
         </div>
-      </div>
+        </div>
+      </template>
     </Teleport>
 
     <!-- Photo lightbox -->
@@ -1133,9 +1061,13 @@ function sendFollowUpWA(order: any) {
             Buka di Google Maps
           </a>
         </div>
-        <div v-if="detailOrder.condition">
-          <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">Kondisi</p>
-          <p class="text-neutral-700">{{ detailOrder.condition }}</p>
+        <div v-if="detailOrder.assessment?.answers?.length || detailOrder.assessment_acuity || detailOrder.condition">
+          <OrderAssessmentBlock
+            compact
+            :assessment="detailOrder.assessment"
+            :acuity="detailOrder.assessment_acuity"
+            :condition="detailOrder.condition"
+          />
         </div>
         <div v-if="detailOrder.handler_name">
           <p class="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">Penanganan</p>

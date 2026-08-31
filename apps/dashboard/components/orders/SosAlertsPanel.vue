@@ -85,12 +85,6 @@ const filtered = computed(() => {
   );
 });
 
-const focusCounts = computed(() => ({
-  all: alerts.value.length,
-  watch: alerts.value.filter(needsWatch).length,
-  done: alerts.value.filter(isDone).length,
-}));
-
 const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize.value)));
 const paginated = computed(() => {
   const start = (page.value - 1) * pageSize.value;
@@ -151,54 +145,32 @@ function toggleDropdown(item: any, event: MouseEvent) {
 
     <div v-if="dropdownItem" class="fixed inset-0 z-[98]" @click="dropdownItem = null" />
 
-    <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden shadow-sm">
-      <div class="px-4 sm:px-5 py-3 flex flex-wrap items-center gap-2.5 border-b border-neutral-200">
-        <div class="flex gap-1 min-w-0 overflow-x-auto">
-          <button
-            v-for="opt in ([
-              { id: 'all', label: 'Semua' },
-              { id: 'watch', label: 'Perlu pantau' },
-              { id: 'done', label: 'Selesai' },
-            ] as const)"
-            :key="opt.id"
-            type="button"
-            :class="[
-              'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap',
-              focus === opt.id
-                ? 'bg-primary-50 text-primary-700'
-                : 'text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50',
-            ]"
-            @click="focus = opt.id"
-          >
-            {{ opt.label }}
-            <span
-              v-if="focusCounts[opt.id] > 0"
-              :class="[
-                'ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full text-xs font-bold',
-                focus === opt.id ? 'bg-primary-600 text-white' : 'bg-neutral-200 text-neutral-600',
-              ]"
-            >
-              {{ focusCounts[opt.id] }}
-            </span>
-          </button>
-        </div>
-        <div class="flex flex-wrap items-center gap-2 ml-auto">
-          <UiSearchInput
-            v-model="search"
-            placeholder="Cari nama, telepon, tiket…"
-            class="w-[180px] sm:w-[240px]"
-          />
-          <UiButton
-            variant="secondary"
-            size="sm"
-            :disabled="pending && !!data"
-            @click="refresh()"
-          >
-            <Icon icon="lucide:refresh-cw" class="text-sm" :class="{ 'animate-spin': pending }" />
-            Refresh
-          </UiButton>
-        </div>
-      </div>
+    <UiTableCard
+      title="Log SOS"
+      :badge="filtered.length"
+      description="Jejak permintaan darurat — penanganan di tab Pesanan"
+    >
+      <template #actions>
+        <UiSearchInput
+          v-model="search"
+          placeholder="Cari..."
+          class="w-28 sm:w-36 shrink-0"
+        />
+        <UiSelect v-model="focus" class="!w-auto shrink-0">
+          <option value="all">Semua</option>
+          <option value="watch">Perlu pantau</option>
+          <option value="done">Selesai</option>
+        </UiSelect>
+        <button
+          type="button"
+          class="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-neutral-200 text-neutral-500 hover:text-neutral-800 hover:border-neutral-300 transition-colors shrink-0"
+          :disabled="pending && !!data"
+          aria-label="Refresh"
+          @click="refresh()"
+        >
+          <Icon icon="lucide:refresh-cw" class="text-sm" :class="{ 'animate-spin': pending }" />
+        </button>
+      </template>
 
       <UiTable>
           <thead>
@@ -309,15 +281,15 @@ function toggleDropdown(item: any, event: MouseEvent) {
           </tbody>
       </UiTable>
 
-      <div v-if="filtered.length" class="px-6 py-4 border-t border-neutral-200">
+      <template v-if="filtered.length" #footer>
         <UiPagination
           v-model:page="page"
           :total-pages="totalPages"
           :total="filtered.length"
           :page-size="pageSize"
         />
-      </div>
-    </div>
+      </template>
+    </UiTableCard>
 
     <Teleport to="body">
       <div

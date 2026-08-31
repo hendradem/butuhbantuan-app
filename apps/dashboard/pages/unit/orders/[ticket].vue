@@ -69,7 +69,7 @@ watch(
       const hasGps =
         !!(Number(order.value?.responder_lat) || Number(order.value?.responder_lng)) ||
         !!order.value?.track_enabled_at;
-      pollTimer = setInterval(() => refresh(), hasGps ? 5_000 : 15_000);
+      pollTimer = setInterval(() => refresh(), hasGps ? 8_000 : 15_000);
     }
   },
   { immediate: true },
@@ -356,7 +356,7 @@ async function onNextStep(action: string) {
               v-if="order?.partner_tier === 'psc' || order?.partner_tier === 'verified'"
               class="hidden sm:inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-800 shrink-0"
             >
-              {{ order.partner_tier === 'psc' ? 'PSC' : 'Terverifikasi' }}
+              {{ order.partner_tier === 'psc' ? 'PSC' : 'Swasta' }}
             </span>
             <UiStatusBadge v-if="order" :status="order.status" class="shrink-0" />
             <span
@@ -364,6 +364,7 @@ async function onNextStep(action: string) {
               class="soft-skel inline-block h-5 w-16 rounded-full shrink-0"
               aria-hidden="true"
             />
+            <OrderTriageBadge :acuity="order?.assessment_acuity" />
             <span
               v-if="order?.source === 'sos'"
               class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emergency-600 text-white uppercase animate-pulse shrink-0"

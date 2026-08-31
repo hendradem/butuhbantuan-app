@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import { jenisPelayananLabel, showJenisPelayananPicker } from "@butuhbantuan/utils";
 import { toast } from "~/utils/appToast";
 
 definePageMeta({ title: "Detail Layanan Darurat" });
@@ -20,6 +21,11 @@ const { data, pending, refresh: refreshItem } = await useAsyncData(
 const item = computed(() => data.value);
 const showSkeleton = computed(() => isInitialPending(pending.value, data.value));
 
+const editEmergencyTypeName = computed(() => {
+  const fromForm = types.value?.find((t: any) => String(t.id) === String(editForm.type_id))?.name;
+  return fromForm || item.value?.emergency_type?.name;
+});
+
 const { data: types } = await useAsyncData("emergency-types", () =>
   get<{ data: any[] }>("/api/v1/emergency/type").then((r) => r.data),
 );
@@ -36,7 +42,7 @@ const editForm = reactive({
   full_address: "", lat: "", lng: "",
   is_dispatcher: false, is_province_dispatcher: false,
   partner_tier: "community",
-  trained_driver: false, has_oxygen: false, has_stretcher: false, equipment_notes: "",
+  dashboard_access: true,
   type_of_service: "", tipe_emergency: [] as string[],
   is_active: true, is_24_hours: false,
   open_time: "08:00", close_time: "17:00",
@@ -65,10 +71,7 @@ function populateForm(e: any) {
     is_dispatcher: e.is_dispatcher ?? false,
     is_province_dispatcher: e.is_province_dispatcher ?? false,
     partner_tier: e.partner_tier || "community",
-    trained_driver: e.readiness?.trained_driver ?? false,
-    has_oxygen: e.readiness?.has_oxygen ?? false,
-    has_stretcher: e.readiness?.has_stretcher ?? false,
-    equipment_notes: e.readiness?.equipment_notes ?? "",
+    dashboard_access: e.dashboard_access !== false,
     type_of_service: e.type_of_service ?? "",
     tipe_emergency: Array.isArray(e.tipe_emergency) ? e.tipe_emergency : [],
     is_active: e.operational?.is_active ?? true,
@@ -114,12 +117,7 @@ async function submitEdit() {
       is_dispatcher: editForm.is_dispatcher,
       is_province_dispatcher: editForm.is_province_dispatcher,
       partner_tier: editForm.partner_tier,
-      readiness: {
-        trained_driver: editForm.trained_driver,
-        has_oxygen: editForm.has_oxygen,
-        has_stretcher: editForm.has_stretcher,
-        equipment_notes: editForm.equipment_notes,
-      },
+      dashboard_access: editForm.dashboard_access === true,
       type_of_service: editForm.type_of_service,
       tipe_emergency: editForm.tipe_emergency,
       operational: {
@@ -285,17 +283,7 @@ function typeBadgeColor(name: string) {
   return m[name] ?? "bg-neutral-100 text-neutral-700";
 }
 
-function partnerTierLabel(tier?: string) {
-  if (tier === "psc") return "Resmi";
-  if (tier === "verified") return "Terverifikasi";
-  return "Komunitas";
-}
-
-function partnerTierBadgeClass(tier?: string) {
-  if (tier === "psc") return "bg-emerald-100 text-emerald-800";
-  if (tier === "verified") return "bg-indigo-100 text-indigo-700";
-  return "bg-neutral-100 text-neutral-600";
-}
+import { partnerTierBadgeClass, partnerTierLabel } from "~/utils/partnerTier";
 </script>
 
 <template>
@@ -356,7 +344,7 @@ function partnerTierBadgeClass(tier?: string) {
     </div>
 
     <!-- Body -->
-    <div class="p-4 sm:p-6">
+    <div class="p-4 sm:p-6 min-w-0 overflow-x-hidden">
       <!-- Skeleton -->
       <div v-if="showSkeleton" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div class="lg:col-span-7 space-y-4">
@@ -367,14 +355,35 @@ function partnerTierBadgeClass(tier?: string) {
         </div>
       </div>
 
-      <div v-else-if="item" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div v-else-if="item" class="space-y-4">
 
-        <!-- ── LEFT COLUMN ────────────────────────────────────────────── -->
-        <div class="lg:col-span-7 space-y-5">
+        <!-- EDIT -->
+        <div v-if="mode === 'edit'" class="grid grid-cols-1 min-w-0 gap-4">
+          <div class="min-w-0 bg-white rounded-xl border border-neutral-200 overflow-hidden">
+            <div class="bg-neutral-50 px-5 py-3 border-b border-neutral-200">
+              <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Edit Data Layanan</p>
+            </div>
+            <div class="p-5 min-w-0">
+              <EmergencyForm
+                :types="types ?? []"
+                :form="editForm"
+                @open-map-picker="showMapPicker = true"
+              />
+            </div>
+          </div>
+          <div class="min-w-0">
+            <AmbulanceComplianceForm
+              :emergency-id="id"
+              :emergency-type-name="editEmergencyTypeName"
+              :initial="item.compliance"
+              @saved="refreshItem()"
+            />
+          </div>
+        </div>
 
-          <!-- VIEW: Identity -->
-          <template v-if="mode === 'view'">
-            <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+        <!-- VIEW -->
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden md:col-span-2 xl:col-span-3">
               <div class="bg-neutral-50 px-5 py-3 border-b border-neutral-200">
                 <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Identitas</p>
               </div>
@@ -400,6 +409,13 @@ function partnerTierBadgeClass(tier?: string) {
                       <span v-if="item.is_dispatcher" class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
                         <Icon icon="lucide:phone-incoming" class="text-[10px]" />
                         Dispatcher
+                      </span>
+                      <span
+                        v-if="item.dashboard_access === false"
+                        class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700"
+                      >
+                        <Icon icon="lucide:message-circle" class="text-[10px]" />
+                        WA only
                       </span>
                       <span v-if="item.is_province_dispatcher" class="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
                         Dispatcher Provinsi
@@ -472,170 +488,133 @@ function partnerTierBadgeClass(tier?: string) {
               </div>
             </div>
 
-            <!-- Readiness -->
+            <!-- Fleet -->
             <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
               <div class="bg-neutral-50 px-5 py-3 border-b border-neutral-200">
-                <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Kesiapan</p>
+                <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Armada</p>
               </div>
-              <div class="px-5 py-4 flex flex-wrap gap-2">
-                <span :class="['text-xs font-medium px-2.5 py-1 rounded-full', item.readiness?.trained_driver ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-neutral-50 text-neutral-400 ring-1 ring-neutral-100']">
-                  <Icon :icon="item.readiness?.trained_driver ? 'lucide:check' : 'lucide:minus'" class="text-xs mr-1 inline" />
-                  Sopir terlatih
-                </span>
-                <span :class="['text-xs font-medium px-2.5 py-1 rounded-full', item.readiness?.has_oxygen ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-neutral-50 text-neutral-400 ring-1 ring-neutral-100']">
-                  <Icon :icon="item.readiness?.has_oxygen ? 'lucide:check' : 'lucide:minus'" class="text-xs mr-1 inline" />
-                  Oksigen
-                </span>
-                <span :class="['text-xs font-medium px-2.5 py-1 rounded-full', item.readiness?.has_stretcher ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-neutral-50 text-neutral-400 ring-1 ring-neutral-100']">
-                  <Icon :icon="item.readiness?.has_stretcher ? 'lucide:check' : 'lucide:minus'" class="text-xs mr-1 inline" />
-                  Brankar
-                </span>
-                <p v-if="item.readiness?.equipment_notes" class="w-full text-xs text-neutral-500 mt-1">{{ item.readiness.equipment_notes }}</p>
+              <div class="grid grid-cols-2 divide-x divide-neutral-100">
+                <div class="px-5 py-4 text-center">
+                  <p class="text-3xl font-bold text-neutral-900">{{ item.fleet?.total ?? 0 }}</p>
+                  <p class="text-xs text-neutral-400 mt-1">Total Unit</p>
+                </div>
+                <div class="px-5 py-4 text-center">
+                  <p class="text-3xl font-bold text-green-600">{{ item.fleet?.available ?? 0 }}</p>
+                  <p class="text-xs text-neutral-400 mt-1">Tersedia</p>
+                </div>
               </div>
             </div>
-          </template>
 
-          <!-- EDIT: EmergencyForm -->
-          <template v-else>
+            <!-- Dashboard Access -->
             <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-              <div class="bg-neutral-50 px-5 py-3 border-b border-neutral-200">
-                <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Edit Data Layanan</p>
+              <div class="bg-neutral-50 px-5 py-3 border-b border-neutral-200 flex items-center justify-between">
+                <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Akses Dashboard Unit</p>
+                <UiSpinner v-if="credLoading" class="w-3.5 h-3.5 text-neutral-400" />
               </div>
-              <div class="p-5">
-                <EmergencyForm
-                  :types="types ?? []"
-                  :form="editForm"
-                  @open-map-picker="showMapPicker = true"
-                />
-              </div>
-            </div>
-          </template>
-        </div>
+              <div class="px-5 py-4 space-y-3">
+                <div v-if="credLoading" class="h-8 bg-neutral-100 rounded-lg animate-pulse" />
 
-        <!-- ── RIGHT COLUMN ──────────────────────────────────────────── -->
-        <div class="lg:col-span-5 space-y-5">
-
-          <!-- Fleet -->
-          <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-            <div class="bg-neutral-50 px-5 py-3 border-b border-neutral-200">
-              <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Armada</p>
-            </div>
-            <div class="grid grid-cols-2 divide-x divide-neutral-100">
-              <div class="px-5 py-4 text-center">
-                <p class="text-3xl font-bold text-neutral-900">{{ item.fleet?.total ?? 0 }}</p>
-                <p class="text-xs text-neutral-400 mt-1">Total Unit</p>
-              </div>
-              <div class="px-5 py-4 text-center">
-                <p class="text-3xl font-bold text-green-600">{{ item.fleet?.available ?? 0 }}</p>
-                <p class="text-xs text-neutral-400 mt-1">Tersedia</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Dashboard Access -->
-          <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-            <div class="bg-neutral-50 px-5 py-3 border-b border-neutral-200 flex items-center justify-between">
-              <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Akses Dashboard Unit</p>
-              <UiSpinner v-if="credLoading" class="w-3.5 h-3.5 text-neutral-400" />
-            </div>
-            <div class="px-5 py-4 space-y-3">
-              <!-- Loading -->
-              <div v-if="credLoading" class="h-8 bg-neutral-100 rounded-lg animate-pulse" />
-
-              <!-- Has credentials -->
-              <template v-else-if="credData">
-                <div class="flex items-center justify-between gap-3">
-                  <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                    <div>
-                      <p class="text-sm font-semibold text-neutral-800">Aktif</p>
-                      <p class="text-xs text-neutral-400 font-mono">{{ credData.username }}</p>
+                <template v-else-if="credData">
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2">
+                      <span class="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                      <div>
+                        <p class="text-sm font-semibold text-neutral-800">Aktif</p>
+                        <p class="text-xs text-neutral-400 font-mono">{{ credData.username }}</p>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <UiButton variant="secondary" size="sm" @click="openCredForm">
+                        <Icon icon="lucide:key" class="text-sm" />
+                        Ubah
+                      </UiButton>
+                      <UiButton variant="secondary" size="sm" :loading="credDisabling" @click="showDisableCredConfirm = true">
+                        <Icon icon="lucide:shield-off" class="text-sm" />
+                      </UiButton>
                     </div>
                   </div>
-                  <div class="flex items-center gap-1.5">
-                    <UiButton variant="secondary" size="sm" @click="openCredForm">
-                      <Icon icon="lucide:key" class="text-sm" />
-                      Ubah
+                </template>
+
+                <template v-else-if="credData === null">
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2">
+                      <span class="w-2 h-2 rounded-full bg-neutral-300 shrink-0" />
+                      <p class="text-sm text-neutral-500">Belum aktif</p>
+                    </div>
+                    <UiButton v-if="!credFormOpen" size="sm" @click="openCredForm">
+                      <Icon icon="lucide:shield-check" class="text-sm" />
+                      Aktifkan
                     </UiButton>
-                    <UiButton variant="secondary" size="sm" :loading="credDisabling" @click="showDisableCredConfirm = true">
-                      <Icon icon="lucide:shield-off" class="text-sm" />
+                  </div>
+                </template>
+
+                <div v-else class="flex items-center gap-2 text-neutral-400">
+                  <Icon icon="lucide:wifi-off" class="text-sm" />
+                  <p class="text-xs flex-1">Gagal memuat</p>
+                  <button class="text-xs text-primary-600 hover:underline" @click="loadCred">Coba lagi</button>
+                </div>
+
+                <div v-if="credFormOpen" class="pt-3 border-t border-neutral-100 space-y-3">
+                  <div>
+                    <label class="block text-xs font-medium text-neutral-600 mb-1.5">Username <span class="text-emergency-500">*</span></label>
+                    <UiInput v-model="credFormUsername" placeholder="Username..." autocomplete="off" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-neutral-600 mb-1.5">
+                      {{ credData ? 'Password baru' : 'Password' }} <span class="text-emergency-500">*</span>
+                    </label>
+                    <UiInput v-model="credFormPassword" type="password" placeholder="Password..." autocomplete="new-password" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-neutral-600 mb-1.5">Konfirmasi <span class="text-emergency-500">*</span></label>
+                    <UiInput v-model="credFormConfirm" type="password" placeholder="Ulangi password..." autocomplete="new-password" />
+                  </div>
+                  <p v-if="credFormError" class="text-xs text-emergency-600 flex items-center gap-1">
+                    <Icon icon="lucide:alert-circle" class="text-sm" />
+                    {{ credFormError }}
+                  </p>
+                  <div class="flex justify-end gap-2">
+                    <UiButton variant="secondary" size="sm" @click="closeCredForm">Batal</UiButton>
+                    <UiButton
+                      size="sm"
+                      :loading="credFormSaving"
+                      :disabled="!credFormUsername || !credFormPassword || !credFormConfirm"
+                      @click="saveCredential"
+                    >
+                      <Icon :icon="credData ? 'lucide:save' : 'lucide:shield-check'" class="text-sm" />
+                      {{ credData ? 'Simpan' : 'Aktifkan' }}
                     </UiButton>
                   </div>
                 </div>
-              </template>
-
-              <!-- No credentials -->
-              <template v-else-if="credData === null">
-                <div class="flex items-center justify-between gap-3">
-                  <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-neutral-300 shrink-0" />
-                    <p class="text-sm text-neutral-500">Belum aktif</p>
-                  </div>
-                  <UiButton v-if="!credFormOpen" size="sm" @click="openCredForm">
-                    <Icon icon="lucide:shield-check" class="text-sm" />
-                    Aktifkan
-                  </UiButton>
-                </div>
-              </template>
-
-              <!-- Error -->
-              <div v-else class="flex items-center gap-2 text-neutral-400">
-                <Icon icon="lucide:wifi-off" class="text-sm" />
-                <p class="text-xs flex-1">Gagal memuat</p>
-                <button class="text-xs text-primary-600 hover:underline" @click="loadCred">Coba lagi</button>
-              </div>
-
-              <!-- Credential form -->
-              <div v-if="credFormOpen" class="pt-3 border-t border-neutral-100 space-y-3">
-                <div>
-                  <label class="block text-xs font-medium text-neutral-600 mb-1.5">Username <span class="text-emergency-500">*</span></label>
-                  <UiInput v-model="credFormUsername" placeholder="Username..." autocomplete="off" />
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-neutral-600 mb-1.5">
-                    {{ credData ? 'Password baru' : 'Password' }} <span class="text-emergency-500">*</span>
-                  </label>
-                  <UiInput v-model="credFormPassword" type="password" placeholder="Password..." autocomplete="new-password" />
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-neutral-600 mb-1.5">Konfirmasi <span class="text-emergency-500">*</span></label>
-                  <UiInput v-model="credFormConfirm" type="password" placeholder="Ulangi password..." autocomplete="new-password" />
-                </div>
-                <p v-if="credFormError" class="text-xs text-emergency-600 flex items-center gap-1">
-                  <Icon icon="lucide:alert-circle" class="text-sm" />
-                  {{ credFormError }}
-                </p>
-                <div class="flex justify-end gap-2">
-                  <UiButton variant="secondary" size="sm" @click="closeCredForm">Batal</UiButton>
-                  <UiButton
-                    size="sm"
-                    :loading="credFormSaving"
-                    :disabled="!credFormUsername || !credFormPassword || !credFormConfirm"
-                    @click="saveCredential"
-                  >
-                    <Icon :icon="credData ? 'lucide:save' : 'lucide:shield-check'" class="text-sm" />
-                    {{ credData ? 'Simpan' : 'Aktifkan' }}
-                  </UiButton>
-                </div>
               </div>
             </div>
-          </div>
 
-          <!-- Tipe emergency -->
-          <div v-if="item.tipe_emergency?.length" class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-            <div class="bg-neutral-50 px-5 py-3 border-b border-neutral-200">
-              <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Tipe Emergency</p>
+            <!-- Jenis pelayanan -->
+            <div
+              v-if="showJenisPelayananPicker(item.emergency_type?.name) && item.tipe_emergency?.length"
+              class="bg-white rounded-xl border border-neutral-200 overflow-hidden"
+            >
+              <div class="bg-neutral-50 px-5 py-3 border-b border-neutral-200">
+                <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Jenis Pelayanan</p>
+              </div>
+              <div class="px-5 py-4 flex flex-wrap gap-2">
+                <span
+                  v-for="te in item.tipe_emergency"
+                  :key="te"
+                  class="text-xs font-medium px-2.5 py-1 rounded-full bg-primary-50 text-primary-700 ring-1 ring-primary-100"
+                >
+                  {{ jenisPelayananLabel(te) }}
+                </span>
+              </div>
             </div>
-            <div class="px-5 py-4 flex flex-wrap gap-2">
-              <span
-                v-for="te in item.tipe_emergency"
-                :key="te"
-                class="text-xs font-medium px-2.5 py-1 rounded-full bg-primary-50 text-primary-700 ring-1 ring-primary-100"
-              >
-                {{ te }}
-              </span>
-            </div>
-          </div>
+
+            <AmbulanceComplianceView
+              class="md:col-span-2 xl:col-span-3"
+              :emergency-id="id"
+              :compliance="item.compliance"
+              :emergency-type-name="item.emergency_type?.name"
+              @saved="refreshItem()"
+            />
         </div>
       </div>
 

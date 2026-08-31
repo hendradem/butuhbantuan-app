@@ -109,28 +109,23 @@ export function useOrderDispatch(mode: OrderDispatchMode) {
 
   async function reassign(
     orderId: string,
-    opts: { mode: ReassignMode; emergencyUUID?: string }
-  ) {
+    opts: { mode: ReassignMode; emergencyUUID?: string },
+  ): Promise<{ ok: true; order: any } | { ok: false }> {
     acting.value = orderId;
     try {
       const body =
         opts.mode === "auto"
           ? { mode: "auto" }
           : { mode: "manual", emergency_uuid: opts.emergencyUUID };
-      await $fetch(`${baseUrl}${prefix()}/${orderId}/reassign`, {
+      const res = await $fetch<{ data: any }>(`${baseUrl}${prefix()}/${orderId}/reassign`, {
         method: "POST",
         headers: headers(),
         body,
       });
-      toast.success(
-        opts.mode === "auto"
-          ? "Dialihkan ke unit rekomendasi sistem"
-          : "Pesanan dialihkan"
-      );
-      return true;
+      return { ok: true, order: res.data ?? null };
     } catch (e: any) {
       toast.error(e?.data?.message || "Gagal mengalihkan pesanan");
-      return false;
+      return { ok: false };
     } finally {
       acting.value = null;
     }

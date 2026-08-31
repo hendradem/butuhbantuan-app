@@ -35,7 +35,8 @@
     "tipe_emergency": [
       "emergency",
       "transport"
-    ]
+    ],
+    "dashboard_access": false
   },
   {
     "id": "a1b2c3d4-0002-0000-0000-000000000002",

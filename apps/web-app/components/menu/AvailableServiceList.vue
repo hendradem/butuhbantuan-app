@@ -1,19 +1,15 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import type { RecentUnit } from "~/utils/recentUnits";
 import { splitMenuServices, serviceDemandTick } from "~/utils/serviceDemand";
 
 const props = defineProps<{
   emergencyTypeData: any;
   loading?: boolean;
-  recentUnits?: RecentUnit[];
 }>();
 
 const emit = defineEmits<{
   serviceClick: [service: any];
   needHelp: [];
-  recentSelect: [unit: RecentUnit];
-  recentClear: [];
 }>();
 
 const moreSheet = useMoreSheetStore();
@@ -38,13 +34,6 @@ function openMore() {
 
 <template>
   <div>
-    <RecentUnitsStrip
-      v-if="recentUnits?.length"
-      :items="recentUnits"
-      @select="emit('recentSelect', $event)"
-      @clear="emit('recentClear')"
-    />
-
     <!-- Skeleton: always 4 slots -->
     <div v-if="loading" class="grid grid-cols-4 items-start mt-2">
       <div

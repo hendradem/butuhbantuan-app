@@ -133,6 +133,20 @@ func (r *AnalyticsRepo) GetAnalytics(periodDays int) (domain.Analytics, error) {
 		result.ByType = []domain.TypeStat{}
 	}
 
+	// ── By jenis pelayanan (darurat / transport / jenazah) ────────────────────
+	r.db.Raw(fmt.Sprintf(`
+		SELECT
+			COALESCE(NULLIF(LOWER(TRIM(jenis_pelayanan)), ''), 'unknown') AS code,
+			COUNT(*) AS count
+		FROM %s
+		WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL %d DAY)
+		GROUP BY code
+		ORDER BY count DESC
+	`, tOrder, periodDays)).Scan(&result.ByJenisPelayanan)
+	if result.ByJenisPelayanan == nil {
+		result.ByJenisPelayanan = []domain.JenisPelayananStat{}
+	}
+
 	// ── Peak hours ────────────────────────────────────────────────────────────
 	r.db.Raw(fmt.Sprintf(`
 		SELECT HOUR(created_at) AS hour, COUNT(*) AS count
@@ -287,6 +301,97 @@ func (r *AnalyticsRepo) GetAnalytics(periodDays int) (domain.Analytics, error) {
 		{Key: "exhausted", Label: "Habis cascade", Count: fr.Exhausted},
 		{Key: "cancelled", Label: "Dibatalkan", Count: fr.Cancelled},
 		{Key: "rejected", Label: "Penolakan unit", Count: rejectedAttempts},
+	}
+
+	// ── Access channel mix (WA-only vs dashboard login units) ───────────────────
+	type channelRow struct {
+		WaOnly            int64
+		Dashboard         int64
+		WaAccepted        int64
+		DashAccepted      int64
+		WaArrived         int64
+		DashArrived       int64
+		WaCompleted       int64
+		DashCompleted     int64
+		WaAvgAccept       float64
+		DashAvgAccept     float64
+		WaAvgArrive       float64
+		DashAvgArrive     float64
+		WaAvgComplete     float64
+		DashAvgComplete   float64
+		WaTrackEnabled    int64
+		DashTrackEnabled  int64
+		WaGpsPinged       int64
+		DashGpsPinged     int64
+	}
+	var ch channelRow
+	r.db.Raw(fmt.Sprintf(`
+		SELECT
+			SUM(CASE WHEN COALESCE(e.dashboard_access, 1) = 0 THEN 1 ELSE 0 END) AS wa_only,
+			SUM(CASE WHEN COALESCE(e.dashboard_access, 1) = 1 THEN 1 ELSE 0 END) AS dashboard,
+			SUM(CASE WHEN COALESCE(e.dashboard_access, 1) = 0 AND o.accepted_at IS NOT NULL THEN 1 ELSE 0 END) AS wa_accepted,
+			SUM(CASE WHEN COALESCE(e.dashboard_access, 1) = 1 AND o.accepted_at IS NOT NULL THEN 1 ELSE 0 END) AS dash_accepted,
+			SUM(CASE WHEN COALESCE(e.dashboard_access, 1) = 0 AND o.arrived_at IS NOT NULL THEN 1 ELSE 0 END) AS wa_arrived,
+			SUM(CASE WHEN COALESCE(e.dashboard_access, 1) = 1 AND o.arrived_at IS NOT NULL THEN 1 ELSE 0 END) AS dash_arrived,
+			SUM(CASE WHEN COALESCE(e.dashboard_access, 1) = 0 AND o.status = 'completed' THEN 1 ELSE 0 END) AS wa_completed,
+			SUM(CASE WHEN COALESCE(e.dashboard_access, 1) = 1 AND o.status = 'completed' THEN 1 ELSE 0 END) AS dash_completed,
+			AVG(CASE WHEN COALESCE(e.dashboard_access, 1) = 0 AND o.accepted_at IS NOT NULL
+				THEN TIMESTAMPDIFF(SECOND, o.created_at, o.accepted_at) END) AS wa_avg_accept,
+			AVG(CASE WHEN COALESCE(e.dashboard_access, 1) = 1 AND o.accepted_at IS NOT NULL
+				THEN TIMESTAMPDIFF(SECOND, o.created_at, o.accepted_at) END) AS dash_avg_accept,
+			AVG(CASE WHEN COALESCE(e.dashboard_access, 1) = 0 AND o.accepted_at IS NOT NULL AND o.arrived_at IS NOT NULL
+				THEN TIMESTAMPDIFF(SECOND, o.accepted_at, o.arrived_at) END) AS wa_avg_arrive,
+			AVG(CASE WHEN COALESCE(e.dashboard_access, 1) = 1 AND o.accepted_at IS NOT NULL AND o.arrived_at IS NOT NULL
+				THEN TIMESTAMPDIFF(SECOND, o.accepted_at, o.arrived_at) END) AS dash_avg_arrive,
+			AVG(CASE WHEN COALESCE(e.dashboard_access, 1) = 0 AND o.accepted_at IS NOT NULL AND o.status = 'completed'
+				THEN TIMESTAMPDIFF(SECOND, o.accepted_at, o.completed_at) END) AS wa_avg_complete,
+			AVG(CASE WHEN COALESCE(e.dashboard_access, 1) = 1 AND o.accepted_at IS NOT NULL AND o.status = 'completed'
+				THEN TIMESTAMPDIFF(SECOND, o.accepted_at, o.completed_at) END) AS dash_avg_complete,
+			SUM(CASE WHEN COALESCE(e.dashboard_access, 1) = 0 AND o.track_enabled_at IS NOT NULL THEN 1 ELSE 0 END) AS wa_track_enabled,
+			SUM(CASE WHEN COALESCE(e.dashboard_access, 1) = 1 AND o.track_enabled_at IS NOT NULL THEN 1 ELSE 0 END) AS dash_track_enabled,
+			SUM(CASE WHEN COALESCE(e.dashboard_access, 1) = 0 AND o.responder_updated_at IS NOT NULL THEN 1 ELSE 0 END) AS wa_gps_pinged,
+			SUM(CASE WHEN COALESCE(e.dashboard_access, 1) = 1 AND o.responder_updated_at IS NOT NULL THEN 1 ELSE 0 END) AS dash_gps_pinged
+		FROM %s o
+		LEFT JOIN %s e ON e.uuid = o.emergency_uuid
+		WHERE o.created_at >= DATE_SUB(NOW(), INTERVAL %d DAY)
+		  AND o.emergency_uuid IS NOT NULL AND o.emergency_uuid <> ''
+	`, tOrder, tEmerg, periodDays)).Scan(&ch)
+
+	acceptRate := func(acc, total int64) float64 {
+		if total <= 0 {
+			return 0
+		}
+		return float64(acc) / float64(total) * 100
+	}
+	result.AccessChannels = []domain.AccessChannelStat{
+		{
+			Key:            "wa_only",
+			Label:          "WA only (tanpa dashboard)",
+			Orders:         ch.WaOnly,
+			Accepted:       ch.WaAccepted,
+			Arrived:        ch.WaArrived,
+			Completed:      ch.WaCompleted,
+			AcceptRate:     acceptRate(ch.WaAccepted, ch.WaOnly),
+			AvgAcceptSec:   ch.WaAvgAccept,
+			AvgArriveSec:   ch.WaAvgArrive,
+			AvgCompleteSec: ch.WaAvgComplete,
+			TrackEnabled:   ch.WaTrackEnabled,
+			GpsPinged:      ch.WaGpsPinged,
+		},
+		{
+			Key:            "dashboard",
+			Label:          "Dashboard login",
+			Orders:         ch.Dashboard,
+			Accepted:       ch.DashAccepted,
+			Arrived:        ch.DashArrived,
+			Completed:      ch.DashCompleted,
+			AcceptRate:     acceptRate(ch.DashAccepted, ch.Dashboard),
+			AvgAcceptSec:   ch.DashAvgAccept,
+			AvgArriveSec:   ch.DashAvgArrive,
+			AvgCompleteSec: ch.DashAvgComplete,
+			TrackEnabled:   ch.DashTrackEnabled,
+			GpsPinged:      ch.DashGpsPinged,
+		},
 	}
 
 	// ── SLA distribution: response (created→accepted) & arrival (accepted→arrived)
@@ -516,6 +621,22 @@ func (r *AnalyticsRepo) GetUnitPeriodAggregates(emergencyUUID string, periodDays
 		referrals = []domain.ReferralStat{}
 	}
 	out.Referrals = referrals
+
+	var byJenis []domain.JenisPelayananStat
+	_ = r.db.Raw(fmt.Sprintf(`
+		SELECT
+			COALESCE(NULLIF(LOWER(TRIM(jenis_pelayanan)), ''), 'unknown') AS code,
+			COUNT(*) AS count
+		FROM %s
+		WHERE emergency_uuid = ?
+		  AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+		GROUP BY code
+		ORDER BY count DESC
+	`, tOrder), emergencyUUID, periodDays).Scan(&byJenis).Error
+	if byJenis == nil {
+		byJenis = []domain.JenisPelayananStat{}
+	}
+	out.ByJenisPelayanan = byJenis
 
 	return out, nil
 }

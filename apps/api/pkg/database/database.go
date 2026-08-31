@@ -34,6 +34,7 @@ func Connect(dsn string) (*gorm.DB, error) {
 		return nil, err
 	}
 	mysqlrepo.BackfillUnitNames(db)
+	mysqlrepo.BackfillWaOnlyDashboardFlag(db)
 
 	log.Println("database migrated")
 	return db, nil

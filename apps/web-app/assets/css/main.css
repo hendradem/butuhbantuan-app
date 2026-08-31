@@ -159,6 +159,18 @@ html[data-ui-theme="soft"] h4 {
   .btn-whatsapp:hover {
     background: #15803d;
   }
+  .btn-report {
+    @apply btn-base flex items-center w-full justify-center text-white transition;
+    background: var(--bb-accent);
+    border-radius: var(--bb-radius-control);
+  }
+  .btn-report:hover {
+    filter: brightness(0.92);
+  }
+  .btn-report:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
   .btn-call {
     @apply btn-base flex w-full items-center justify-center transition;
     background: var(--bb-bg-surface);
@@ -271,6 +283,17 @@ html[data-ui-theme="soft"] h4 {
   cursor: pointer;
 }
 
+/* Route focus — other units/hospitals recede so the active path stays readable */
+.ambulance-marker.bb-marker--muted,
+.fire-fighter-marker.bb-marker--muted,
+.hospital-marker.bb-marker--muted,
+.sar-marker.bb-marker--muted {
+  background-color: #9ca3af !important;
+  filter: grayscale(1);
+  opacity: 0.7;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
+}
+
 .bb-svc-pin-wrap,
 .bb-user-pin-wrap {
   background: transparent !important;
@@ -328,6 +351,16 @@ html[data-ui-theme="soft"] h4 {
 .bb-svc-pin--sar .bb-svc-pin__head { background-color: #f97316; }
 .bb-svc-pin--sar .bb-svc-pin__icon {
   background-image: url('/assets/icons/sar-logo.svg');
+}
+
+.bb-svc-pin--muted {
+  opacity: 0.7;
+  filter: grayscale(1);
+}
+
+.bb-svc-pin--muted .bb-svc-pin__head {
+  background-color: #9ca3af !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
 }
 
 /* Apple Maps–style drop-in when markers (re)appear after location/data change */
@@ -642,3 +675,263 @@ html[data-ui-theme="soft"] h4 {
 .overlay-leave-to {
   opacity: 0;
 }
+
+/* E-ticket: Untitled UI typography — true weights, not soft-theme bump */
+.eticket-ui {
+  color: #344054;
+  font-weight: 400;
+}
+
+html[data-ui-theme="soft"] .eticket-ui .font-normal,
+.eticket-ui .font-normal {
+  font-weight: 400 !important;
+}
+
+html[data-ui-theme="soft"] .eticket-ui .font-medium,
+.eticket-ui .font-medium {
+  font-weight: 500 !important;
+}
+
+html[data-ui-theme="soft"] .eticket-ui .font-semibold,
+.eticket-ui .font-semibold {
+  font-weight: 600 !important;
+}
+
+.eticket-label {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 400;
+  color: #667085;
+}
+
+.eticket-value {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+  color: #101828;
+}
+
+.eticket-value-emphasis {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: #101828;
+}
+
+.eticket-title {
+  font-size: 0.9375rem;
+  line-height: 1.375rem;
+  font-weight: 500;
+  color: #101828;
+}
+
+.eticket-meta {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 400;
+  color: #667085;
+}
+
+.eticket-divider {
+  border: none;
+  border-top: 1px solid #eaecf0;
+}
+
+.eticket-expand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0 1rem;
+}
+
+.eticket-expand::before,
+.eticket-expand::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #eaecf0;
+}
+
+.eticket-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  color: #475467;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.eticket-expand-btn:hover {
+  background: #f9fafb;
+  border-color: #98a2b3;
+}
+
+.eticket-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.25rem;
+}
+
+.eticket-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.eticket-panel {
+  border: 1px solid #eaecf0;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: #fff;
+}
+
+.eticket-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f2f4f7;
+}
+
+.eticket-panel-row:last-child {
+  border-bottom: none;
+}
+
+.eticket-panel-row--stack {
+  align-items: flex-start;
+}
+
+.eticket-panel-row--action {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.eticket-panel-row--action:hover {
+  background: #f9fafb;
+}
+
+.eticket-panel-label {
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  font-weight: 400;
+  color: #667085;
+}
+
+.eticket-panel-value {
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  font-weight: 400;
+  color: #344054;
+}
+
+.eticket-subsection {
+  border-bottom: 1px solid #f2f4f7;
+}
+
+.eticket-subsection:last-child {
+  border-bottom: none;
+}
+
+.eticket-subsection-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.eticket-subsection-head:hover {
+  background: #f9fafb;
+}
+
+.eticket-subsection-hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  font-weight: 400;
+  color: #98a2b3;
+  text-align: right;
+}
+
+.eticket-subsection-body {
+  padding: 0 1rem 0.75rem;
+}
+
+.eticket-timeline {
+  padding: 0.25rem 1rem 0.75rem;
+}
+
+.eticket-timeline-item {
+  display: grid;
+  grid-template-columns: 2.75rem 1fr;
+  gap: 0.75rem;
+  padding-bottom: 0.875rem;
+  position: relative;
+}
+
+.eticket-timeline-item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 1.3125rem;
+  top: 1.125rem;
+  bottom: 0;
+  width: 1px;
+  background: #eaecf0;
+}
+
+.eticket-timeline-time {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 400;
+  color: #667085;
+  font-variant-numeric: tabular-nums;
+  padding-top: 0.0625rem;
+}
+
+.eticket-timeline-body {
+  position: relative;
+  min-width: 0;
+}
+
+.eticket-timeline-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+  color: #344054;
+}
+
+.eticket-timeline-more {
+  margin-left: 3.5rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  color: #667085;
+  cursor: pointer;
+}
+
+.eticket-timeline-more:hover {
+  color: #344054;
+}
+

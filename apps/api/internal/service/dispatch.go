@@ -30,6 +30,7 @@ type IncidentAssignInput struct {
 	RegencyID     string
 	ProvinceID    string
 	PreferredUUID string // list tap; kept only if near distance-best
+	Assessment    *domain.OrderAssessment
 }
 
 // DispatchUseCase ranks units, assigns SOS/call tickets, and supports manual accept/reject/reassign.
@@ -117,8 +118,13 @@ func (s *DispatchService) AssignIncident(in IncidentAssignInput) (*domain.Dispat
 		source = "sos"
 	}
 
+	acuity := ""
+	if in.Assessment != nil {
+		acuity = in.Assessment.Acuity
+	}
+
 	candidate, err := s.pickCandidatePreferred(
-		in.Lat, in.Lng, in.TypeID, in.RegencyID, in.ProvinceID, in.PreferredUUID, nil,
+		in.Lat, in.Lng, in.TypeID, in.RegencyID, in.ProvinceID, in.PreferredUUID, nil, acuity,
 	)
 	if err != nil {
 		return nil, err
@@ -126,20 +132,25 @@ func (s *DispatchService) AssignIncident(in IncidentAssignInput) (*domain.Dispat
 
 	deadline := time.Now().Add(s.sla)
 	ticketInput := domain.OrderTicket{
-		RequesterName:  in.Name,
-		RequesterPhone: in.Phone,
-		Location:       in.Address,
-		Condition:      in.Description,
-		PhotoURL:       in.PhotoURL,
-		RequesterLat:   in.Lat,
-		RequesterLng:   in.Lng,
-		Source:         source,
-		TypeID:         in.TypeID,
-		RegencyID:      in.RegencyID,
-		ProvinceID:     in.ProvinceID,
-		DispatchRound:  1,
-		DispatchStatus: "searching",
-		SlaDeadline:    &deadline,
+		RequesterName:    in.Name,
+		RequesterPhone:   in.Phone,
+		Location:         in.Address,
+		Condition:        in.Description,
+		Assessment:       in.Assessment,
+		AssessmentAcuity: "",
+		PhotoURL:         in.PhotoURL,
+		RequesterLat:     in.Lat,
+		RequesterLng:     in.Lng,
+		Source:           source,
+		TypeID:           in.TypeID,
+		RegencyID:        in.RegencyID,
+		ProvinceID:       in.ProvinceID,
+		DispatchRound:    1,
+		DispatchStatus:   "searching",
+		SlaDeadline:      &deadline,
+	}
+	if in.Assessment != nil {
+		ticketInput.AssessmentAcuity = in.Assessment.Acuity
 	}
 
 	if candidate == nil {
@@ -363,6 +374,13 @@ func (s *DispatchService) ReassignTo(orderID, targetUUID, actorUUID string, admi
 	if _, err := s.recordOffer(updated, cand, nextRound); err != nil {
 		log.Printf("dispatch: record manual reassign %s: %v", updated.TicketNumber, err)
 	}
+	if !target.DashboardAccess {
+		if minted, merr := s.orderSvc.EnableTrack(updated.ID, "system"); merr != nil {
+			log.Printf("dispatch: EnableTrack after reassign-to %s: %v", updated.TicketNumber, merr)
+		} else if minted != nil {
+			updated = minted
+		}
+	}
 	s.notifyReassigned(updated, prevUUID, target.ID, target.Name, nextRound, "Pesanan dialihkan ke "+target.Name+".")
 	_ = s.orderSvc.RecordEvent(domain.OrderEvent{
 		OrderID:      updated.ID,
@@ -480,10 +498,14 @@ func (s *DispatchService) EscalateToPSC(orderID, actorUUID string, admin bool) (
 	s.pushSvc.Notify(updated.TicketNumber, pushTitle, pushBody)
 	if s.pub != nil {
 		payload := updated
+		s.pub.PublishScoped(emergencyUUID, updated.RegencyID, updated.ProvinceID, hub.Event{Type: "order_updated", Payload: payload})
 		if emergencyUUID != "" {
 			s.pub.PublishScoped(emergencyUUID, updated.RegencyID, updated.ProvinceID, hub.Event{Type: "new_order", Payload: payload})
 		} else {
-			s.pub.PublishScoped("", updated.RegencyID, updated.ProvinceID, hub.Event{Type: "order_dispatch_exhausted", Payload: updated})
+			s.pub.PublishScoped("", updated.RegencyID, updated.ProvinceID, hub.Event{
+				Type:    "order_dispatch_exhausted",
+				Payload: updated,
+			})
 		}
 		if ticket.EmergencyUUID != "" && ticket.EmergencyUUID != emergencyUUID {
 			s.pub.Publish(ticket.EmergencyUUID, hub.Event{
@@ -589,6 +611,7 @@ func (s *DispatchService) ListCandidates(orderID string) ([]domain.RankedCandida
 		ticket.RequesterLat, ticket.RequesterLng,
 		rt.typeID, rt.typeName, rt.regencyID, rt.provinceID,
 		exclude,
+		ticket.AssessmentAcuity,
 	)
 	if err != nil {
 		return nil, err
@@ -744,6 +767,7 @@ func (s *DispatchService) offerNext(ticket *domain.OrderTicket, pushPrefix strin
 		ticket.RequesterLat, ticket.RequesterLng,
 		rt.typeID, rt.regencyID, rt.provinceID,
 		exclude,
+		ticket.AssessmentAcuity,
 	)
 	if err != nil {
 		return nil, err
@@ -780,6 +804,15 @@ func (s *DispatchService) offerNext(ticket *domain.OrderTicket, pushPrefix strin
 		log.Printf("dispatch: record offer %s: %v", updated.TicketNumber, err)
 	}
 
+	// New assignee may be WA-only — mint a fresh /dispatch link (old token wiped by Reassign).
+	if !candidate.Emergency.DashboardAccess {
+		if minted, merr := s.orderSvc.EnableTrack(updated.ID, "system"); merr != nil {
+			log.Printf("dispatch: EnableTrack after reassign %s: %v", updated.TicketNumber, merr)
+		} else if minted != nil {
+			updated = minted
+		}
+	}
+
 	s.notifyReassigned(updated, prevUUID, candidate.Emergency.ID, candidate.Emergency.Name, nextRound, pushPrefix+candidate.Emergency.Name+".")
 	_ = s.orderSvc.RecordEvent(domain.OrderEvent{
 		OrderID:      updated.ID,
@@ -801,7 +834,10 @@ func (s *DispatchService) notifyReassigned(
 	pushBody string,
 ) {
 	if s.pub != nil {
+		// New assignee gets the offer; ops tables need order_updated so the row
+		// swaps unit_name / contact without a manual refresh.
 		s.pub.PublishScoped(newUUID, updated.RegencyID, updated.ProvinceID, hub.Event{Type: "new_order", Payload: updated})
+		s.pub.PublishScoped(newUUID, updated.RegencyID, updated.ProvinceID, hub.Event{Type: "order_updated", Payload: updated})
 		if prevUUID != "" && prevUUID != newUUID {
 			s.pub.Publish(prevUUID, hub.Event{
 				Type: "order_reassigned",
@@ -823,6 +859,10 @@ func (s *DispatchService) markExhausted(ticket *domain.OrderTicket) error {
 	updated, err := s.orderRepo.MarkDispatchExhausted(ticket.ID)
 	if err != nil {
 		return err
+	}
+	// Old /dispatch link must not stay valid once cascade is exhausted.
+	if closed, derr := s.orderSvc.DisableTrack(updated.ID, "system"); derr == nil && closed != nil {
+		updated = closed
 	}
 	_ = s.orderSvc.RecordEvent(domain.OrderEvent{
 		OrderID:      updated.ID,
@@ -882,8 +922,9 @@ func (s *DispatchService) pickCandidate(
 	typeID uint,
 	regencyID, provinceID string,
 	exclude map[string]struct{},
+	acuity string,
 ) (*domain.RankedCandidate, error) {
-	return s.pickCandidatePreferred(lat, lng, typeID, regencyID, provinceID, "", exclude)
+	return s.pickCandidatePreferred(lat, lng, typeID, regencyID, provinceID, "", exclude, acuity)
 }
 
 func (s *DispatchService) pickCandidatePreferred(
@@ -891,12 +932,13 @@ func (s *DispatchService) pickCandidatePreferred(
 	typeID uint,
 	regencyID, provinceID, preferredUUID string,
 	exclude map[string]struct{},
+	acuity string,
 ) (*domain.RankedCandidate, error) {
 	if exclude == nil {
 		exclude = map[string]struct{}{}
 	}
 	typeName := s.resolveTypeName(typeID)
-	ranked, err := s.rankCascade(lat, lng, typeID, typeName, regencyID, provinceID, exclude)
+	ranked, err := s.rankCascade(lat, lng, typeID, typeName, regencyID, provinceID, exclude, acuity)
 	if err != nil {
 		return nil, err
 	}
@@ -940,16 +982,18 @@ func (s *DispatchService) rankCascade(
 	typeID uint,
 	typeName, regencyID, provinceID string,
 	exclude map[string]struct{},
+	acuity string,
 ) ([]domain.RankedCandidate, error) {
 	tiers, err := s.loadCascadeTiers(typeID, typeName, regencyID, provinceID, lat, lng)
 	if err != nil {
 		return nil, err
 	}
-	strict := s.walkCascadeTiers(tiers, lat, lng, typeID, typeName, exclude, true)
+	ctx := RankContext{AssessmentAcuity: acuity}
+	strict := s.walkCascadeTiers(tiers, lat, lng, typeID, typeName, exclude, true, ctx)
 	if len(strict) > 0 {
 		return strict, nil
 	}
-	return s.walkCascadeTiers(tiers, lat, lng, typeID, typeName, exclude, false), nil
+	return s.walkCascadeTiers(tiers, lat, lng, typeID, typeName, exclude, false, ctx), nil
 }
 
 func (s *DispatchService) walkCascadeTiers(
@@ -959,6 +1003,7 @@ func (s *DispatchService) walkCascadeTiers(
 	typeName string,
 	exclude map[string]struct{},
 	strictCapacity bool,
+	ctx RankContext,
 ) []domain.RankedCandidate {
 	out := make([]domain.RankedCandidate, 0, 32)
 
@@ -980,13 +1025,13 @@ func (s *DispatchService) walkCascadeTiers(
 	}
 
 	// 1) Everyone in radius — pure distance (PMI/PSC dispatcher included).
-	nearRanked := rankCandidates(tiers.radiusPool, lat, lng, typeID, typeName, exclude, strictCapacity)
+	nearRanked := rankCandidates(tiers.radiusPool, lat, lng, typeID, typeName, exclude, strictCapacity, ctx)
 	labelTier(nearRanked)
 	s.applyRejectPenalties(nearRanked)
 	out = append(out, nearRanked...)
 
 	// 2) Farther same-province units.
-	farRanked := rankCandidates(tiers.farPool, lat, lng, typeID, typeName, exclude, strictCapacity)
+	farRanked := rankCandidates(tiers.farPool, lat, lng, typeID, typeName, exclude, strictCapacity, ctx)
 	labelTier(farRanked)
 	s.applyRejectPenalties(farRanked)
 	out = append(out, farRanked...)

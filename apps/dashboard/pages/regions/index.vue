@@ -163,20 +163,17 @@ async function executeDelete() {
 
     <!-- Table card -->
     <div class="p-4 sm:p-6">
-      <UiTableCard>
-        <template #toolbar>
-          <div class="flex flex-wrap items-center gap-2.5">
-            <UiSearchInput
-              v-model="search"
-              placeholder="Cari nama, kabupaten, provinsi..."
-              class="flex-1 min-w-[160px] max-w-sm"
-            />
-            <UiSelect v-model="pageSize" class="!w-auto" @change="page = 1">
-              <option :value="10">10 / halaman</option>
-              <option :value="25">25 / halaman</option>
-              <option :value="50">50 / halaman</option>
-            </UiSelect>
-          </div>
+      <UiTableCard
+        title="Daftar Wilayah"
+        :badge="filtered.length"
+        description="Wilayah tercakup layanan darurat"
+      >
+        <template #actions>
+          <UiSearchInput
+            v-model="search"
+            placeholder="Cari..."
+            class="w-28 sm:w-40 shrink-0"
+          />
         </template>
 
         <!-- Table -->

@@ -9,11 +9,14 @@ withDefaults(
     hoverable?: boolean;
     title?: string;
     description?: string;
+    /** Tighter header block (title + description) */
+    compactHeader?: boolean;
     /** Soft shadow (Untitled often uses none / xs) */
     shadow?: boolean;
   }>(),
   {
     padding: "md",
+    compactHeader: false,
     shadow: false,
   },
 );
@@ -37,15 +40,35 @@ const paddingClasses = {
     <!-- Structured header (Untitled: title + desc + actions) -->
     <div
       v-if="title || $slots.header || $slots.actions"
-      class="px-4 sm:px-6 py-5 border-b border-neutral-200"
+      :class="[
+        'border-b border-neutral-200',
+        compactHeader ? 'px-4 sm:px-5 py-3' : 'px-4 sm:px-6 py-5',
+      ]"
     >
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div
+        :class="[
+          'flex flex-col sm:flex-row sm:items-start sm:justify-between',
+          compactHeader ? 'gap-2' : 'gap-4',
+        ]"
+      >
         <div class="min-w-0">
           <slot name="header">
-            <h2 v-if="title" class="text-lg font-semibold text-neutral-900 tracking-tight">
+            <h2
+              v-if="title"
+              :class="[
+                'font-semibold text-neutral-900 tracking-tight',
+                compactHeader ? 'text-sm' : 'text-lg',
+              ]"
+            >
               {{ title }}
             </h2>
-            <p v-if="description" class="mt-1 text-sm font-normal text-neutral-500">
+            <p
+              v-if="description"
+              :class="[
+                'font-normal text-neutral-500',
+                compactHeader ? 'mt-0.5 text-xs' : 'mt-1 text-sm',
+              ]"
+            >
               {{ description }}
             </p>
           </slot>

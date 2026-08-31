@@ -139,6 +139,7 @@ func (r *EmergencyRepo) buildEntity(e domain.Emergency) EmergencyEntity {
 		TipeEmergency:        strings.Join(e.TipeEmergency, ","),
 		IsDispatcher:         e.IsDispatcher,
 		IsProvinceDispatcher: e.IsProvinceDispatcher,
+		DashboardAccess:      e.DashboardAccess,
 	}
 	// Use the caller-supplied UUID when available so seeded data has stable IDs.
 	if e.ID != "" {
@@ -188,6 +189,88 @@ func (r *EmergencyRepo) UpdateActive(id string, isActive bool) error {
 		return err
 	}
 	return r.db.Model(&row).Update("is_active", isActive).Error
+}
+
+func (r *EmergencyRepo) UpdateCompliance(id string, profile domain.AmbulanceComplianceProfile) (*domain.Emergency, error) {
+	var row EmergencyEntity
+	if err := r.db.Where("uuid = ?", id).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repository.ErrNotFound
+		}
+		return nil, err
+	}
+
+	raw, err := profile.Marshal()
+	if err != nil {
+		return nil, err
+	}
+	row.DeclaredCategory = profile.DeclaredCategory
+	row.ComplianceJSON = raw
+
+	if err := r.db.Model(&row).Updates(map[string]any{
+		"declared_category": row.DeclaredCategory,
+		"compliance_json":   row.ComplianceJSON,
+	}).Error; err != nil {
+		return nil, err
+	}
+	if err := r.preload().First(&row, row.ID).Error; err != nil {
+		return nil, err
+	}
+	updated := mapEmergency(row)
+	return &updated, nil
+}
+
+func (r *EmergencyRepo) GetComplianceProfile(id string) (*domain.AmbulanceComplianceProfile, error) {
+	var row EmergencyEntity
+	if err := r.db.Where("uuid = ?", id).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repository.ErrNotFound
+		}
+		return nil, err
+	}
+	profile := domain.ProfileFromEmergency(row.ComplianceJSON, row.DeclaredCategory)
+	if profile == nil || profile.DeclaredCategory == "" {
+		return nil, repository.ErrNotFound
+	}
+	return profile, nil
+}
+
+func (r *EmergencyRepo) GetIncidentReportTemplate(id string) (*domain.IncidentReportTemplate, error) {
+	var row EmergencyEntity
+	if err := r.db.Where("uuid = ?", id).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repository.ErrNotFound
+		}
+		return nil, err
+	}
+	tpl, err := domain.ParseIncidentReportTemplate(row.IncidentReportTemplateJSON)
+	if err != nil {
+		return nil, err
+	}
+	if tpl == nil {
+		def := domain.DefaultIncidentReportTemplate(row.Name, row.OrganizationName, row.Regency.Name)
+		return &def, nil
+	}
+	return tpl, nil
+}
+
+func (r *EmergencyRepo) UpdateIncidentReportTemplate(id string, tpl domain.IncidentReportTemplate) (*domain.IncidentReportTemplate, error) {
+	var row EmergencyEntity
+	if err := r.db.Where("uuid = ?", id).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repository.ErrNotFound
+		}
+		return nil, err
+	}
+	raw, err := tpl.Marshal()
+	if err != nil {
+		return nil, err
+	}
+	if err := r.db.Model(&row).Update("incident_report_template_json", raw).Error; err != nil {
+		return nil, err
+	}
+	out := tpl
+	return &out, nil
 }
 
 func (r *EmergencyRepo) UpdateWilayah(id string, addr domain.Address) error {
@@ -301,6 +384,7 @@ func (r *EmergencyRepo) Upsert(e domain.Emergency) (*domain.Emergency, error) {
 		"tipe_emergency":         row.TipeEmergency,
 		"is_dispatcher":          row.IsDispatcher,
 		"is_province_dispatcher": row.IsProvinceDispatcher,
+		"dashboard_access":       row.DashboardAccess,
 	}).Error; err != nil {
 		return nil, err
 	}
@@ -338,6 +422,7 @@ func (r *EmergencyRepo) Update(e domain.Emergency) (*domain.Emergency, error) {
 	row.TipeEmergency = strings.Join(e.TipeEmergency, ",")
 	row.IsDispatcher = e.IsDispatcher
 	row.IsProvinceDispatcher = e.IsProvinceDispatcher
+	row.DashboardAccess = e.DashboardAccess
 	tier := normalizePartnerTier(e.PartnerTier)
 	row.PartnerTier = tier
 	row.IsVerified = tier == domain.PartnerTierPSC || tier == domain.PartnerTierVerified
@@ -484,6 +569,7 @@ func mapEmergency(e EmergencyEntity) domain.Emergency {
 		IsDispatcher:         e.IsDispatcher,
 		IsProvinceDispatcher: e.IsProvinceDispatcher,
 		PartnerTier:          normalizePartnerTier(tier),
+		DashboardAccess:      e.DashboardAccess,
 		Readiness: domain.Readiness{
 			TrainedDriver:  e.TrainedDriver,
 			HasOxygen:      e.HasOxygen,
@@ -519,7 +605,22 @@ func mapEmergency(e EmergencyEntity) domain.Emergency {
 			Total:     e.TotalUnits,
 			Available: e.AvailableUnits,
 		},
+		Compliance: mapComplianceView(e),
+		IncidentReportTemplate: mapIncidentReportTemplate(e),
 	}
+}
+
+func mapIncidentReportTemplate(e EmergencyEntity) *domain.IncidentReportTemplate {
+	tpl, err := domain.ParseIncidentReportTemplate(e.IncidentReportTemplateJSON)
+	if err != nil || tpl == nil {
+		def := domain.DefaultIncidentReportTemplate(e.Name, e.OrganizationName, e.Regency.Name)
+		return &def
+	}
+	return tpl
+}
+
+func mapComplianceView(e EmergencyEntity) *domain.AmbulanceComplianceView {
+	return domain.BuildComplianceView(domain.ProfileFromEmergency(e.ComplianceJSON, e.DeclaredCategory))
 }
 
 func mapManyEmergencies(rows []EmergencyEntity) []domain.Emergency {
@@ -585,6 +686,8 @@ func normalizeTipeLabel(s string) string {
 		return "pemadam"
 	case "pencarian dan pertolongan", "sar", "basarnas":
 		return "pencarian dan pertolongan"
+	case "jenazah", "mobil jenazah", "kamar mayat":
+		return "jenazah"
 	default:
 		return v
 	}

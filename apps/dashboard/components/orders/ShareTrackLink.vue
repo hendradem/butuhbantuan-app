@@ -5,6 +5,8 @@ import { toast } from "~/utils/appToast";
 const props = defineProps<{
   order: any | null;
   mode: "admin" | "unit";
+  /** Copy-only row (arrive step). Full create / WA stays on the share step. */
+  compact?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -237,8 +239,30 @@ async function shareWA() {
 
 <template>
   <div v-if="canShare" class="space-y-2">
+    <template v-if="compact && hasShareableLink">
+      <div class="flex items-center justify-between gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <span
+            class="w-1.5 h-1.5 rounded-full shrink-0"
+            :class="serverTrackActive ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-300'"
+          />
+          <p class="text-[11px] font-medium text-neutral-600 truncate">
+            {{ serverTrackActive ? "Link live" : "Link siap" }}
+          </p>
+        </div>
+        <button
+          type="button"
+          class="shrink-0 text-xs font-medium text-neutral-500 hover:text-neutral-800 disabled:opacity-50"
+          :disabled="acting"
+          @click.stop.prevent="copyLink"
+        >
+          Salin
+        </button>
+      </div>
+    </template>
+
     <!-- Belum ada link -->
-    <template v-if="!hasShareableLink">
+    <template v-else-if="!hasShareableLink">
       <button
         type="button"
         class="w-full h-11 rounded-lg bg-neutral-900 text-white text-sm font-semibold hover:bg-neutral-800 active:scale-[0.99] transition disabled:opacity-50 inline-flex items-center justify-center gap-2"

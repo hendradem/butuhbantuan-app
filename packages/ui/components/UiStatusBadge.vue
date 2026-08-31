@@ -10,7 +10,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   cancelled:   { label: "Dibatalkan", cls: "bg-neutral-50 text-neutral-600 border-neutral-200" },
 };
 
-const props = defineProps<{ status: string; label?: string }>();
+const props = defineProps<{ status: string; label?: string; size?: "sm" | "md" }>();
 const cfg = computed(
   () =>
     STATUS[props.status] ?? {
@@ -23,7 +23,8 @@ const cfg = computed(
 <template>
   <span
     :class="[
-      'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
+      'inline-flex items-center rounded-full border font-medium',
+      size === 'sm' ? 'px-2 py-0.5 text-[11px] leading-4' : 'px-2.5 py-0.5 text-xs',
       cfg.cls,
     ]"
   >

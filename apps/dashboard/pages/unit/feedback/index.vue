@@ -128,18 +128,17 @@ const CALL_LABELS: Record<string, string> = {
       </div>
 
       <!-- Feedback list -->
-      <UiTableCard>
-        <template #toolbar>
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2.5 w-full min-w-0">
-            <p class="text-sm font-medium text-neutral-700 sm:mr-auto shrink-0">
-              Riwayat feedback
-            </p>
-            <UiSearchInput
-              v-model="search"
-              placeholder="Cari komentar..."
-              class="w-full sm:w-[220px] sm:max-w-xs"
-            />
-          </div>
+      <UiTableCard
+        title="Riwayat Feedback"
+        :badge="filteredFeedbacks.length"
+        description="Penilaian layanan dari pelapor"
+      >
+        <template #actions>
+          <UiSearchInput
+            v-model="search"
+            placeholder="Cari..."
+            class="w-28 sm:w-40 shrink-0"
+          />
         </template>
 
         <div v-if="showSkeleton" class="divide-y divide-neutral-100">

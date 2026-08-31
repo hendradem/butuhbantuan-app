@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"log"
 
@@ -87,6 +88,8 @@ func (h *EmergencyHandler) Create(c *fiber.Ctx) error {
 	}
 	// Newly created units are active by default; hospital import sets IsActive=false explicitly.
 	req.Operational.IsActive = true
+	// Omitted dashboard_access → true (Go bool zero is false).
+	req.DashboardAccess = boolFromBodyDefaultTrue(c.Body(), "dashboard_access", req.DashboardAccess)
 	created, err := h.emergencySvc.Create(req)
 	if err != nil {
 		log.Printf("emergency create error: %v | body: name=%q type_id=%d regency=%q province=%q", err, req.Name, req.EmergencyType.ID, req.Address.RegencyID, req.Address.ProvinceID)
@@ -96,6 +99,18 @@ func (h *EmergencyHandler) Create(c *fiber.Ctx) error {
 		return response.Error(c, fiber.StatusInternalServerError, "failed to create emergency")
 	}
 	return response.Created(c, "success", created)
+}
+
+// boolFromBodyDefaultTrue returns parsed when key is present; otherwise true.
+func boolFromBodyDefaultTrue(body []byte, key string, parsed bool) bool {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(body, &m) != nil {
+		return true
+	}
+	if _, ok := m[key]; !ok {
+		return true
+	}
+	return parsed
 }
 
 func (h *EmergencyHandler) GetAllTypes(c *fiber.Ctx) error {

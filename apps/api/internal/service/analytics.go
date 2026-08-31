@@ -83,6 +83,7 @@ func (s *NoopAnalyticsService) GetAnalytics(_ int) (domain.Analytics, error) {
 		RegionStats:     []domain.RegionStat{},
 		DispatchFunnel:  []domain.FunnelStage{},
 		FunnelDrops:     []domain.FunnelDrop{},
+		AccessChannels:  []domain.AccessChannelStat{},
 		ResponseSla:     []domain.SlaBucket{},
 		ArrivalSla:      []domain.SlaBucket{},
 	}, nil

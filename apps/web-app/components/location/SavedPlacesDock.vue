@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
 import {
-  PLACE_SLOTS,
-  getSavedPlace,
   listSavedPlaces,
   savedPlacesTick,
   type SavedPlace,
@@ -29,17 +27,9 @@ onMounted(() => {
   }
 });
 
-const placeCount = computed(() => {
+const places = computed(() => {
   void savedPlacesTick.value;
-  return listSavedPlaces().length;
-});
-
-const slots = computed(() => {
-  void savedPlacesTick.value;
-  return PLACE_SLOTS.map((meta) => ({
-    ...meta,
-    place: getSavedPlace(meta.slot),
-  }));
+  return listSavedPlaces();
 });
 
 function toggle() {
@@ -51,13 +41,24 @@ function toggle() {
   }
 }
 
-function onChip(place: SavedPlace | null, slot: SavedPlace["slot"] | "home" | "work") {
-  if (place) {
-    emit("go", place);
-    return;
-  }
-  saveSheet.openSave(slot);
+function addPlace() {
+  saveSheet.openSave();
 }
+
+watch(
+  places,
+  (next, prev) => {
+    if (!prev) return;
+    if (next.length > prev.length) {
+      open.value = true;
+      try {
+        localStorage.setItem(STORAGE_KEY, "1");
+      } catch {
+        /* ignore */
+      }
+    }
+  },
+);
 </script>
 
 <template>
@@ -68,33 +69,40 @@ function onChip(place: SavedPlace | null, slot: SavedPlace["slot"] | "home" | "w
         class="flex items-center gap-1.5 min-w-0 overflow-x-auto scrollbar-none"
       >
         <button
-          v-for="s in slots"
-          :key="s.slot"
+          v-for="p in places"
+          :key="p.id"
           type="button"
-          class="shrink-0 inline-flex items-center gap-1.5 pl-2.5 pr-3 py-2 text-[12px] font-semibold"
-          :class="s.place ? 'chip-on' : 'chip-off'"
-          @click="onChip(s.place, s.slot)"
+          class="chip-on shrink-0 inline-flex items-center gap-1.5 pl-2.5 pr-3 py-2 text-[12px] font-semibold"
+          @click="emit('go', p)"
         >
-          <Icon :icon="s.place ? s.icon : 'lucide:plus'" class="text-[14px]" />
-          {{ s.label }}
+          <Icon :icon="p.icon" class="text-[14px]" />
+          {{ p.label }}
+        </button>
+        <button
+          type="button"
+          class="chip-off shrink-0 inline-flex items-center gap-1.5 pl-2.5 pr-3 py-2 text-[12px] font-semibold"
+          @click="addPlace"
+        >
+          <Icon icon="lucide:plus" class="text-[14px]" />
+          Simpan
         </button>
       </div>
     </Transition>
 
     <button
       type="button"
-      class="dock-fab shrink-0 relative w-11 h-11 flex items-center justify-center transition-opacity active:opacity-85"
+      class="bb-map-fab shrink-0 relative w-11 h-11 flex items-center justify-center transition-opacity active:opacity-85"
       :aria-expanded="open"
       :aria-label="open ? 'Tutup favorit' : 'Buka favorit'"
       @click="toggle"
     >
       <Icon :icon="open ? 'lucide:x' : 'lucide:bookmark'" class="text-[18px]" />
       <span
-        v-if="!open && placeCount"
+        v-if="!open && places.length"
         class="absolute -top-0.5 -right-0.5 min-w-[1rem] h-4 px-1 flex items-center justify-center text-[10px] font-bold text-white"
         style="background: var(--bb-danger); border-radius: 9999px"
       >
-        {{ placeCount }}
+        {{ places.length }}
       </span>
     </button>
   </div>
@@ -120,14 +128,6 @@ function onChip(place: SavedPlace | null, slot: SavedPlace["slot"] | "home" | "w
 .chip-off {
   color: var(--bb-text-secondary);
   border-style: dashed;
-}
-
-.dock-fab {
-  background: var(--bb-bg-surface);
-  border-radius: 9999px;
-  border: 1px solid var(--bb-border);
-  box-shadow: 0 4px 16px rgba(26, 28, 46, 0.12);
-  color: var(--bb-text);
 }
 
 .dock-enter-active,

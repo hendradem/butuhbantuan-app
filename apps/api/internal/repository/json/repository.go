@@ -174,6 +174,22 @@ func (r *Repo) UpdateWilayah(_ string, _ domain.Address) error {
 	return repository.ErrNotSupported
 }
 
+func (r *Repo) UpdateCompliance(_ string, _ domain.AmbulanceComplianceProfile) (*domain.Emergency, error) {
+	return nil, repository.ErrNotSupported
+}
+
+func (r *Repo) GetComplianceProfile(_ string) (*domain.AmbulanceComplianceProfile, error) {
+	return nil, repository.ErrNotSupported
+}
+
+func (r *Repo) GetIncidentReportTemplate(_ string) (*domain.IncidentReportTemplate, error) {
+	return nil, repository.ErrNotSupported
+}
+
+func (r *Repo) UpdateIncidentReportTemplate(_ string, _ domain.IncidentReportTemplate) (*domain.IncidentReportTemplate, error) {
+	return nil, repository.ErrNotSupported
+}
+
 func (r *Repo) FindAllTypes() ([]domain.EmergencyType, error) {
 	return r.types, nil
 }

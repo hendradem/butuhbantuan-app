@@ -15,6 +15,7 @@ type PublicTicket struct {
 	RequesterName  string    `json:"requester_name,omitempty"`
 	RequesterPhone string    `json:"requester_phone,omitempty"` // masked unless verified
 	PhoneVerified  bool      `json:"phone_verified,omitempty"`
+	JenisPelayanan string    `json:"jenis_pelayanan,omitempty"`
 	Location       string    `json:"location,omitempty"`
 	Condition      string    `json:"condition,omitempty"`
 	PhotoURL       string    `json:"photo_url,omitempty"`
@@ -30,6 +31,9 @@ type PublicTicket struct {
 	EscalationLabel   string `json:"escalation_label,omitempty"`
 	UnitPhone      string    `json:"unit_phone,omitempty"`
 	UnitWhatsapp   string    `json:"unit_whatsapp,omitempty"`
+	WaDispatch     bool      `json:"wa_dispatch,omitempty"`
+	// TrackToken only when phone-verified (e-ticket owner). Needed to send /dispatch after reassign.
+	TrackToken     string    `json:"track_token,omitempty"`
 	UnitLat        float64   `json:"unit_lat,omitempty"`
 	UnitLng        float64   `json:"unit_lng,omitempty"`
 	ETAMinutes     int       `json:"eta_minutes,omitempty"`
@@ -81,7 +85,18 @@ func PhoneMatches(stored, claim string) bool {
 	return false
 }
 
-// MaskPhone hides the middle digits for public display (e.g. 0812****90).
+// MaskTicketNumber hides the middle segment for unverified viewers (BB-****31-0002).
+func MaskTicketNumber(number string) string {
+	n := strings.TrimSpace(number)
+	if n == "" {
+		return ""
+	}
+	parts := strings.Split(n, "-")
+	if len(parts) < 3 {
+		return "****"
+	}
+	return parts[0] + "-****" + parts[len(parts)-1]
+}
 func MaskPhone(phone string) string {
 	digits := NormalizePhone(phone)
 	if digits == "" {
@@ -120,6 +135,7 @@ func ToPublicTicket(o OrderTicket, phoneVerified bool) PublicTicket {
 		RequesterName:     o.RequesterName,
 		RequesterPhone:    phone,
 		PhoneVerified:     phoneVerified,
+		JenisPelayanan:    o.JenisPelayanan,
 		Location:          o.Location,
 		Condition:         o.Condition,
 		PhotoURL:          o.PhotoURL,
@@ -135,6 +151,7 @@ func ToPublicTicket(o OrderTicket, phoneVerified bool) PublicTicket {
 		EscalationLabel:   o.EscalationLabel,
 		UnitPhone:         o.UnitPhone,
 		UnitWhatsapp:      o.UnitWhatsapp,
+		WaDispatch:        o.WaDispatch,
 		UnitLat:           o.UnitLat,
 		UnitLng:           o.UnitLng,
 		ETAMinutes:        o.ETAMinutes,
@@ -149,7 +166,44 @@ func ToPublicTicket(o OrderTicket, phoneVerified bool) PublicTicket {
 		CreatedAt:         o.CreatedAt,
 		History:           ToPublicHistory(o.History),
 	}
+	if phoneVerified && o.TrackToken != "" {
+		pub.TrackToken = o.TrackToken
+	}
+	if !phoneVerified {
+		redactPublicTicket(&pub)
+	}
 	return pub
+}
+
+// redactPublicTicket strips sensitive fields until the viewer verifies pelapor phone.
+func redactPublicTicket(pub *PublicTicket) {
+	pub.RequesterName = ""
+	pub.Location = ""
+	pub.Condition = ""
+	pub.PhotoURL = ""
+	pub.RequesterLat = 0
+	pub.RequesterLng = 0
+	pub.ResponderLat = 0
+	pub.ResponderLng = 0
+	pub.ResponderUpdatedAt = nil
+	pub.History = nil
+	pub.UnitPhone = ""
+	pub.UnitWhatsapp = ""
+	pub.UnitLat = 0
+	pub.UnitLng = 0
+	pub.ETAMinutes = 0
+	pub.EmergencyUUID = ""
+	pub.TrackToken = ""
+	pub.ArrivedAt = nil
+	pub.AcceptedAt = nil
+	pub.CompletedAt = nil
+	pub.SlaDeadline = nil
+	pub.DispatchRound = 0
+	pub.TypeID = 0
+	pub.JenisPelayanan = ""
+	pub.EscalationHotline = ""
+	pub.EscalationLabel = ""
+	pub.TicketNumber = MaskTicketNumber(pub.TicketNumber)
 }
 
 // ToPublicHistory keeps only citizen-meaningful events and strips actor/ops fields.

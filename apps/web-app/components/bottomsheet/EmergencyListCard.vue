@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import { jenisPelayananLabel } from "@butuhbantuan/utils";
 import { cityNameFormat } from "~/utils/cityNameFormat";
+import { unitUsesWaDispatch } from "~/utils/waContact";
 import { emergencyLogoSrc, onEmergencyLogoError } from "~/utils/emergencyLogo";
 import { formatDistance } from "~/utils/geo";
 import {
@@ -29,6 +31,12 @@ const leaflet = useLeafletStore();
 
 const data = computed(() => props.emergency?.emergencyData ?? props.emergency);
 const trip = computed(() => props.emergency?.trip);
+const isHospital = computed(() => data.value?.organization_type === "rumah_sakit");
+const waDispatch = computed(() => unitUsesWaDispatch(props.emergency));
+const igdPhone = computed(() => {
+  const c = data.value?.contact;
+  return c?.phone || c?.whatsapp || "";
+});
 
 const tier = computed(() => partnerTierOf(data.value));
 
@@ -86,7 +94,7 @@ const serviceLabel = computed(() => {
   if (typeof raw === "string" && raw.trim()) return raw.replace(/,/g, " · ");
   const tipe = data.value?.tipe_emergency;
   if (Array.isArray(tipe) && tipe.length) {
-    return tipe.map((t: string) => String(t)).join(" · ");
+    return tipe.map((t: string) => jenisPelayananLabel(String(t))).join(" · ");
   }
   return data.value?.emergency_type?.name || "";
 });
@@ -123,13 +131,6 @@ const detailFacts = computed(() => {
   return rows;
 });
 
-const isHospital = computed(() => data.value?.organization_type === "rumah_sakit");
-
-const igdPhone = computed(() => {
-  const c = data.value?.contact;
-  return c?.phone || c?.whatsapp || "";
-});
-
 const emergencyId = computed(
   () => data.value?.id ?? props.emergency?.id ?? props.emergency?.emergencyData?.id,
 );
@@ -138,11 +139,36 @@ watch(emergencyId, () => {
   factsExpanded.value = false;
 });
 
-const canToggleFacts = computed(() => detailFacts.value.length > FACTS_PREVIEW);
+const canToggleFacts = computed(
+  () => detailFacts.value.length > FACTS_PREVIEW || hasCompliance.value,
+);
 
 const previewFacts = computed(() => detailFacts.value.slice(0, FACTS_PREVIEW));
 
 const extraFacts = computed(() => detailFacts.value.slice(FACTS_PREVIEW));
+
+const compliance = computed(() => data.value?.compliance ?? null);
+
+const isAmbulance = computed(() => {
+  const n = String(
+    data.value?.emergency_type?.name || serviceLabel.value || "",
+  ).toLowerCase();
+  return n.includes("ambulance") || n.includes("ambulans");
+});
+
+const hasCompliance = computed(
+  () => props.actions && isAmbulance.value && !!compliance.value?.category_label,
+);
+
+const compliancePct = computed(() => compliance.value?.completeness_pct ?? 0);
+
+const complianceVerified = computed(() => !!compliance.value?.verification?.is_verified);
+
+function complianceBadgeClass(pct: number) {
+  if (pct >= 80) return softLabelTone.emerald;
+  if (pct >= 50) return softLabelTone.amber;
+  return softLabelTone.red;
+}
 
 /** Travel-time badge: green → amber → red (previous thresholds). */
 function etaBadgeClass(mins: number | null) {
@@ -200,7 +226,16 @@ function distanceBadgeClass(meters: number | null) {
 
         <div class="ui-list-card__content">
           <div class="ui-list-card__title-row">
-            <h3 class="ui-list-card__title">{{ data?.name }}</h3>
+            <div class="ui-list-card__title-group">
+              <h3 class="ui-list-card__title">{{ data?.name }}</h3>
+              <Icon
+                v-if="complianceVerified"
+                icon="lucide:badge-check"
+                class="ui-list-card__verified"
+                aria-label="Terverifikasi"
+                title="Terverifikasi Dinkes"
+              />
+            </div>
             <span v-if="locationLabel" class="ui-list-card__location">
               <Icon icon="mingcute:location-fill" class="ui-list-card__meta-icon" />
               {{ locationLabel }}
@@ -225,6 +260,13 @@ function distanceBadgeClass(meters: number | null) {
               <Icon icon="mingcute:route-fill" />
               {{ distanceLabel }}
             </span>
+            <span
+              v-if="hasCompliance"
+              :class="[SOFT_LABEL, complianceBadgeClass(compliancePct)]"
+            >
+              <Icon icon="lucide:clipboard-check" />
+              {{ compliancePct }}% lengkap
+            </span>
           </div>
 
           <p v-if="actions && openLabel && !detailFacts.length" class="ui-list-card__open">
@@ -233,8 +275,8 @@ function distanceBadgeClass(meters: number | null) {
         </div>
       </div>
 
-      <div v-if="detailFacts.length" class="ui-list-card__facts-wrap">
-        <ul class="ui-list-card__facts">
+      <div v-if="detailFacts.length || hasCompliance" class="ui-list-card__facts-wrap">
+        <ul v-if="detailFacts.length" class="ui-list-card__facts">
           <li
             v-for="row in previewFacts"
             :key="row.label"
@@ -263,7 +305,11 @@ function distanceBadgeClass(meters: number | null) {
               :class="{ 'ui-list-card__collapse-chevron--open': factsExpanded }"
             />
           </button>
-          <ul v-show="factsExpanded" class="ui-list-card__facts ui-list-card__facts--extra">
+          <ul
+            v-if="extraFacts.length"
+            v-show="factsExpanded"
+            class="ui-list-card__facts ui-list-card__facts--extra"
+          >
             <li
               v-for="row in extraFacts"
               :key="row.label"
@@ -277,6 +323,13 @@ function distanceBadgeClass(meters: number | null) {
               </div>
             </li>
           </ul>
+          <AmbulanceComplianceBlock
+            v-if="hasCompliance"
+            v-show="factsExpanded"
+            embedded
+            :compliance="compliance"
+            :emergency-type-name="data?.emergency_type?.name"
+          />
         </div>
       </div>
 
@@ -296,7 +349,7 @@ function distanceBadgeClass(meters: number | null) {
         <template v-else>
           <button type="button" class="btn-whatsapp text-sm !mb-0 flex-1" @click="emit('hubungi')">
             <Icon icon="mingcute:chat-1-fill" class="w-4 h-4 mr-1.5" />
-            Hubungi
+            {{ waDispatch ? "WhatsApp" : "Hubungi" }}
           </button>
           <button
             type="button"

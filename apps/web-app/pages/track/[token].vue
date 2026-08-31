@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
 import { convertPhoneNumber } from "~/utils/convertPhoneNumber";
+import { createGpsPingGate } from "~/utils/gpsPingGate";
 
 definePageMeta({ layout: false });
 
@@ -48,6 +49,7 @@ const showDetails = ref(false);
 
 let watchId: number | null = null;
 let pingInFlight = false;
+const gpsGate = createGpsPingGate();
 
 function assetUrl(url: string): string {
   if (!url) return "";
@@ -65,9 +67,9 @@ const isCompleted = computed(() => session.value?.status === "completed");
 const hasArrived = computed(() => !!session.value?.arrived_at);
 
 const phaseLabel = computed(() => {
-  if (isCompleted.value) return "Penanganan Selesai";
-  if (hasArrived.value) return "Penanganan sedang berlangsung";
-  if (sharing.value) return "Sedang menuju lokasi";
+  if (isCompleted.value) return "Selesai";
+  if (hasArrived.value) return "Penanganan";
+  if (sharing.value) return "Menuju lokasi";
   if (canShare.value) return "Siap berbagi";
   return "Tidak aktif";
 });
@@ -87,7 +89,7 @@ const phaseHint = computed(() => {
 const travelBadge = computed(() => {
   if (!hasArrived.value) return null;
   const label = formatTravel(session.value?.travel_sec);
-  return label ? `Response time ${label}` : null;
+  return label ? `Respon ${label}` : null;
 });
 
 /** First load only — refresh must not flash skeleton. */
@@ -151,6 +153,7 @@ async function loadSession() {
 
 async function ping(lat: number, lng: number) {
   if (!token.value || pingInFlight || !canShare.value) return;
+  if (!gpsGate.shouldSend(lat, lng)) return;
   pingInFlight = true;
   pingError.value = "";
   try {
@@ -158,6 +161,7 @@ async function ping(lat: number, lng: number) {
       method: "POST",
       body: { lat, lng },
     });
+    gpsGate.markSent(lat, lng);
     lastPingAt.value = new Date();
     if (session.value) {
       session.value.responder_lat = lat;
@@ -190,6 +194,7 @@ function startSharing() {
   permissionDenied.value = false;
   pingError.value = "";
   sharing.value = true;
+  gpsGate.reset();
 
   watchId = navigator.geolocation.watchPosition(
     (pos) => {
@@ -214,6 +219,7 @@ function stopSharing() {
   }
   watchId = null;
   sharing.value = false;
+  gpsGate.reset();
 }
 
 async function markArrived() {
@@ -389,8 +395,38 @@ onUnmounted(() => {
         </div>
 
         <template v-else-if="session">
-          <!-- Main card — order-card anatomy (match e-ticket) -->
-          <div class="ui-card overflow-hidden">
+          <!-- Completed: confirmation only — no PII / WA / Maps -->
+          <div v-if="isCompleted" class="ui-card overflow-hidden">
+            <div class="px-4 py-2 text-center text-sm font-medium text-white bg-neutral-700">
+              Tiket selesai
+            </div>
+            <div class="px-5 py-6 text-center space-y-3">
+              <div class="mx-auto w-11 h-11 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center ring-1 ring-inset ring-emerald-600/10">
+                <Icon icon="lucide:check" class="text-xl" />
+              </div>
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-neutral-900 truncate">{{ cardTitle }}</p>
+                <p class="mt-0.5 text-xs font-mono text-neutral-500 tracking-wide">
+                  {{ session.ticket_number }}
+                </p>
+              </div>
+              <div class="flex flex-col items-center gap-1.5">
+                <span
+                  class="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full border"
+                  :class="phaseColor"
+                >
+                  {{ phaseLabel }}
+                </span>
+                <p v-if="travelBadge" class="text-xs text-neutral-500">{{ travelBadge }}</p>
+              </div>
+              <p class="text-sm text-neutral-500 leading-snug max-w-[16rem] mx-auto">
+                Live lokasi dihentikan. Terima kasih — Anda boleh menutup halaman ini.
+              </p>
+            </div>
+          </div>
+
+          <!-- Active field session -->
+          <div v-else class="ui-card overflow-hidden">
             <div
               v-if="urgencyBanner"
               class="px-4 py-2 text-center text-sm font-medium text-white"
@@ -426,29 +462,26 @@ onUnmounted(() => {
 
               <div class="mt-3 rounded-lg bg-white px-3 py-2.5 ring-1 ring-inset ring-neutral-200/80 space-y-2">
                 <span
-                  class="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full border"
+                  class="inline-flex max-w-full items-center text-xs font-semibold px-2.5 py-1 rounded-full border"
                   :class="phaseColor"
                 >
-                  {{ phaseLabel }}
+                  {{ phaseLabel }} 
                 </span>
                 <div
                   v-if="travelBadge || session.requester_name"
-                  class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-600"
+                  class="space-y-1 text-xs text-neutral-600"
                 >
-                  <span
-                    v-if="travelBadge"
-                    class="inline-flex items-center gap-1.5"
-                  >
+                  <p v-if="travelBadge" class="flex items-center gap-1.5 min-w-0">
                     <Icon icon="lucide:timer" class="text-sm text-neutral-400 shrink-0" />
-                    <span class="font-medium text-neutral-700">{{ travelBadge }}</span>
-                  </span>
-                  <span
+                    <span class="font-medium text-neutral-700 leading-snug">{{ travelBadge }}</span>
+                  </p>
+                  <p
                     v-if="session.requester_name"
-                    class="inline-flex items-center gap-1.5 min-w-0"
+                    class="flex items-center gap-1.5 min-w-0"
                   >
                     <Icon icon="lucide:user" class="text-sm text-neutral-400 shrink-0" />
                     <span class="truncate font-medium text-neutral-700">{{ session.requester_name }}</span>
-                  </span>
+                  </p>
                 </div>
               </div>
             </div>
@@ -545,60 +578,52 @@ onUnmounted(() => {
             v-if="showEnrouteShare"
             class="ui-card p-4 space-y-3"
           >
-            <div class="flex items-start gap-3">
-              <div
-                class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 ring-1 ring-inset"
-                :class="sharing
-                  ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/10'
-                  : 'bg-neutral-50 text-neutral-500 ring-neutral-500/10'"
-              >
-                <Icon :icon="sharing ? 'lucide:radio' : 'lucide:navigation'" class="text-lg" />
-              </div>
+            <div class="flex items-start gap-2.5">
+              <span
+                class="mt-1.5 w-2 h-2 rounded-full shrink-0"
+                :class="sharing ? 'bg-emerald-500' : 'bg-neutral-300'"
+              />
               <div class="min-w-0 flex-1">
-                <p class="text-base font-semibold text-neutral-900">
-                  {{ sharing ? "Lokasi sedang dibagikan" : "Bagikan lokasi ke pelapor" }}
+                <p class="text-sm font-semibold text-neutral-900">
+                  {{ sharing ? "GPS live" : "Bagikan lokasi" }}
                 </p>
-                <p class="text-sm text-neutral-500 mt-1 leading-snug">
-                  {{
-                    sharing
-                      ? "Tekan Sudah sampai saat tiba. GPS tetap live selama penanganan."
-                      : "Izinkan GPS dulu, lalu tandai Sudah sampai setelah tiba."
-                  }}
+                <p class="text-xs text-neutral-500 mt-0.5">
+                  <template v-if="sharing && lastPingLabel">
+                    {{ lastPingLabel }}<span v-if="accuracy != null"> · ±{{ Math.round(accuracy) }} m</span>
+                  </template>
+                  <template v-else-if="sharing">Menunggu sinyal GPS…</template>
+                  <template v-else>Izinkan GPS, lalu tandai Sudah sampai.</template>
                 </p>
-                <p v-if="lastPingLabel" class="text-sm text-emerald-700 mt-2 font-medium">
-                  Terkirim · {{ lastPingLabel }}
-                  <span v-if="accuracy != null"> · akurasi ±{{ Math.round(accuracy) }} m</span>
+                <p v-if="permissionDenied" class="text-xs text-amber-700 mt-1">
+                  Izin lokasi ditolak. Aktifkan di pengaturan browser.
                 </p>
-                <p v-if="permissionDenied" class="text-sm text-amber-700 mt-2">
-                  Izin lokasi ditolak. Aktifkan lokasi di pengaturan browser, lalu coba lagi.
-                </p>
-                <p v-if="pingError" class="text-sm text-red-600 mt-2">{{ pingError }}</p>
+                <p v-if="pingError" class="text-xs text-red-600 mt-1">{{ pingError }}</p>
               </div>
             </div>
 
             <template v-if="!sharing">
               <button
                 type="button"
-                class="w-full py-3.5 rounded-lg bg-red-600 text-white font-semibold text-base active:scale-[0.98] transition-transform"
+                class="w-full py-2.5 rounded-lg bg-red-600 text-white font-semibold text-sm active:scale-[0.98] transition-transform"
                 @click="startSharing"
               >
                 Izinkan &amp; bagikan lokasi
               </button>
               <button
                 type="button"
-                class="w-full text-center text-sm font-medium text-emerald-700 hover:text-emerald-800 py-1 disabled:opacity-50"
+                class="w-full text-center text-xs font-medium text-neutral-500 hover:text-neutral-800 py-0.5 disabled:opacity-50"
                 :disabled="markingArrive"
                 @click="markArrived"
               >
                 {{ markingArrive ? "Mencatat…" : "Sudah sampai (tanpa bagikan)" }}
               </button>
-              <p v-if="arriveError" class="text-sm text-red-600">{{ arriveError }}</p>
+              <p v-if="arriveError" class="text-xs text-red-600">{{ arriveError }}</p>
             </template>
 
             <template v-else>
               <button
                 type="button"
-                class="w-full py-3.5 rounded-lg bg-emerald-600 text-white font-semibold text-base active:scale-[0.98] transition-transform disabled:opacity-50"
+                class="w-full py-2.5 rounded-lg bg-emerald-600 text-white font-semibold text-sm active:scale-[0.98] transition-transform disabled:opacity-50"
                 :disabled="markingArrive"
                 @click="markArrived"
               >
@@ -606,12 +631,12 @@ onUnmounted(() => {
               </button>
               <button
                 type="button"
-                class="w-full text-center text-sm font-medium text-neutral-500 hover:text-neutral-800 py-1"
+                class="w-full text-center text-xs font-medium text-neutral-500 hover:text-neutral-800 py-0.5"
                 @click="stopSharing"
               >
-                Berhenti berbagi lokasi
+                Pause berbagi
               </button>
-              <p v-if="arriveError" class="text-sm text-red-600">{{ arriveError }}</p>
+              <p v-if="arriveError" class="text-xs text-red-600">{{ arriveError }}</p>
             </template>
           </div>
 
@@ -620,50 +645,26 @@ onUnmounted(() => {
             v-else-if="showHandling"
             class="ui-card p-4 space-y-3"
           >
-            <div class="flex items-start gap-3">
-              <div
-                class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 ring-1 ring-inset"
-                :class="sharing
-                  ? 'bg-violet-50 text-violet-700 ring-violet-600/10'
-                  : 'bg-neutral-50 text-neutral-500 ring-neutral-500/10'"
-              >
-                <Icon :icon="sharing ? 'lucide:radio' : 'lucide:stethoscope'" class="text-lg" />
-              </div>
+            <div class="flex items-start gap-2.5">
+              <span
+                class="mt-1.5 w-2 h-2 rounded-full shrink-0"
+                :class="sharing ? 'bg-violet-500' : 'bg-neutral-300'"
+              />
               <div class="min-w-0 flex-1">
-                <p class="text-base font-semibold text-neutral-900">
-                  {{ sharing ? "Penanganan · GPS live" : "Penanganan di lokasi" }}
+                <p class="text-sm font-semibold text-neutral-900">Penanganan</p>
+                <p class="text-xs text-neutral-500 mt-0.5">
+                  <template v-if="sharing && lastPingLabel">
+                    GPS live · {{ lastPingLabel }}<span v-if="accuracy != null"> · ±{{ Math.round(accuracy) }} m</span>
+                  </template>
+                  <template v-else-if="sharing">GPS live</template>
+                  <template v-else>GPS paused — bagikan agar posko memantau</template>
                 </p>
-                <p class="text-sm text-neutral-500 mt-1 leading-snug">
-                  Status tetap diproses. Bagikan GPS agar posko memantau (rujuk RS / kembali pos).
-                  Tekan Selesai jika penanganan tuntas.
+                <p v-if="permissionDenied" class="text-xs text-amber-700 mt-1">
+                  Izin lokasi ditolak. Aktifkan di pengaturan browser.
                 </p>
-                <p v-if="lastPingLabel" class="text-sm text-emerald-700 mt-2 font-medium">
-                  Terkirim · {{ lastPingLabel }}
-                  <span v-if="accuracy != null"> · akurasi ±{{ Math.round(accuracy) }} m</span>
-                </p>
-                <p v-if="permissionDenied" class="text-sm text-amber-700 mt-2">
-                  Izin lokasi ditolak. Aktifkan lokasi di pengaturan browser, lalu coba lagi.
-                </p>
-                <p v-if="pingError" class="text-sm text-red-600 mt-2">{{ pingError }}</p>
+                <p v-if="pingError" class="text-xs text-red-600 mt-1">{{ pingError }}</p>
               </div>
             </div>
-
-            <button
-              v-if="!sharing"
-              type="button"
-              class="w-full py-3 rounded-lg bg-neutral-900 text-white font-semibold text-sm active:scale-[0.98] transition-transform"
-              @click="startSharing"
-            >
-              Lanjutkan bagikan GPS
-            </button>
-            <button
-              v-else
-              type="button"
-              class="w-full text-center text-sm font-medium text-neutral-500 hover:text-neutral-800 py-1"
-              @click="stopSharing"
-            >
-              Pause berbagi lokasi
-            </button>
 
             <button
               type="button"
@@ -673,21 +674,23 @@ onUnmounted(() => {
             >
               Selesai
             </button>
-            <p v-if="completeError && !showCompleteModal" class="text-sm text-red-600">{{ completeError }}</p>
-          </div>
-
-          <!-- Done state -->
-          <div
-            v-else-if="isCompleted"
-            class="ui-card p-5 text-center space-y-2"
-          >
-            <div class="mx-auto w-11 h-11 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center ring-1 ring-inset ring-emerald-600/10">
-              <Icon icon="lucide:check" class="text-xl" />
-            </div>
-            <p class="text-base font-semibold text-neutral-900">Tiket selesai</p>
-            <p class="text-sm text-neutral-500 leading-snug">
-              Live lokasi dihentikan. Terima kasih — Anda boleh menutup halaman ini.
-            </p>
+            <button
+              v-if="!sharing"
+              type="button"
+              class="w-full text-center text-xs font-medium text-neutral-500 hover:text-neutral-800 py-0.5"
+              @click="startSharing"
+            >
+              Lanjutkan bagikan GPS
+            </button>
+            <button
+              v-else
+              type="button"
+              class="w-full text-center text-xs font-medium text-neutral-500 hover:text-neutral-800 py-0.5"
+              @click="stopSharing"
+            >
+              Pause berbagi
+            </button>
+            <p v-if="completeError && !showCompleteModal" class="text-xs text-red-600">{{ completeError }}</p>
           </div>
 
           <p class="text-center text-xs text-neutral-400">

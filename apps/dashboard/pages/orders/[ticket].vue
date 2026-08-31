@@ -25,11 +25,16 @@ const refresh = useSoftRefresh(refreshOrder);
 const order = computed(() => data.value ?? null);
 const showSkeleton = computed(() => isInitialPending(pending.value, data.value));
 
+const TERMINAL = new Set(["completed", "cancelled"]);
+
+function onAdminOrderLive() {
+  const status = order.value?.status;
+  if (status && TERMINAL.has(status)) return;
+  void refresh();
+}
+
 type MobilePane = "steps" | "detail";
 const mobilePane = ref<MobilePane>("steps");
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const TERMINAL = new Set(["completed", "cancelled"]);
 
 watch(
   () => order.value?.status,
@@ -51,21 +56,34 @@ function formatDate(d: string | null | undefined): string {
 
 // Auto refresh while active (faster when field GPS is live)
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+function restartOrderPoll() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+  const status = order.value?.status;
+  if (!import.meta.client || !status || TERMINAL.has(status)) return;
+  const hasGps =
+    !!(Number(order.value?.responder_lat) || Number(order.value?.responder_lng)) ||
+    !!order.value?.track_enabled_at;
+  pollTimer = setInterval(() => refresh(), hasGps ? 8_000 : 15_000);
+}
 watch(
   () => [order.value?.status, order.value?.responder_updated_at, order.value?.track_enabled_at],
-  () => {
-    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-    const status = order.value?.status;
-    if (import.meta.client && status && !TERMINAL.has(status)) {
-      const hasGps =
-        !!(Number(order.value?.responder_lat) || Number(order.value?.responder_lng)) ||
-        !!order.value?.track_enabled_at;
-      pollTimer = setInterval(() => refresh(), hasGps ? 5_000 : 15_000);
-    }
-  },
-  { immediate: true }
+  () => restartOrderPoll(),
 );
-onUnmounted(() => { if (pollTimer) clearInterval(pollTimer); });
+onMounted(() => {
+  if (import.meta.client) {
+    window.addEventListener("bb:admin-order-live", onAdminOrderLive);
+  }
+  restartOrderPoll();
+});
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer);
+  if (import.meta.client) {
+    window.removeEventListener("bb:admin-order-live", onAdminOrderLive);
+  }
+});
 
 const lightboxPhoto = ref<string | null>(null);
 
@@ -389,7 +407,7 @@ async function onNextStep(action: string) {
               v-if="order?.partner_tier === 'psc' || order?.partner_tier === 'verified'"
               class="hidden sm:inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-800 shrink-0"
             >
-              {{ order.partner_tier === 'psc' ? 'PSC' : 'Terverifikasi' }}
+              {{ order.partner_tier === 'psc' ? 'PSC' : 'Swasta' }}
             </span>
             <UiStatusBadge v-if="order" :status="order.status" class="shrink-0" />
             <span
@@ -397,6 +415,7 @@ async function onNextStep(action: string) {
               class="soft-skel inline-block h-5 w-16 rounded-full shrink-0"
               aria-hidden="true"
             />
+            <OrderTriageBadge :acuity="order?.assessment_acuity" />
             <span
               v-if="order?.source === 'sos'"
               class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emergency-600 text-white uppercase animate-pulse shrink-0"

@@ -90,6 +90,22 @@ function pushToast(order: any) {
   );
 }
 
+/** Live hub → Nuxt payload (orders table + open ticket) + overview heatmap. */
+let liveRefreshAt = 0;
+function refreshAdminLive() {
+  const now = Date.now();
+  if (now - liveRefreshAt < 400) return;
+  liveRefreshAt = now;
+  if (import.meta.client) {
+    window.dispatchEvent(new CustomEvent("bb:admin-order-live"));
+  }
+  refreshNuxtData("admin-orders").catch(() => {});
+  const ticket = route.params.ticket;
+  if (typeof ticket === "string" && ticket && route.path.startsWith("/orders/")) {
+    refreshNuxtData(`order-detail-${ticket}`).catch(() => {});
+  }
+}
+
 function announceOrders(orders: any[]) {
   if (!orders.length) return;
   addSeenIds(orders.map((o: any) => o.id));
@@ -104,9 +120,7 @@ function announceOrders(orders: any[]) {
     });
     pushToast(o);
   }
-  if (import.meta.client) {
-    window.dispatchEvent(new CustomEvent("bb:admin-order-live"));
-  }
+  refreshAdminLive();
 }
 
 async function pollOrders() {
@@ -178,13 +192,12 @@ useOrderSSE(
   baseUrl,
   {
     silentToast: true,
-    onOrderUpdated: (order?: any) => {
-      // Status / location changes — refresh overview sebaran colors when open
-      if (import.meta.client) {
-        window.dispatchEvent(new CustomEvent("bb:admin-order-live"));
-      }
-      // fall through: handlers below are only onNewOrder path for exhausted etc.
-      void order;
+    onOrderUpdated: () => {
+      refreshAdminLive();
+    },
+    onReassigned: () => {
+      refreshAdminLive();
+      pollOrders();
     },
     onNewOrder: (order?: any) => {
       if (order?.id) {
@@ -194,11 +207,8 @@ useOrderSSE(
           return;
         }
       }
-      // Fallback: refresh pending counts via poll (dedupe by seen ids)
+      refreshAdminLive();
       pollOrders();
-      if (import.meta.client) {
-        window.dispatchEvent(new CustomEvent("bb:admin-order-live"));
-      }
     },
     onArrived: (order: any) => {
       const ticket = order?.ticket_number || "";
@@ -211,6 +221,7 @@ useOrderSSE(
         href: ticket ? `/orders/${ticket}` : "/orders",
         kind: "arrived",
       });
+      refreshAdminLive();
     },
   },
   "admin",
@@ -218,7 +229,7 @@ useOrderSSE(
 </script>
 
 <template>
-  <div class="flex h-screen bg-neutral-50 overflow-hidden font-sans">
+  <div class="flex h-dvh max-h-dvh bg-neutral-50 overflow-hidden font-sans">
     <Transition name="fade">
       <div
         v-if="mobileOpen"
@@ -229,16 +240,19 @@ useOrderSSE(
 
     <div
       :class="[
-        'fixed inset-y-0 left-0 z-50 lg:static lg:z-auto lg:flex transition-transform duration-300',
+        'fixed inset-y-0 left-0 z-50 shrink-0 lg:relative lg:z-auto lg:h-full transition-transform duration-300',
         mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
       ]"
     >
       <AppSidebar :mobile-open="mobileOpen" @close="closeMobile" />
     </div>
 
-    <div class="flex flex-col flex-1 min-w-0 overflow-hidden">
+    <div class="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
       <AppHeader @toggle-mobile="mobileOpen = !mobileOpen" />
-      <main data-dashboard-scroll="main" class="flex-1 overflow-y-auto">
+      <main
+        data-dashboard-scroll="main"
+        class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-neutral-50"
+      >
         <slot />
       </main>
     </div>

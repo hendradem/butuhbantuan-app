@@ -56,6 +56,7 @@ type PublicUnitStats struct {
 	ByHour      []HourStat              `json:"by_hour"`
 	PeakHour    *HourStat               `json:"peak_hour,omitempty"`
 	Referrals   []ReferralStat          `json:"referrals,omitempty"`
+	ByJenisPelayanan []JenisPelayananStat `json:"by_jenis_pelayanan,omitempty"`
 	GeneratedAt time.Time               `json:"generated_at"`
 }
 
@@ -74,6 +75,7 @@ type UnitPeriodAggregates struct {
 	DailyTrend      []DailyStat
 	ByHour          []HourStat
 	Referrals       []ReferralStat
+	ByJenisPelayanan []JenisPelayananStat
 }
 
 // Min samples before rates are shown on the public page.
@@ -150,6 +152,10 @@ func BuildPublicUnitStats(e Emergency, agg UnitPeriodAggregates, periodDays int,
 	if referrals == nil {
 		referrals = []ReferralStat{}
 	}
+	byJenis := agg.ByJenisPelayanan
+	if byJenis == nil {
+		byJenis = []JenisPelayananStat{}
+	}
 
 	return PublicUnitStats{
 		Unit: PublicUnitProfile{
@@ -171,6 +177,7 @@ func BuildPublicUnitStats(e Emergency, agg UnitPeriodAggregates, periodDays int,
 		ByHour:      hours,
 		PeakHour:    peak,
 		Referrals:   referrals,
+		ByJenisPelayanan: byJenis,
 		GeneratedAt: time.Now().UTC(),
 	}
 }

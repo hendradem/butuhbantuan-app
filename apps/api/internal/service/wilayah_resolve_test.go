@@ -66,6 +66,18 @@ func (s *stubEmergencyRepo) UpdateOperational(string, domain.OperationalStatus) 
 func (s *stubEmergencyRepo) UpdateFleet(string, domain.FleetStatus) error { return nil }
 func (s *stubEmergencyRepo) UpdateActive(string, bool) error                      { return nil }
 func (s *stubEmergencyRepo) UpdateWilayah(string, domain.Address) error           { return nil }
+func (s *stubEmergencyRepo) UpdateCompliance(string, domain.AmbulanceComplianceProfile) (*domain.Emergency, error) {
+	return nil, nil
+}
+func (s *stubEmergencyRepo) GetComplianceProfile(string) (*domain.AmbulanceComplianceProfile, error) {
+	return nil, nil
+}
+func (s *stubEmergencyRepo) GetIncidentReportTemplate(string) (*domain.IncidentReportTemplate, error) {
+	return nil, nil
+}
+func (s *stubEmergencyRepo) UpdateIncidentReportTemplate(string, domain.IncidentReportTemplate) (*domain.IncidentReportTemplate, error) {
+	return nil, nil
+}
 
 func TestWilayahResolver_prefersNearestGPS(t *testing.T) {
 	repo := &stubRegionRepo{regions: []domain.AvailableRegion{

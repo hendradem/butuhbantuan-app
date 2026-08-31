@@ -5,7 +5,6 @@ import { buildUnitWaMessage, openWhatsApp } from "~/utils/waContact";
 
 const sheet = useConfirmationSheetStore();
 const reviewSheet = useReviewSheetStore();
-const ticketSheet = useTicketSheetStore();
 const userLocation = useUserLocationStore();
 const toast = appToast();
 
@@ -38,13 +37,16 @@ function onContactClick(e: Event) {
 }
 
 function openTicketStatus() {
-  const n = String(sheet.ticketNumber || "").trim();
-  if (!n) return;
+  const token = String(sheet.publicToken || "").trim();
+  if (!token) {
+    toast.error("Link e-tiket tidak tersedia");
+    return;
+  }
   sheet.onClose();
-  ticketSheet.open(n, {
-    via: sheet.callType === "whatsapp" || sheet.callType === "phone" ? sheet.callType : undefined,
-    to: sheet.callNumber || undefined,
-  });
+  const query: Record<string, string> = {};
+  if (sheet.callType === "whatsapp" || sheet.callType === "phone") query.via = sheet.callType;
+  if (sheet.callNumber) query.to = sheet.callNumber;
+  void navigateTo({ path: `/ticket/${token}`, query });
 }
 </script>
 

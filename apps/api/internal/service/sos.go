@@ -35,6 +35,7 @@ func (s *SOSService) Submit(alert domain.SOSAlert) (*domain.SOSAlert, error) {
 		existing, err := s.orderRepo.FindActiveByPhone(alert.Phone, alert.TypeID)
 		if err == nil && existing != nil {
 			alert.TicketNumber = existing.TicketNumber
+			alert.PublicToken = existing.PublicToken
 			alert.Reused = true
 			// Still persist a breadcrumb SOS row pointing at the live ticket.
 			created, cerr := s.sosRepo.Create(alert)
@@ -44,6 +45,7 @@ func (s *SOSService) Submit(alert domain.SOSAlert) (*domain.SOSAlert, error) {
 			}
 			created.Reused = true
 			created.TicketNumber = existing.TicketNumber
+			created.PublicToken = existing.PublicToken
 			return created, nil
 		}
 		if err != nil && !errors.Is(err, repository.ErrNotFound) {
@@ -58,6 +60,7 @@ func (s *SOSService) Submit(alert domain.SOSAlert) (*domain.SOSAlert, error) {
 		}
 		if result != nil && result.Ticket != nil {
 			alert.TicketNumber = result.Ticket.TicketNumber
+			alert.PublicToken = result.Ticket.PublicToken
 		}
 	}
 

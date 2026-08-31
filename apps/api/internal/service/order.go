@@ -106,6 +106,15 @@ func (s *OrderService) GetByTicketNumber(number string) (*domain.OrderTicket, er
 	return ticket, nil
 }
 
+func (s *OrderService) GetByPublicToken(token string) (*domain.OrderTicket, error) {
+	ticket, err := s.repo.FindByPublicToken(token)
+	if err != nil {
+		return nil, err
+	}
+	s.attachHistory(ticket)
+	return ticket, nil
+}
+
 func (s *OrderService) GetAll() ([]domain.OrderTicket, error) {
 	return s.repo.FindAll()
 }
@@ -135,15 +144,15 @@ func (s *OrderService) UpdateStatus(id, status, handlerName, notes string) (*dom
 		}
 	}
 	if status == "completed" {
-		// Soft-close: stop live GPS & hide “track active” in dashboard, but keep
-		// the magic-link token so field petugas can still open a read-only session.
-		if closed, err := s.repo.ExpireTrack(id); err == nil {
+		// Full revoke — field magic link must not keep PII reachable after close.
+		if closed, err := s.repo.DisableTrack(id); err == nil {
 			result = closed
+			result.TrackToken = ""
 			_ = s.RecordEvent(domain.OrderEvent{
 				OrderID:      result.ID,
 				TicketNumber: result.TicketNumber,
 				Type:         domain.OrderEventTrackDisabled,
-				Message:      "Live lokasi dihentikan (tiket selesai)",
+				Message:      "Link petugas dicabut (tiket selesai)",
 				Actor:        handlerName,
 			})
 		}
@@ -176,6 +185,10 @@ func (s *OrderService) AcceptPending(id, expectedUUID string) (*domain.OrderTick
 	}
 	if s.attemptRepo != nil {
 		_ = s.attemptRepo.MarkAccepted(result.ID, result.EmergencyUUID)
+	}
+	// Same magic-link URL stays valid; extend TTL for field GPS / complete.
+	if refreshed, rerr := s.RefreshTrackTTL(result.ID); rerr == nil && refreshed != nil {
+		result = refreshed
 	}
 	s.recordStatusEvent(before, result, "accepted", "", "")
 	if s.pub != nil {
@@ -390,7 +403,12 @@ func synthesizeHistory(ticket *domain.OrderTicket, attempts repository.DispatchA
 	return out
 }
 
-const trackLinkTTL = 12 * time.Hour
+const (
+	// Pending WA-dispatch / offer links — short window so leaked chat URLs die fast.
+	trackOfferTTL = 4 * time.Hour
+	// After accept — field GPS / complete still needs a working link.
+	trackActiveTTL = 8 * time.Hour
+)
 
 // EnableTrack creates/refreshes a magic link so field staff can share GPS without dashboard login.
 // Also allowed for pending orders so dispatchers can pre-generate a respond link for WA delivery.
@@ -403,7 +421,11 @@ func (s *OrderService) EnableTrack(id, actor string) (*domain.OrderTicket, error
 		return nil, repository.ErrConflict
 	}
 	token := uuid.New().String()
-	expires := time.Now().Add(trackLinkTTL)
+	ttl := trackActiveTTL
+	if ticket.Status == "pending" {
+		ttl = trackOfferTTL
+	}
+	expires := time.Now().Add(ttl)
 	updated, err := s.repo.EnableTrack(id, token, expires)
 	if err != nil {
 		return nil, err
@@ -417,6 +439,28 @@ func (s *OrderService) EnableTrack(id, actor string) (*domain.OrderTicket, error
 	})
 	s.pub.PublishScoped(updated.EmergencyUUID, updated.RegencyID, updated.ProvinceID, hub.Event{Type: "order_updated", Payload: updated})
 	return updated, nil
+}
+
+// RefreshTrackTTL extends expiry without rotating the token (keeps the same /dispatch URL).
+func (s *OrderService) RefreshTrackTTL(id string) (*domain.OrderTicket, error) {
+	ticket, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if ticket.TrackToken == "" {
+		return ticket, nil
+	}
+	if ticket.Status == "completed" || ticket.Status == "cancelled" {
+		return nil, repository.ErrConflict
+	}
+	ttl := trackActiveTTL
+	if ticket.Status == "pending" {
+		ttl = trackOfferTTL
+	}
+	if err := s.repo.ExtendTrackExpiry(id, time.Now().Add(ttl)); err != nil {
+		return nil, err
+	}
+	return s.repo.FindByID(id)
 }
 
 func (s *OrderService) DisableTrack(id, actor string) (*domain.OrderTicket, error) {
@@ -439,30 +483,27 @@ func (s *OrderService) DisableTrack(id, actor string) (*domain.OrderTicket, erro
 // Unlike GetByTrackToken, this also allows pending (unaccepted) orders so a unit
 // can see the offer and accept/reject without opening the dashboard.
 func (s *OrderService) GetOfferByToken(token string) (*domain.OrderTicket, error) {
-	ticket, err := s.repo.FindByTrackToken(token)
+	ticket, err := s.repo.FindByTrackToken(strings.TrimSpace(token))
 	if err != nil {
 		return nil, err
 	}
-	if ticket.Status == "cancelled" {
+	if ticket.Status == "cancelled" || ticket.Status == "completed" {
 		return nil, repository.ErrConflict
 	}
-	// Expired check only applies to active/pending; completed is always readable.
-	if ticket.Status != "completed" && ticket.TrackExpiresAt != nil && time.Now().After(*ticket.TrackExpiresAt) {
+	if ticket.TrackExpiresAt != nil && time.Now().After(*ticket.TrackExpiresAt) {
 		return nil, repository.ErrConflict
 	}
 	return ticket, nil
 }
 
-// GetByTrackToken returns a session for the field tracking page.
-// Allows completed tickets so petugas still sees pelapor contact / photo after finish.
+// GetByTrackToken returns a session for the field tracking page (active tickets only).
+// Completed/cancelled links are revoked — no PII over magic link after close.
 func (s *OrderService) GetByTrackToken(token string) (*domain.OrderTicket, error) {
-	ticket, err := s.repo.FindByTrackToken(token)
+	ticket, err := s.repo.FindByTrackToken(strings.TrimSpace(token))
 	if err != nil {
 		return nil, err
 	}
 	switch ticket.Status {
-	case "completed":
-		return ticket, nil
 	case "accepted", "in_progress":
 		if ticket.TrackExpiresAt != nil && time.Now().After(*ticket.TrackExpiresAt) {
 			return nil, repository.ErrConflict
@@ -611,6 +652,9 @@ func (s *NoopOrderService) GetByID(_ string) (*domain.OrderTicket, error) {
 func (s *NoopOrderService) GetByTicketNumber(_ string) (*domain.OrderTicket, error) {
 	return nil, errOrderNotSupported
 }
+func (s *NoopOrderService) GetByPublicToken(_ string) (*domain.OrderTicket, error) {
+	return nil, errOrderNotSupported
+}
 func (s *NoopOrderService) GetAll() ([]domain.OrderTicket, error) { return []domain.OrderTicket{}, nil }
 func (s *NoopOrderService) GetByUnit(_, _ string) ([]domain.OrderTicket, error) {
 	return []domain.OrderTicket{}, nil
@@ -630,6 +674,9 @@ func (s *NoopOrderService) GetHistory(_ string) ([]domain.OrderEvent, error) {
 	return nil, errOrderNotSupported
 }
 func (s *NoopOrderService) EnableTrack(_, _ string) (*domain.OrderTicket, error) {
+	return nil, errOrderNotSupported
+}
+func (s *NoopOrderService) RefreshTrackTTL(_ string) (*domain.OrderTicket, error) {
 	return nil, errOrderNotSupported
 }
 func (s *NoopOrderService) DisableTrack(_, _ string) (*domain.OrderTicket, error) {

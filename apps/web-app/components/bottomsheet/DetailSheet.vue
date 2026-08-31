@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import { appToast } from "~/utils/appToast";
 import { displayEtaMinutes } from "~/utils/rankUnits";
 
 const detailSheet = useDetailSheetStore();
 const exploreSheet = useExploreSheetStore();
+const mapUrl = useMapUrl();
 const leaflet = useLeafletStore();
-const userLocation = useUserLocationStore();
+const { saved, toggleFromEmergency } = useSavedUnits();
+const toast = appToast();
 
 const data = computed(() => detailSheet.detailSheetData);
 const emergencyData = computed(() => data.value?.emergency?.emergencyData);
@@ -20,6 +23,18 @@ const unitStatsPath = computed(() => {
   return id ? `/unit/${id}` : "";
 });
 
+const isUnitSaved = computed(() => saved(emergencyData.value?.id));
+
+function toggleSaveUnit() {
+  if (!emergencyData.value?.id) return;
+  const next = toggleFromEmergency(data.value?.emergency);
+  toast.success(
+    next
+      ? `${emergencyData.value.name} tersimpan`
+      : "Dihapus dari unit tersimpan",
+  );
+}
+
 /** Prefer live OSRM route (matches map bubble); else Matrix trip minutes. */
 const etaMinutes = computed(() => {
   const sec = leaflet.routeTravel?.durationSec;
@@ -29,10 +44,19 @@ const etaMinutes = computed(() => {
   return displayEtaMinutes(tripData.value?.duration);
 });
 
+const headerTitle = computed(() => {
+  const typeName = String(
+    emergencyType.value?.name || emergencyData.value?.emergency_type?.name || "",
+  ).trim();
+  if (!typeName) return "Bantuan darurat";
+  if (/rumah sakit|hospital/i.test(typeName)) return typeName;
+  return `Bantuan ${typeName}`;
+});
+
 function handleClose() {
   menuOpen.value = false;
+  mapUrl.clearUnit();
   detailSheet.onClose();
-  leaflet.resetLeafletRouting();
 }
 
 function onStatsNavigate() {
@@ -90,7 +114,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="min-w-0">
             <h1 class="text-md leading-none m-0 font-semibold truncate ui-text-primary">
-              {{ emergencyData.name }}
+              {{ headerTitle }}
             </h1>
             <p v-if="etaMinutes != null" class="m-0 mt-1 leading-none text-[13px] ui-text-secondary">
               ±{{ etaMinutes }} menit dari lokasimu
@@ -99,6 +123,21 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            class="flex items-center justify-center w-8 h-8 shrink-0 ui-icon-well"
+            :title="isUnitSaved ? 'Hapus dari tersimpan' : 'Simpan unit'"
+            :aria-label="isUnitSaved ? 'Hapus dari tersimpan' : 'Simpan unit'"
+            :aria-pressed="isUnitSaved"
+            @click="toggleSaveUnit"
+          >
+            <Icon
+              :icon="isUnitSaved ? 'lucide:bookmark-check' : 'lucide:bookmark'"
+              class="text-lg"
+              :style="{ color: isUnitSaved ? 'var(--bb-danger)' : 'var(--bb-text-secondary)' }"
+            />
+          </button>
+
           <div v-if="unitStatsPath" ref="menuRef" class="relative">
             <button
               type="button"
@@ -119,6 +158,19 @@ onBeforeUnmount(() => {
                 style="box-shadow: var(--bb-shadow-soft)"
                 role="menu"
               >
+                <button
+                  type="button"
+                  class="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium ui-text-primary hover:bg-neutral-50 active:bg-neutral-100 text-left"
+                  role="menuitem"
+                  @click="toggleSaveUnit(); menuOpen = false"
+                >
+                  <Icon
+                    :icon="isUnitSaved ? 'lucide:bookmark-minus' : 'lucide:bookmark'"
+                    class="text-base shrink-0"
+                    style="color: var(--bb-text-secondary)"
+                  />
+                  <span class="min-w-0 flex-1">{{ isUnitSaved ? "Hapus dari tersimpan" : "Simpan unit" }}</span>
+                </button>
                 <NuxtLink
                   :to="unitStatsPath"
                   class="flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium ui-text-primary hover:bg-neutral-50 active:bg-neutral-100"
