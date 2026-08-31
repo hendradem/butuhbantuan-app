@@ -1,7 +1,9 @@
+import type { EmergencyDataType } from "@butuhbantuan/types";
+
 export const useEmergencyStore = defineStore("emergency", {
   state: () => ({
-    filteredEmergency: [] as any[],
-    selectedEmergency: null as any,
+    filteredEmergency: [] as EmergencyDataType[],
+    selectedEmergency: null as EmergencyDataType | null,
     isLoading: false,
     isCovered: false, // grey by default; set true only when coverage is confirmed
     /** Explicit out-of-coverage vs unknown/loading */
@@ -9,8 +11,8 @@ export const useEmergencyStore = defineStore("emergency", {
     lastRegionName: "" as string,
   }),
   actions: {
-    setFilteredEmergency(data: any[]) { this.filteredEmergency = data; },
-    setSelectedEmergency(data: any) { this.selectedEmergency = data; },
+    setFilteredEmergency(data: EmergencyDataType[]) { this.filteredEmergency = data; },
+    setSelectedEmergency(data: EmergencyDataType | null) { this.selectedEmergency = data; },
     setLoading(v: boolean) { this.isLoading = v; },
     setCoverage(v: boolean) {
       this.isCovered = v;

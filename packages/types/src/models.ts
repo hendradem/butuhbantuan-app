@@ -117,16 +117,7 @@ export interface OrderTicket {
   eta_minutes?: number;
   completed_at?: string | null;
   created_at: string;
-  history?: Array<{
-    id?: string;
-    type?: string;
-    message: string;
-    actor?: string;
-    from_unit?: string;
-    to_unit?: string;
-    dispatch_tier?: string;
-    created_at: string;
-  }>;
+  history?: OrderEvent[];
   citizen_phase?: string;
   escalation_hotline?: string;
   escalation_label?: string;
@@ -159,4 +150,43 @@ export interface User {
   email: string;
   role: "admin" | "responder" | "reporter";
   createdAt: string;
+}
+
+export interface Province {
+  id: string;
+  name: string;
+}
+
+export interface Regency {
+  id: string;
+  province_id: string;
+  name: string;
+}
+
+export interface AvailableRegion {
+  id: string;
+  name: string;
+  regency_id: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface OrderEvent {
+  id?: string;
+  order_id?: string;
+  ticket_number?: string;
+  type?: string;
+  message: string;
+  actor?: string;
+  from_unit?: string;
+  to_unit?: string;
+  dispatch_tier?: string;
+  created_at: string;
+}
+
+export interface UnitCredential {
+  emergency_uuid: string;
+  unit_name: string;
+  username: string;
+  access_token: string;
 }
