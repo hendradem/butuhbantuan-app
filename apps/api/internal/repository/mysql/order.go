@@ -692,7 +692,9 @@ func (r *UnitCredentialRepo) Set(cred domain.UnitCredential) error {
 		}).Error)
 	}
 
-	// Update existing — keep the existing access_token so logged-in sessions remain valid.
+	// Update existing — keep the existing access_token and expires_at so logged-in sessions
+	// remain valid after a password/username change. ExpiresAt continues to roll via FindByToken.
+	// To revoke a token immediately, Delete + Set must be called instead.
 	return wrapDup(r.db.Model(&existing).Updates(map[string]any{
 		"unit_name":     cred.UnitName,
 		"username":      cred.Username,

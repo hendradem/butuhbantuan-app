@@ -55,6 +55,8 @@ func backfillUnitTokenExpiry(db *gorm.DB) {
 
 // addCompoundIndexes adds composite indexes and uniqueness constraints that
 // GORM AutoMigrate cannot express via struct tags alone.
+// Requires MySQL 8.0.29+ for CREATE INDEX IF NOT EXISTS syntax; errors are
+// silently ignored so older versions degrade gracefully (indexes missing, not fatal).
 func addCompoundIndexes(db *gorm.DB) {
 	type idx struct{ table, name, cols string }
 	indexes := []idx{

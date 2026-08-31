@@ -161,12 +161,16 @@ export interface Regency {
   id: string;
   province_id: string;
   name: string;
+  province_name?: string;
 }
 
 export interface AvailableRegion {
   id: string;
   name: string;
   regency_id: string;
+  regency?: string;
+  province_id?: string;
+  province?: string;
   latitude?: number;
   longitude?: number;
 }
