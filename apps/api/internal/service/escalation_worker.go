@@ -19,6 +19,22 @@ func NewEscalationWorker(dispatch DispatchUseCase, interval time.Duration) *Esca
 	return &EscalationWorker{dispatch: dispatch, interval: interval}
 }
 
+// RecoverOverdue escalates any tickets already past SLA deadline at startup.
+// Call this once before Start.
+func (w *EscalationWorker) RecoverOverdue() {
+	if w.dispatch == nil {
+		return
+	}
+	n, err := w.dispatch.EscalateOverdue()
+	if err != nil {
+		log.Printf("dispatch escalation recovery error: %v", err)
+		return
+	}
+	if n > 0 {
+		log.Printf("dispatch escalation recovery: escalated %d overdue ticket(s) at startup", n)
+	}
+}
+
 // Start runs until ctx is cancelled. Safe to call in a goroutine.
 func (w *EscalationWorker) Start(ctx context.Context) {
 	if w.dispatch == nil {
