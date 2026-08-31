@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/butuhbantuan/api/internal/domain"
+	"github.com/butuhbantuan/api/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -27,7 +28,7 @@ func (r *HospitalMasterRepo) ListByRegency(regencyID string) ([]domain.HospitalM
 	return out, nil
 }
 
-func (r *HospitalMasterRepo) FindByUUIDs(ids []string) ([]HospitalMasterEntity, error) {
+func (r *HospitalMasterRepo) FindByUUIDs(ids []string) ([]domain.HospitalMaster, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -35,7 +36,11 @@ func (r *HospitalMasterRepo) FindByUUIDs(ids []string) ([]HospitalMasterEntity, 
 	if err := r.db.Where("uuid IN ?", ids).Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	return rows, nil
+	out := make([]domain.HospitalMaster, len(rows))
+	for i, row := range rows {
+		out[i] = mapHospitalMaster(row)
+	}
+	return out, nil
 }
 
 func (r *HospitalMasterRepo) UpsertMany(items []domain.HospitalMaster) (int, error) {
@@ -109,6 +114,7 @@ func (r *HospitalMasterRepo) LinkEmergencyHospitalMaster(emergencyUUID string, m
 
 func mapHospitalMaster(row HospitalMasterEntity) domain.HospitalMaster {
 	return domain.HospitalMaster{
+		InternalID:          row.ID,
 		ID:                  row.UUID.String(),
 		Source:              row.Source,
 		SourceCode:          row.SourceCode,
@@ -128,3 +134,5 @@ func mapHospitalMaster(row HospitalMasterEntity) domain.HospitalMaster {
 		AlreadyImported:     row.ImportedEmergencyUUID != "",
 	}
 }
+
+var _ repository.HospitalMasterRepository = (*HospitalMasterRepo)(nil)

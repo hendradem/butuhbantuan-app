@@ -184,3 +184,11 @@ type AssessmentRepository interface {
 	UpsertJenisBinding(b domain.AssessmentJenisBinding) (*domain.AssessmentJenisBinding, error)
 	DeleteJenisBinding(jenisPelayanan string) error
 }
+
+type HospitalMasterRepository interface {
+	ListByRegency(regencyID string) ([]domain.HospitalMaster, error)
+	FindByUUIDs(ids []string) ([]domain.HospitalMaster, error)
+	UpsertMany(items []domain.HospitalMaster) (int, error)
+	MarkImported(masterInternalID uint, emergencyUUID string) error
+	LinkEmergencyHospitalMaster(emergencyUUID string, masterInternalID uint) error
+}

@@ -7,7 +7,6 @@ import (
 
 	"github.com/butuhbantuan/api/internal/domain"
 	"github.com/butuhbantuan/api/internal/repository"
-	mysqlrepo "github.com/butuhbantuan/api/internal/repository/mysql"
 )
 
 type HospitalUseCase interface {
@@ -18,7 +17,7 @@ type HospitalUseCase interface {
 }
 
 type hospitalService struct {
-	master   *mysqlrepo.HospitalMasterRepo
+	master   repository.HospitalMasterRepository
 	region   repository.RegionRepository
 	emerg    repository.EmergencyRepository
 	types    repository.EmergencyTypeRepository
@@ -26,7 +25,7 @@ type hospitalService struct {
 }
 
 func NewHospitalService(
-	master *mysqlrepo.HospitalMasterRepo,
+	master repository.HospitalMasterRepository,
 	region repository.RegionRepository,
 	emerg repository.EmergencyRepository,
 	types repository.EmergencyTypeRepository,
@@ -112,9 +111,9 @@ func (s *hospitalService) Import(req domain.HospitalImportRequest) (*domain.Hosp
 	if err != nil {
 		return nil, err
 	}
-	byUUID := map[string]mysqlrepo.HospitalMasterEntity{}
+	byUUID := map[string]domain.HospitalMaster{}
 	for _, row := range rows {
-		byUUID[row.UUID.String()] = row
+		byUUID[row.ID] = row
 	}
 
 	rsType, err := s.resolveRumahSakitType()
@@ -139,9 +138,9 @@ func (s *hospitalService) Import(req domain.HospitalImportRequest) (*domain.Hosp
 			result.Errors = append(result.Errors, "master tidak ditemukan: "+id)
 			continue
 		}
-		if row.ImportedEmergencyUUID != "" {
+		if row.ImportedEmergencyID != "" {
 			result.Skipped++
-			result.IDs = append(result.IDs, row.ImportedEmergencyUUID)
+			result.IDs = append(result.IDs, row.ImportedEmergencyID)
 			continue
 		}
 		lat := formatCoord(row.Latitude)
@@ -174,8 +173,8 @@ func (s *hospitalService) Import(req domain.HospitalImportRequest) (*domain.Hosp
 				OpenTime:  "00:00",
 				CloseTime: "23:59",
 			},
-			Fleet:            domain.FleetStatus{Total: 0, Available: 0},
-			DashboardAccess:  true,
+			Fleet:           domain.FleetStatus{Total: 0, Available: 0},
+			DashboardAccess: true,
 		}
 		created, err := s.emerg.Create(e)
 		if err != nil {
@@ -183,8 +182,8 @@ func (s *hospitalService) Import(req domain.HospitalImportRequest) (*domain.Hosp
 			result.Errors = append(result.Errors, row.Name+": "+err.Error())
 			continue
 		}
-		_ = s.master.MarkImported(row.ID, created.ID)
-		_ = s.master.LinkEmergencyHospitalMaster(created.ID, row.ID)
+		_ = s.master.MarkImported(row.InternalID, created.ID)
+		_ = s.master.LinkEmergencyHospitalMaster(created.ID, row.InternalID)
 		result.Imported++
 		result.IDs = append(result.IDs, created.ID)
 	}

@@ -9,6 +9,7 @@ const (
 
 // HospitalMaster is a cached RS directory row (not a live partner unit).
 type HospitalMaster struct {
+	InternalID          uint      `json:"-"` // DB auto-increment PK; never serialised
 	ID                  string    `json:"id"`
 	Source              string    `json:"source"`
 	SourceCode          string    `json:"source_code"`
