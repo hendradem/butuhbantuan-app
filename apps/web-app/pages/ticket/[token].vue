@@ -93,7 +93,8 @@ function onPushToggle() {
         <button
           v-if="cardRef?.pushVisible"
           type="button"
-          class="ui-close-btn"
+          class="ui-close-btn relative"
+          :class="cardRef.pushSubscribed && !cardRef.pushLoading ? 'text-red-500' : ''"
           :aria-label="cardRef.pushSubscribed ? 'Matikan notifikasi' : 'Aktifkan notifikasi'"
           :disabled="cardRef.pushLoading"
           @click="onPushToggle"
@@ -102,6 +103,10 @@ function onPushToggle() {
             :icon="cardRef.pushLoading ? 'lucide:loader-2' : cardRef.pushSubscribed ? 'lucide:bell-off' : 'lucide:bell'"
             class="text-lg"
             :class="cardRef.pushLoading && 'animate-spin'"
+          />
+          <span
+            v-if="cardRef.pushSubscribed && !cardRef.pushLoading"
+            class="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"
           />
         </button>
         <button

@@ -88,6 +88,7 @@ const ticket = ref<any>(null);
 const pending = ref(true);
 const error = ref<Error | null>(null);
 const loadAttempted = ref(false);
+const lightboxPhoto = ref<string | null>(null);
 
 async function loadTicket(bustCache = false) {
   const token = viewToken.value;
@@ -1303,7 +1304,7 @@ defineExpose({
               <!-- Detail panel: pelapor (always) + expandable rows -->
               <div
                 v-if="summaryDetailFields.length || (showDetails && hasCollapsibleDetails)"
-                class="px-5 pb-1"
+                class="pb-0"
               >
                 <div class="eticket-panel">
                   <div
@@ -1405,23 +1406,14 @@ defineExpose({
                   </template>
                 </div>
 
-                <div v-if="hasCollapsibleDetails" class="eticket-expand">
+                <div v-if="hasCollapsibleDetails" class="flex justify-center py-2">
                   <button
                     type="button"
-                    class="eticket-expand-btn"
+                    class="inline-flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-600 transition-colors py-1 px-2"
                     @click="showDetails = !showDetails"
                   >
-                    {{
-                      showDetails
-                        ? "Sembunyikan"
-                        : moreDetailCount > 0
-                          ? `${moreDetailCount} detail lagi`
-                          : "Lihat detail"
-                    }}
-                    <Icon
-                      :icon="showDetails ? 'lucide:chevron-up' : 'lucide:chevron-down'"
-                      class="text-sm"
-                    />
+                    <Icon :icon="showDetails ? 'lucide:chevron-up' : 'lucide:chevron-down'" class="text-sm" />
+                    {{ showDetails ? "Sembunyikan" : moreDetailCount > 0 ? `${moreDetailCount} detail lagi` : "Lihat detail" }}
                   </button>
                 </div>
               </div>

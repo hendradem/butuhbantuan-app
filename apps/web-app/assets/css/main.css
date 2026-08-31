@@ -787,8 +787,8 @@ html[data-ui-theme="soft"] .eticket-ui .font-semibold,
 }
 
 .eticket-panel {
-  border: 1px solid #eaecf0;
-  border-radius: 0.75rem;
+  border-top: 1px solid #eaecf0;
+  border-bottom: 1px solid #eaecf0;
   overflow: hidden;
   background: #fff;
 }
