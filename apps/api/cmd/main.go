@@ -189,8 +189,8 @@ func main() {
 				time.Duration(cfg.DispatchSLASecs)*time.Second,
 			).WithTypeRepo(typeRepo)
 			escalationWorker := service.NewEscalationWorker(dispatchSvc, 15*time.Second)
-				escalationWorker.RecoverOverdue()
-				go escalationWorker.Start(workerCtx)
+			escalationWorker.RecoverOverdue()
+			go escalationWorker.Start(workerCtx)
 			log.Printf("auto-dispatch enabled (sla=%ds)", cfg.DispatchSLASecs)
 		} else {
 			dispatchSvc = service.NewNoopDispatchService()
