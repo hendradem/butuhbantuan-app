@@ -190,3 +190,8 @@ export interface UnitCredential {
   username: string;
   access_token: string;
 }
+
+export interface EmergencyListItem {
+  emergencyData: EmergencyDataType;
+  trip: { distance: number; duration: number };
+}
