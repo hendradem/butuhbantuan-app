@@ -1229,6 +1229,19 @@ defineExpose({
                   <Icon icon="lucide:star" class="text-lg" />
                   {{ primaryAction.label }}
                 </button>
+                <!-- koordinasi: community relay in progress -->
+                <div
+                  v-else-if="citizenPhase === 'koordinasi'"
+                  class="rounded-xl border border-blue-100 bg-blue-50 p-3 flex items-start gap-2"
+                >
+                  <Icon icon="lucide:users" class="text-blue-500 text-base mt-0.5 shrink-0" />
+                  <div>
+                    <p class="text-xs font-medium text-blue-700">Menunggu Relawan Komunitas</p>
+                    <p class="text-[11px] text-blue-600 mt-0.5">
+                      Unit meneruskan permintaan ke grup relawan. Tunggu sebentar.
+                    </p>
+                  </div>
+                </div>
                 <p
                   v-else-if="!contactWaAction && ticket.status === 'pending' && !needsFollowUp"
                   class="text-center text-sm text-neutral-500 py-1 leading-snug"
