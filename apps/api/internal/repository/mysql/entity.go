@@ -319,7 +319,7 @@ type UnitCredentialEntity struct {
 	Username      string    `gorm:"type:varchar(100);uniqueIndex;not null"`
 	PasswordHash  string    `gorm:"type:varchar(255);not null"`
 	AccessToken   string    `gorm:"type:char(36);index;not null"`
-	ExpiresAt     time.Time `gorm:"not null;index"`
+	ExpiresAt     time.Time `gorm:"not null;index;default:'2030-01-01 00:00:00'"`
 	CreatedAt     time.Time `gorm:"autoCreateTime"`
 	UpdatedAt     time.Time `gorm:"autoUpdateTime"`
 }
