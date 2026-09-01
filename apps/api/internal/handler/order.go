@@ -582,3 +582,69 @@ func parseCoordPair(coords [2]string) (lat, lng float64) {
 	}
 	return lat, lng
 }
+
+// RelayCommunity mints a community claim link on a WA-only pending dispatch.
+// POST /track/:token/relay
+func (h *OrderHandler) RelayCommunity(c *fiber.Ctx) error {
+	token := strings.TrimSpace(c.Params("token"))
+	if token == "" {
+		return response.Error(c, fiber.StatusBadRequest, "token required")
+	}
+	updated, err := h.svc.RelayToCommunity(token, h.claimWindow)
+	if errors.Is(err, repository.ErrNotFound) {
+		return response.Error(c, fiber.StatusNotFound, "sesi tidak ditemukan atau sudah kedaluwarsa")
+	}
+	if errors.Is(err, repository.ErrConflict) {
+		return response.Error(c, fiber.StatusConflict, "tiket tidak lagi dalam status menunggu")
+	}
+	if err != nil {
+		log.Printf("relay community: %v", err)
+		return response.Error(c, fiber.StatusInternalServerError, "gagal membuat link komunitas")
+	}
+	return response.OK(c, "ok", updated)
+}
+
+// GetClaimPage returns public (no-PII) ticket info for the volunteer claim page.
+// GET /claim/:token
+func (h *OrderHandler) GetClaimPage(c *fiber.Ctx) error {
+	token := strings.TrimSpace(c.Params("token"))
+	if token == "" {
+		return response.Error(c, fiber.StatusBadRequest, "token required")
+	}
+	ticket, err := h.svc.GetClaim(token)
+	if errors.Is(err, repository.ErrNotFound) {
+		return response.Error(c, fiber.StatusNotFound, "link tidak valid atau sudah kedaluwarsa")
+	}
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "gagal memuat info kejadian")
+	}
+	return response.OK(c, "ok", ticket)
+}
+
+// SubmitClaim accepts a ticket for a community volunteer.
+// POST /claim/:token
+func (h *OrderHandler) SubmitClaim(c *fiber.Ctx) error {
+	token := strings.TrimSpace(c.Params("token"))
+	if token == "" {
+		return response.Error(c, fiber.StatusBadRequest, "token required")
+	}
+	var body struct {
+		Name  string `json:"name"`
+		Phone string `json:"phone"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid body")
+	}
+	if strings.TrimSpace(body.Name) == "" {
+		return response.Error(c, fiber.StatusBadRequest, "name required")
+	}
+	updated, err := h.svc.ClaimOrder(token, strings.TrimSpace(body.Name), strings.TrimSpace(body.Phone))
+	if errors.Is(err, repository.ErrConflict) || errors.Is(err, repository.ErrNotFound) {
+		return response.Error(c, fiber.StatusConflict, "link sudah digunakan atau kedaluwarsa")
+	}
+	if err != nil {
+		log.Printf("claim order: %v", err)
+		return response.Error(c, fiber.StatusInternalServerError, "gagal mengklaim tiket")
+	}
+	return response.OK(c, "ok", updated)
+}

@@ -169,6 +169,11 @@ func Register(
 	track.Post("/:token/complete", orderH.CompleteByToken)
 	track.Get("/:token", orderH.GetTrackSession)
 	track.Post("/:token", orderH.PingTrackLocation)
+	track.Post("/:token/relay", orderH.RelayCommunity)
+
+	claim := v1.Group("/claim")
+	claim.Get("/:token", orderH.GetClaimPage)
+	claim.Post("/:token", limitOrder, orderH.SubmitClaim)
 
 	unit := v1.Group("/unit")
 	unit.Post("/auth/login", limitUnitLogin, unitH.Login)
