@@ -234,6 +234,7 @@ func Register(
 	admin.Post("/orders/:id/reassign", adminAuth, unitH.AdminReassignOrder)
 	admin.Post("/orders/:id/escalate-psc", adminAuth, unitH.AdminEscalateOrder)
 	admin.Post("/orders/:id/cancel", adminAuth, unitH.AdminCancelOrder)
+	admin.Post("/orders/:id/relay", adminAuth, orderH.AdminRelayOrder)
 	admin.Get("/orders/:id/candidates", adminAuth, unitH.AdminListOrderCandidates)
 	admin.Get("/orders/:id/history", adminAuth, unitH.GetOrderHistory)
 	admin.Post("/orders/:id/track/enable", adminAuth, unitH.AdminEnableTrack)

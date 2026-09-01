@@ -633,11 +633,7 @@ func (s *OrderService) emitArrived(before, updated *domain.OrderTicket) {
 	s.pub.PublishScoped(updated.EmergencyUUID, updated.RegencyID, updated.ProvinceID, hub.Event{Type: "order_arrived", Payload: updated})
 }
 
-func (s *OrderService) RelayToCommunity(trackToken string, windowSecs int) (*domain.OrderTicket, error) {
-	ticket, err := s.repo.FindByTrackToken(strings.TrimSpace(trackToken))
-	if err != nil {
-		return nil, err
-	}
+func (s *OrderService) relayCore(ticket *domain.OrderTicket, windowSecs int) (*domain.OrderTicket, error) {
 	if ticket.Status != "pending" {
 		return nil, repository.ErrConflict
 	}
@@ -660,6 +656,22 @@ func (s *OrderService) RelayToCommunity(trackToken string, windowSecs int) (*dom
 	s.pub.PublishScoped(updated.EmergencyUUID, updated.RegencyID, updated.ProvinceID,
 		hub.Event{Type: "order_updated", Payload: updated})
 	return updated, nil
+}
+
+func (s *OrderService) RelayToCommunity(trackToken string, windowSecs int) (*domain.OrderTicket, error) {
+	ticket, err := s.repo.FindByTrackToken(strings.TrimSpace(trackToken))
+	if err != nil {
+		return nil, err
+	}
+	return s.relayCore(ticket, windowSecs)
+}
+
+func (s *OrderService) RelayToCommunityByID(orderID string, windowSecs int) (*domain.OrderTicket, error) {
+	ticket, err := s.repo.FindByID(strings.TrimSpace(orderID))
+	if err != nil {
+		return nil, err
+	}
+	return s.relayCore(ticket, windowSecs)
 }
 
 func (s *OrderService) GetClaim(claimToken string) (*domain.OrderTicket, error) {
@@ -777,6 +789,9 @@ func (s *NoopOrderService) SetReferralHospital(_, _, _ string) error {
 	return errOrderNotSupported
 }
 func (s *NoopOrderService) RelayToCommunity(_ string, _ int) (*domain.OrderTicket, error) {
+	return nil, repository.ErrNotSupported
+}
+func (s *NoopOrderService) RelayToCommunityByID(_ string, _ int) (*domain.OrderTicket, error) {
 	return nil, repository.ErrNotSupported
 }
 func (s *NoopOrderService) GetClaim(_ string) (*domain.OrderTicket, error) {

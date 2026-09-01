@@ -87,6 +87,8 @@ type OrderUseCase interface {
 	// RelayToCommunity mints a claim token on a pending WA-dispatch ticket and
 	// returns the updated ticket. Only valid for tickets still in pending status.
 	RelayToCommunity(trackToken string, windowSecs int) (*domain.OrderTicket, error)
+	// RelayToCommunityByID does the same but looks up by order UUID (for admin dashboard).
+	RelayToCommunityByID(orderID string, windowSecs int) (*domain.OrderTicket, error)
 	// GetClaim returns sanitized (no-PII) ticket info for the public claim page.
 	GetClaim(claimToken string) (*domain.OrderTicket, error)
 	// ClaimOrder allows a community volunteer to accept the ticket by claim token.

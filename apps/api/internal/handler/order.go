@@ -604,6 +604,27 @@ func (h *OrderHandler) RelayCommunity(c *fiber.Ctx) error {
 	return response.OK(c, "ok", updated)
 }
 
+// AdminRelayOrder mints a community claim link from the admin dashboard.
+// POST /admin/orders/:id/relay
+func (h *OrderHandler) AdminRelayOrder(c *fiber.Ctx) error {
+	id := strings.TrimSpace(c.Params("id"))
+	if id == "" {
+		return response.Error(c, fiber.StatusBadRequest, "id required")
+	}
+	updated, err := h.svc.RelayToCommunityByID(id, h.claimWindow)
+	if errors.Is(err, repository.ErrNotFound) {
+		return response.Error(c, fiber.StatusNotFound, "order not found")
+	}
+	if errors.Is(err, repository.ErrConflict) {
+		return response.Error(c, fiber.StatusConflict, "order tidak dalam status pending")
+	}
+	if err != nil {
+		log.Printf("admin relay community: %v", err)
+		return response.Error(c, fiber.StatusInternalServerError, "gagal membuat link komunitas")
+	}
+	return response.OK(c, "ok", updated)
+}
+
 // GetClaimPage returns public (no-PII) ticket info for the volunteer claim page.
 // GET /claim/:token
 func (h *OrderHandler) GetClaimPage(c *fiber.Ctx) error {

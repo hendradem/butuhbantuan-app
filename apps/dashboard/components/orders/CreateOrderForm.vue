@@ -191,9 +191,9 @@ const description = computed(() => {
 });
 
 const ticketUrl = computed(() => {
-  const n = String(createdOrder.value?.ticket_number || "").trim();
-  if (!n) return "";
-  return `${publicAppOrigin()}/ticket/${encodeURIComponent(n)}`;
+  const token = String(createdOrder.value?.public_token || "").trim();
+  if (!token) return "";
+  return `${publicAppOrigin()}/ticket/${encodeURIComponent(token)}`;
 });
 
 const dispatchUrl = computed(() => {
@@ -253,7 +253,7 @@ function buildPelaporWaMessage(order: any): string {
     ? `https://www.google.com/maps?q=${form.requester_lat},${form.requester_lng}`
     : "";
   const unit = order.unit_name || props.unitName || selectedEmergency.value?.name || "unit layanan";
-  const url = `${publicAppOrigin()}/ticket/${encodeURIComponent(order.ticket_number)}`;
+  const url = `${publicAppOrigin()}/ticket/${encodeURIComponent(order.public_token || order.ticket_number)}`;
   return [
     `Halo *${order.requester_name || form.requester_name}*,`,
     ``,
@@ -394,11 +394,62 @@ async function submit() {
   }
 }
 
+// ── Community relay ───────────────────────────────────────────────────────────
+const relaying = ref(false);
+const relayError = ref("");
+const relayDone = ref(false);
+const claimUrl = ref("");
+
+async function relayCommunity() {
+  const o = createdOrder.value;
+  if (!o) return;
+  relaying.value = true;
+  relayError.value = "";
+  try {
+    let ct: string | undefined;
+    if (props.mode === "admin") {
+      const res = await post<{ data: any }>(`/api/v1/admin/orders/${o.id}/relay`, {});
+      ct = res.data?.claim_token;
+    } else {
+      const token = String(o.track_token || "").trim();
+      if (!token) throw new Error("Dispatch link tidak tersedia untuk relay komunitas");
+      const res = await $fetch<{ data: any }>(`${baseUrl}/api/v1/track/${token}/relay`, {
+        method: "POST",
+        headers: unitHeaders(),
+      });
+      ct = (res as any)?.data?.claim_token;
+    }
+    if (ct) {
+      claimUrl.value = `${publicAppOrigin()}/claim/${ct}`;
+      relayDone.value = true;
+    } else {
+      relayError.value = "Server tidak mengembalikan link. Coba lagi.";
+    }
+  } catch (e: any) {
+    relayError.value = e?.data?.message || e?.message || "Gagal membuat link komunitas";
+  } finally {
+    relaying.value = false;
+  }
+}
+
+async function copyClaimUrl() {
+  if (!claimUrl.value) return;
+  try {
+    await navigator.clipboard.writeText(claimUrl.value);
+    toast.success("Link komunitas disalin");
+  } catch {
+    toast.error("Gagal menyalin");
+  }
+}
+
 function goDetail() {
   if (createdOrder.value) emit("openDetail", createdOrder.value);
 }
 
 function createAnother() {
+  relayDone.value = false;
+  relayError.value = "";
+  claimUrl.value = "";
   resetForm();
 }
 </script>
@@ -474,6 +525,50 @@ function createAnother() {
             WA petugas
           </UiButton>
         </div>
+      </div>
+
+      <!-- Community relay -->
+      <div class="border-t border-neutral-100 pt-4 space-y-3">
+        <p class="text-xs font-medium text-neutral-400">Teruskan ke komunitas</p>
+
+        <template v-if="!relayDone">
+          <button
+            type="button"
+            class="flex items-center justify-center gap-2 w-full rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm text-neutral-600 hover:bg-neutral-50 transition disabled:opacity-50"
+            :disabled="relaying"
+            @click="relayCommunity"
+          >
+            <Icon icon="lucide:users" class="text-base shrink-0" />
+            {{ relaying ? "Meneruskan..." : "Buat Link Klaim Komunitas" }}
+          </button>
+          <p v-if="relayError" class="text-xs text-red-500">{{ relayError }}</p>
+        </template>
+
+        <template v-else>
+          <div class="flex items-center gap-1.5 text-xs text-emerald-700 font-medium">
+            <Icon icon="lucide:check-circle" class="text-emerald-500 shrink-0" />
+            Link komunitas berhasil dibuat
+          </div>
+          <div class="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2.5 flex items-center gap-2">
+            <span class="flex-1 text-xs text-neutral-700 truncate font-mono select-all">{{ claimUrl }}</span>
+            <button
+              type="button"
+              class="shrink-0 text-blue-600 text-xs font-medium hover:text-blue-800"
+              @click="copyClaimUrl"
+            >
+              Salin
+            </button>
+          </div>
+          <a
+            :href="`https://wa.me/?text=${encodeURIComponent('Ada yang butuh bantuan! Relawan bisa klaim di: ' + claimUrl)}`"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center justify-center gap-2 w-full rounded-xl bg-green-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-green-700 transition"
+          >
+            <Icon icon="mdi:whatsapp" class="text-base" />
+            Bagikan via WA
+          </a>
+        </template>
       </div>
 
       <div class="flex flex-wrap justify-end gap-2 pt-1 border-t border-neutral-100">
