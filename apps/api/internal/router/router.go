@@ -39,7 +39,7 @@ func Register(
 	geocoding := handler.NewGeocodingHandler(cfg, emergencySvc)
 	authH := handler.NewAuthHandler(cfg)
 	feedbackH := handler.NewFeedbackHandler(feedbackSvc).WithOrders(orderSvc)
-	orderH := handler.NewOrderHandler(orderSvc, emergencySvc).WithDispatch(dispatchSvc).WithWilayah(wilayah).WithWaDispatch(service.NewWaDispatchResolver(unitCredRepo))
+	orderH := handler.NewOrderHandler(orderSvc, emergencySvc, cfg).WithDispatch(dispatchSvc).WithWilayah(wilayah).WithWaDispatch(service.NewWaDispatchResolver(unitCredRepo))
 	if assessmentSvc != nil {
 		orderH = orderH.WithAssessment(assessmentSvc)
 	}

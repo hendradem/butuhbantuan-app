@@ -23,7 +23,8 @@ type Config struct {
 	VAPIDPublicKey  string
 	VAPIDPrivateKey string
 	VAPIDSubject    string
-	DispatchSLASecs int
+	DispatchSLASecs          int
+	CommunityClaimWindowSecs int
 	// SATUSEHAT MSI (hospital master). Empty credentials → stub provider.
 	SatuSehatBaseURL      string
 	SatuSehatClientID     string
@@ -67,7 +68,8 @@ func Load() *Config {
 		VAPIDPublicKey:  getEnv("VAPID_PUBLIC_KEY", ""),
 		VAPIDPrivateKey: getEnv("VAPID_PRIVATE_KEY", ""),
 		VAPIDSubject:    getEnv("VAPID_SUBJECT", "mailto:admin@butuhbantuan.id"),
-		DispatchSLASecs: getEnvInt("DISPATCH_SLA_SECONDS", 90),
+		DispatchSLASecs:          getEnvInt("DISPATCH_SLA_SECONDS", 90),
+		CommunityClaimWindowSecs: getEnvInt("COMMUNITY_CLAIM_WINDOW_SECS", 300),
 		SatuSehatBaseURL:      getEnv("SATUSEHAT_BASE_URL", "https://api-satusehat-stg.dto.kemkes.go.id"),
 		SatuSehatClientID:     getEnv("SATUSEHAT_CLIENT_ID", ""),
 		SatuSehatClientSecret: getEnv("SATUSEHAT_CLIENT_SECRET", ""),

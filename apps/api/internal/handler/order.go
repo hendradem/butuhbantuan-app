@@ -9,6 +9,7 @@ import (
 	"github.com/butuhbantuan/api/internal/domain"
 	"github.com/butuhbantuan/api/internal/repository"
 	"github.com/butuhbantuan/api/internal/service"
+	"github.com/butuhbantuan/api/pkg/config"
 	"github.com/butuhbantuan/api/pkg/response"
 	"github.com/gofiber/fiber/v2"
 )
@@ -20,10 +21,15 @@ type OrderHandler struct {
 	wilayah      *service.WilayahResolver
 	assessment   service.AssessmentUseCase
 	waDispatch   *service.WaDispatchResolver
+	claimWindow  int
 }
 
-func NewOrderHandler(svc service.OrderUseCase, emergencySvc service.EmergencyUseCase) *OrderHandler {
-	return &OrderHandler{svc: svc, emergencySvc: emergencySvc}
+func NewOrderHandler(svc service.OrderUseCase, emergencySvc service.EmergencyUseCase, cfg ...*config.Config) *OrderHandler {
+	h := &OrderHandler{svc: svc, emergencySvc: emergencySvc, claimWindow: 300}
+	if len(cfg) > 0 && cfg[0] != nil {
+		h.claimWindow = cfg[0].CommunityClaimWindowSecs
+	}
+	return h
 }
 
 func (h *OrderHandler) WithDispatch(d service.DispatchUseCase) *OrderHandler {

@@ -633,6 +633,76 @@ func (s *OrderService) emitArrived(before, updated *domain.OrderTicket) {
 	s.pub.PublishScoped(updated.EmergencyUUID, updated.RegencyID, updated.ProvinceID, hub.Event{Type: "order_arrived", Payload: updated})
 }
 
+func (s *OrderService) RelayToCommunity(trackToken string, windowSecs int) (*domain.OrderTicket, error) {
+	ticket, err := s.repo.FindByTrackToken(strings.TrimSpace(trackToken))
+	if err != nil {
+		return nil, err
+	}
+	if ticket.Status != "pending" {
+		return nil, repository.ErrConflict
+	}
+	if windowSecs <= 0 {
+		windowSecs = 300
+	}
+	claimToken := uuid.New().String()
+	expiresAt := time.Now().Add(time.Duration(windowSecs) * time.Second)
+	updated, err := s.repo.SetClaimToken(ticket.ID, claimToken, expiresAt)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.RecordEvent(domain.OrderEvent{
+		OrderID:      updated.ID,
+		TicketNumber: updated.TicketNumber,
+		Type:         "relay_community",
+		Message:      "Pesanan diteruskan ke grup komunitas, menunggu relawan",
+		Actor:        "unit",
+	})
+	s.pub.PublishScoped(updated.EmergencyUUID, updated.RegencyID, updated.ProvinceID,
+		hub.Event{Type: "order_updated", Payload: updated})
+	return updated, nil
+}
+
+func (s *OrderService) GetClaim(claimToken string) (*domain.OrderTicket, error) {
+	ticket, err := s.repo.FindByClaimToken(strings.TrimSpace(claimToken))
+	if err != nil {
+		return nil, err
+	}
+	// Strip PII — volunteers only see what's needed to decide.
+	ticket.RequesterPhone = ""
+	ticket.RequesterName = ""
+	ticket.TrackToken = ""
+	ticket.ClaimToken = ""
+	return ticket, nil
+}
+
+func (s *OrderService) ClaimOrder(claimToken, volunteerName, volunteerPhone string) (*domain.OrderTicket, error) {
+	volunteerName = strings.TrimSpace(volunteerName)
+	volunteerPhone = strings.TrimSpace(volunteerPhone)
+	if volunteerName == "" {
+		return nil, ErrDispatchConflict
+	}
+	updated, err := s.repo.ClaimOrder(claimToken, volunteerName, volunteerPhone)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.RecordEvent(domain.OrderEvent{
+		OrderID:      updated.ID,
+		TicketNumber: updated.TicketNumber,
+		Type:         domain.OrderEventAccepted,
+		Message:      "Diklaim oleh relawan komunitas: " + volunteerName,
+		Actor:        "community",
+	})
+	s.pub.PublishScoped(updated.EmergencyUUID, updated.RegencyID, updated.ProvinceID,
+		hub.Event{Type: "order_updated", Payload: updated})
+	if s.pushSvc != nil {
+		s.pushSvc.Notify(updated.TicketNumber,
+			"Relawan komunitas merespons",
+			"Pesanan Anda akan ditangani oleh "+volunteerName+".",
+		)
+	}
+	return updated, nil
+}
+
 // ── NoopOrderService ──────────────────────────────────────────────────────────
 
 type NoopOrderService struct{}
@@ -705,6 +775,15 @@ func (s *NoopOrderService) SaveIncidentReport(_, _ string) (*domain.OrderTicket,
 }
 func (s *NoopOrderService) SetReferralHospital(_, _, _ string) error {
 	return errOrderNotSupported
+}
+func (s *NoopOrderService) RelayToCommunity(_ string, _ int) (*domain.OrderTicket, error) {
+	return nil, repository.ErrNotSupported
+}
+func (s *NoopOrderService) GetClaim(_ string) (*domain.OrderTicket, error) {
+	return nil, repository.ErrNotFound
+}
+func (s *NoopOrderService) ClaimOrder(_, _, _ string) (*domain.OrderTicket, error) {
+	return nil, repository.ErrNotSupported
 }
 
 // ── NoopUnitAuthService ───────────────────────────────────────────────────────

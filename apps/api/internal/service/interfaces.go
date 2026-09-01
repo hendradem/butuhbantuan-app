@@ -84,6 +84,13 @@ type OrderUseCase interface {
 	GetOfferByToken(token string) (*domain.OrderTicket, error)
 	SaveIncidentReport(id, reportJSON string) (*domain.OrderTicket, error)
 	SetReferralHospital(id, hospitalID, hospitalName string) error
+	// RelayToCommunity mints a claim token on a pending WA-dispatch ticket and
+	// returns the updated ticket. Only valid for tickets still in pending status.
+	RelayToCommunity(trackToken string, windowSecs int) (*domain.OrderTicket, error)
+	// GetClaim returns sanitized (no-PII) ticket info for the public claim page.
+	GetClaim(claimToken string) (*domain.OrderTicket, error)
+	// ClaimOrder allows a community volunteer to accept the ticket by claim token.
+	ClaimOrder(claimToken, volunteerName, volunteerPhone string) (*domain.OrderTicket, error)
 }
 
 // UnitAuthUseCase is the interface handlers use for unit authentication.
