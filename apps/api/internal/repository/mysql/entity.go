@@ -203,6 +203,9 @@ type OrderTicketEntity struct {
 	PublicToken        string `gorm:"type:char(36);uniqueIndex"`
 	TrackEnabledAt     *time.Time
 	TrackExpiresAt     *time.Time `gorm:"index"`
+	// Community relay claim window.
+	ClaimToken     string     `gorm:"type:char(36);index"`
+	ClaimExpiresAt *time.Time `gorm:"index"`
 	ResponderLat       float64    `gorm:"type:double;default:0"`
 	ResponderLng       float64    `gorm:"type:double;default:0"`
 	ResponderUpdatedAt *time.Time

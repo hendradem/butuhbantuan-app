@@ -277,8 +277,11 @@ func (r *OrderRepo) AcceptPending(id, expectedUUID string) (*domain.OrderTicket,
 func (r *OrderRepo) FindPendingPastSLA(now time.Time) ([]domain.OrderTicket, error) {
 	var rows []OrderTicketEntity
 	err := r.db.
-		Where("status = ? AND sla_deadline IS NOT NULL AND sla_deadline <= ? AND dispatch_status = ?",
-			"pending", now, "searching").
+		Where(
+			"status = ? AND sla_deadline IS NOT NULL AND sla_deadline <= ? AND dispatch_status = ?"+
+				" AND (claim_expires_at IS NULL OR claim_expires_at <= ?)",
+			"pending", now, "searching", now,
+		).
 		Order("sla_deadline ASC").
 		Limit(50).
 		Find(&rows).Error
@@ -443,6 +446,8 @@ func mapOrder(row OrderTicketEntity) *domain.OrderTicket {
 		PublicToken:        row.PublicToken,
 		TrackEnabledAt:     row.TrackEnabledAt,
 		TrackExpiresAt:     row.TrackExpiresAt,
+		ClaimToken:         row.ClaimToken,
+		ClaimExpiresAt:     row.ClaimExpiresAt,
 		ResponderLat:       row.ResponderLat,
 		ResponderLng:       row.ResponderLng,
 		ResponderUpdatedAt: row.ResponderUpdatedAt,
@@ -494,6 +499,70 @@ func (r *OrderRepo) SetReferralHospital(id, hospitalID, hospitalName string) err
 			"referral_hospital_id":   hospitalID,
 			"referral_hospital_name": hospitalName,
 		}).Error
+}
+
+func (r *OrderRepo) SetClaimToken(id, token string, expiresAt time.Time) (*domain.OrderTicket, error) {
+	result := r.db.Model(&OrderTicketEntity{}).
+		Where("uuid = ? AND status = ?", id, "pending").
+		Updates(map[string]any{
+			"claim_token":      token,
+			"claim_expires_at": expiresAt,
+		})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, repository.ErrConflict
+	}
+	return r.FindByID(id)
+}
+
+func (r *OrderRepo) FindByClaimToken(token string) (*domain.OrderTicket, error) {
+	if token == "" {
+		return nil, repository.ErrNotFound
+	}
+	var row OrderTicketEntity
+	err := r.db.
+		Where("claim_token = ? AND claim_expires_at > ?", token, time.Now()).
+		First(&row).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repository.ErrNotFound
+		}
+		return nil, err
+	}
+	return mapOrder(row), nil
+}
+
+func (r *OrderRepo) ClaimOrder(claimToken, volunteerName, volunteerPhone string) (*domain.OrderTicket, error) {
+	now := time.Now()
+	var row OrderTicketEntity
+	if err := r.db.Where("claim_token = ? AND claim_expires_at > ? AND status = ?",
+		claimToken, now, "pending").First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repository.ErrConflict
+		}
+		return nil, err
+	}
+	ticketUUID := row.UUID.String()
+
+	result := r.db.Model(&OrderTicketEntity{}).
+		Where("uuid = ? AND claim_token = ? AND status = ?", ticketUUID, claimToken, "pending").
+		Updates(map[string]any{
+			"status":           "accepted",
+			"handler_name":     volunteerName,
+			"handling_notes":   "Diklaim relawan komunitas · " + volunteerPhone,
+			"accepted_at":      now,
+			"claim_token":      "",
+			"claim_expires_at": nil,
+		})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, repository.ErrConflict
+	}
+	return r.FindByID(ticketUUID)
 }
 
 func (r *OrderRepo) EnableTrack(id, token string, expiresAt time.Time) (*domain.OrderTicket, error) {

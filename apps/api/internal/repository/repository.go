@@ -96,6 +96,13 @@ type OrderRepository interface {
 	ExpireTrack(id string) (*domain.OrderTicket, error)
 	SaveIncidentReport(id, reportJSON string) (*domain.OrderTicket, error)
 	SetReferralHospital(id, hospitalID, hospitalName string) error
+	// SetClaimToken mints a community relay claim window on a pending ticket.
+	SetClaimToken(id, token string, expiresAt time.Time) (*domain.OrderTicket, error)
+	// FindByClaimToken returns the ticket with an active (non-expired) claim token.
+	FindByClaimToken(token string) (*domain.OrderTicket, error)
+	// ClaimOrder atomically accepts a ticket by claim token.
+	// volunteerName and volunteerPhone are stored as handler_name / handling_notes.
+	ClaimOrder(claimToken, volunteerName, volunteerPhone string) (*domain.OrderTicket, error)
 }
 
 type DispatchAttemptRepository interface {
