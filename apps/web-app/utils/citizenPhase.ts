@@ -10,6 +10,7 @@ export const CITIZEN_PHASE_LABEL: Record<string, string> = {
   on_scene: "Penanganan di lokasi",
   completed: "Selesai",
   cancelled: "Dibatalkan",
+  koordinasi: "Koordinasi komunitas",
 };
 
 export const CITIZEN_PHASE_HINT: Record<string, string> = {
@@ -23,6 +24,7 @@ export const CITIZEN_PHASE_HINT: Record<string, string> = {
   on_scene: "Petugas di lokasi. Posisi live tetap diperbarui hingga penanganan selesai.",
   completed: "Penanganan selesai.",
   cancelled: "Tiket dibatalkan.",
+  koordinasi: "Unit meneruskan permintaan ke grup relawan komunitas. Menunggu relawan mengklaim.",
 };
 
 export type CitizenPhaseTicket = {

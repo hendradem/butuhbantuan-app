@@ -59,6 +59,46 @@ const markingComplete = ref(false);
 const completeError = ref("");
 const lightboxPhoto = ref<string | null>(null);
 
+// Community relay
+const relaying = ref(false);
+const relayError = ref("");
+const relayDone = ref(false);
+const claimUrl = ref("");
+
+async function relayToCommunity() {
+  relaying.value = true;
+  relayError.value = "";
+  try {
+    const res = await fetch(`${apiBase}/api/v1/track/${token.value}/relay`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      throw new Error((json as any)?.message || "Gagal membuat link komunitas");
+    }
+    const json = await res.json();
+    const ct = (json as any)?.data?.claim_token;
+    if (ct) {
+      claimUrl.value = `${window.location.origin}/claim/${ct}`;
+      relayDone.value = true;
+    }
+  } catch (e: any) {
+    relayError.value = e?.message || "Terjadi kesalahan";
+  } finally {
+    relaying.value = false;
+  }
+}
+
+async function copyClaimUrl() {
+  if (!claimUrl.value) return;
+  try {
+    await navigator.clipboard.writeText(claimUrl.value);
+  } catch {
+    // ignore — user can copy manually
+  }
+}
+
 function assetUrl(url?: string | null): string {
   const u = String(url || "").trim();
   if (!u) return "";
@@ -438,6 +478,48 @@ onUnmounted(() => {
               Tolak
             </button>
             <p v-if="actionError" class="text-sm text-red-600 text-center">{{ actionError }}</p>
+
+            <!-- Community relay -->
+            <div v-if="!relayDone" class="border-t border-neutral-100 pt-4 mt-2">
+              <button
+                type="button"
+                class="w-full flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-600 hover:bg-neutral-50 transition disabled:opacity-50"
+                :disabled="relaying"
+                @click="relayToCommunity"
+              >
+                <Icon icon="lucide:users" class="text-base shrink-0" />
+                {{ relaying ? "Meneruskan..." : "Teruskan ke Grup Komunitas" }}
+              </button>
+              <p v-if="relayError" class="mt-1.5 text-xs text-red-500 text-center">{{ relayError }}</p>
+            </div>
+
+            <!-- After relay: show shareable link -->
+            <div v-else class="border-t border-neutral-100 pt-4 mt-2 space-y-3">
+              <div class="flex items-center gap-2 text-green-700 text-sm font-medium">
+                <Icon icon="lucide:check-circle" class="text-base shrink-0 text-green-500" />
+                Link komunitas berhasil dibuat
+              </div>
+              <p class="text-xs text-neutral-500">Bagikan link ini ke grup WhatsApp komunitas Anda:</p>
+              <div class="flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
+                <span class="flex-1 text-xs text-neutral-700 truncate select-all">{{ claimUrl }}</span>
+                <button
+                  type="button"
+                  class="text-xs text-blue-600 shrink-0 font-medium hover:text-blue-800"
+                  @click="copyClaimUrl"
+                >
+                  Salin
+                </button>
+              </div>
+              <a
+                :href="`https://wa.me/?text=${encodeURIComponent('Ada yang butuh bantuan! Klik link ini untuk mengklaim: ' + claimUrl)}`"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex items-center justify-center gap-2 w-full rounded-xl bg-green-600 text-white text-sm font-semibold px-4 py-3 hover:bg-green-700 transition"
+              >
+                <Icon icon="logos:whatsapp-icon" class="text-base shrink-0" />
+                Kirim via WhatsApp
+              </a>
+            </div>
           </div>
         </div>
 
