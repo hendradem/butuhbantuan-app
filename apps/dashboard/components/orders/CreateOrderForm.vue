@@ -420,7 +420,7 @@ async function relayCommunity() {
       ct = (res as any)?.data?.claim_token;
     }
     if (ct) {
-      claimUrl.value = `${publicAppOrigin()}/claim/${ct}`;
+      claimUrl.value = `${publicAppOrigin()}/dispatch/${ct}`;
       relayDone.value = true;
     } else {
       relayError.value = "Server tidak mengembalikan link. Coba lagi.";

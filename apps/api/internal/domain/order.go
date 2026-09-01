@@ -23,6 +23,7 @@ type OrderTicket struct {
 	Status         string     `json:"status"`  // pending | accepted | in_progress | completed | cancelled
 	Source         string     `json:"source"`  // call | sos | manual
 	HandlerName    string     `json:"handler_name"`
+	HandlerPhone   string     `json:"handler_phone,omitempty"`
 	HandlingNotes  string     `json:"handling_notes"`
 	// Dispatch metadata (SOS auto-dispatch). Zero values for legacy/call tickets.
 	TypeID         uint       `json:"type_id,omitempty"`

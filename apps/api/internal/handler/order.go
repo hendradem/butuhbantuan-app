@@ -537,7 +537,25 @@ func (h *OrderHandler) RejectByToken(c *fiber.Ctx) error {
 }
 
 func (h *OrderHandler) enrichUnitContact(order *domain.OrderTicket) {
-	if order == nil || order.EmergencyUUID == "" || h.emergencySvc == nil {
+	if order == nil {
+		return
+	}
+	// Community volunteer claim: contact is the volunteer, not the original unit.
+	if order.HandlerPhone != "" && strings.HasPrefix(order.UnitName, "Relawan ·") {
+		order.UnitPhone = order.HandlerPhone
+		order.UnitWhatsapp = order.HandlerPhone
+		order.WaDispatch = false
+		if order.ResponderLat != 0 || order.ResponderLng != 0 {
+			if order.RequesterLat != 0 || order.RequesterLng != 0 {
+				order.ETAMinutes = domain.EstimateETAMinutes(
+					order.ResponderLat, order.ResponderLng,
+					order.RequesterLat, order.RequesterLng, 40,
+				)
+			}
+		}
+		return
+	}
+	if order.EmergencyUUID == "" || h.emergencySvc == nil {
 		return
 	}
 	units, err := h.emergencySvc.GetByIDs([]string{order.EmergencyUUID})

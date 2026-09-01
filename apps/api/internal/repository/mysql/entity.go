@@ -188,6 +188,7 @@ type OrderTicketEntity struct {
 	Status            string     `gorm:"type:varchar(20);default:'pending';index"`
 	Source            string     `gorm:"type:varchar(20);default:'call';index"` // "call" | "sos"
 	HandlerName       string     `gorm:"type:varchar(255)"`
+	HandlerPhone      string     `gorm:"type:varchar(50)"`
 	HandlingNotes     string     `gorm:"type:text"`
 	TypeID            uint       `gorm:"default:0;index"`
 	RegencyID         string     `gorm:"type:varchar(10);index"`

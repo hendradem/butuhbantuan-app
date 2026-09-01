@@ -22,7 +22,9 @@ type OfferSession = {
   is_offer: boolean;
   can_share: boolean;
   requester_name?: string;
+  requester_phone?: string;
   location?: string;
+  condition?: string;
   photo_url?: string;
   requester_lat: number;
   requester_lng: number;
@@ -30,13 +32,59 @@ type OfferSession = {
   accepted_at?: string | null;
 };
 
-type Step = "offer" | "enroute" | "onsite" | "done" | "error";
+type ClaimSession = {
+  ticket_number: string;
+  unit_name: string;
+  status: string;
+  location?: string;
+  condition?: string;
+  photo_url?: string;
+  requester_lat?: number;
+  requester_lng?: number;
+  claim_expires_at?: string | null;
+  emergency_uuid?: string;
+};
+
+type Step = "offer" | "enroute" | "onsite" | "done" | "error" | "claim" | "claim-done";
+type TokenKind = "track" | "claim" | "unknown";
 
 const session = ref<OfferSession | null>(null);
+const claimSession = ref<ClaimSession | null>(null);
+const tokenKind = ref<TokenKind>("unknown");
 const pending = ref(true);
 const loadError = ref("");
 const actionError = ref("");
 const rejected = ref(false);
+
+// Volunteer claim state
+const volunteerName = ref("");
+const volunteerPhone = ref("");
+const claiming = ref(false);
+const claimError = ref("");
+const claimSuccess = ref(false);
+const claimedTicketNumber = ref("");
+const claimExpiresIn = ref("");
+let claimExpiryTimer: ReturnType<typeof setInterval> | null = null;
+
+function claimStorageKey(t: string) {
+  return `bb-claimed-${t}`;
+}
+function loadClaimMemory(t: string): string {
+  if (!import.meta.client) return "";
+  try {
+    return String(localStorage.getItem(claimStorageKey(t)) || "");
+  } catch {
+    return "";
+  }
+}
+function saveClaimMemory(t: string, ticketNumber: string) {
+  if (!import.meta.client) return;
+  try {
+    localStorage.setItem(claimStorageKey(t), ticketNumber);
+  } catch {
+    // ignore
+  }
+}
 
 const showRejectModal = ref(false);
 const rejectNote = ref("");
@@ -80,7 +128,7 @@ async function relayToCommunity() {
     const json = await res.json();
     const ct = (json as any)?.data?.claim_token;
     if (ct) {
-      claimUrl.value = `${window.location.origin}/claim/${ct}`;
+      claimUrl.value = `${window.location.origin}/dispatch/${ct}`;
       relayDone.value = true;
     } else {
       relayError.value = "Server tidak mengembalikan link. Coba lagi.";
@@ -116,6 +164,11 @@ const canShare = computed(() => {
 
 const step = computed<Step>(() => {
   if (loadError.value || rejected.value) return "error";
+  if (claimSuccess.value) return "claim-done";
+  if (tokenKind.value === "claim") {
+    if (!claimSession.value) return pending.value ? "claim" : "error";
+    return "claim";
+  }
   if (!session.value) return pending.value ? "offer" : "error";
   if (session.value.status === "completed") return "done";
   if (session.value.is_offer || session.value.status === "pending") return "offer";
@@ -132,12 +185,31 @@ const stepIndex = computed(() => {
 });
 
 const mapsUrl = computed(() => {
-  const s = session.value;
-  if (!s?.requester_lat || !s?.requester_lng) return "";
-  return `https://www.google.com/maps?q=${s.requester_lat},${s.requester_lng}`;
+  const lat = session.value?.requester_lat ?? claimSession.value?.requester_lat;
+  const lng = session.value?.requester_lng ?? claimSession.value?.requester_lng;
+  if (!lat || !lng) return "";
+  return `https://www.google.com/maps?q=${lat},${lng}`;
 });
 
-const photoHref = computed(() => assetUrl(session.value?.photo_url));
+const photoHref = computed(() =>
+  assetUrl(session.value?.photo_url || claimSession.value?.photo_url),
+);
+
+const displayLocation = computed(
+  () => session.value?.location || claimSession.value?.location || "",
+);
+
+const displayCondition = computed(
+  () => session.value?.condition || claimSession.value?.condition || "",
+);
+
+const displayUnitName = computed(
+  () => session.value?.unit_name || claimSession.value?.unit_name || "Unit",
+);
+
+const displayTicketNumber = computed(
+  () => session.value?.ticket_number || claimSession.value?.ticket_number || claimedTicketNumber.value,
+);
 
 const gpsMeta = computed(() => {
   if (!sharing.value) return "";
@@ -152,24 +224,109 @@ const gpsMeta = computed(() => {
 });
 
 async function loadSession() {
-  const isFirst = !session.value;
+  const isFirst = !session.value && !claimSession.value;
   if (isFirst) pending.value = true;
   loadError.value = "";
   actionError.value = "";
+
+  // Reload after successful claim → volunteer already claimed on this device.
+  const remembered = loadClaimMemory(token.value);
+  if (isFirst && remembered) {
+    claimSuccess.value = true;
+    claimedTicketNumber.value = remembered;
+    pending.value = false;
+    return;
+  }
+
+  // Try as track_token first (unit accept/reject flow).
   try {
     const res = await $fetch<{ data: OfferSession }>(
       `${apiBase}/api/v1/track/${token.value}/offer`,
     );
+    tokenKind.value = "track";
     session.value = res.data ?? null;
+    claimSession.value = null;
     if (session.value && !canShare.value && sharing.value) stopSharing();
+    pending.value = false;
+    return;
+  } catch (e: any) {
+    const status = e?.statusCode || e?.status;
+    if (status !== 404 && status !== 410) {
+      loadError.value = "Gagal memuat tugas.";
+      if (isFirst) session.value = null;
+      pending.value = false;
+      return;
+    }
+  }
+
+  // Fallback: try as claim_token (community volunteer flow).
+  try {
+    const res = await $fetch<{ data: ClaimSession }>(
+      `${apiBase}/api/v1/claim/${token.value}`,
+    );
+    tokenKind.value = "claim";
+    claimSession.value = res.data ?? null;
+    session.value = null;
   } catch (e: any) {
     const status = e?.statusCode || e?.status;
     if (status === 410) loadError.value = "Link sudah kedaluwarsa.";
-    else if (status === 404) loadError.value = "Link tidak ditemukan.";
+    else if (status === 404 || status === 409) loadError.value = "Link tidak berlaku atau sudah digunakan.";
     else loadError.value = "Gagal memuat tugas.";
-    if (isFirst) session.value = null;
+    if (isFirst) {
+      session.value = null;
+      claimSession.value = null;
+    }
   } finally {
     pending.value = false;
+  }
+}
+
+function updateClaimExpiry() {
+  const iso = claimSession.value?.claim_expires_at;
+  if (!iso) {
+    claimExpiresIn.value = "";
+    return;
+  }
+  const diff = Math.max(0, new Date(iso).getTime() - Date.now());
+  if (diff <= 0) {
+    claimExpiresIn.value = "Kedaluwarsa";
+    return;
+  }
+  const m = Math.floor(diff / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  claimExpiresIn.value = `${m}:${String(s).padStart(2, "0")}`;
+}
+
+async function submitVolunteerClaim() {
+  const name = volunteerName.value.trim();
+  if (!name) {
+    claimError.value = "Nama wajib diisi";
+    return;
+  }
+  claiming.value = true;
+  claimError.value = "";
+  try {
+    const res = await $fetch<{
+      data: { ticket_number?: string; track_token?: string };
+    }>(`${apiBase}/api/v1/claim/${token.value}`, {
+      method: "POST",
+      body: { name, phone: volunteerPhone.value.trim() },
+    });
+    const ticketNumber = res.data?.ticket_number || claimSession.value?.ticket_number || "";
+    const newTrack = res.data?.track_token || "";
+    if (ticketNumber) saveClaimMemory(token.value, ticketNumber);
+    claimedTicketNumber.value = ticketNumber;
+    claimSuccess.value = true;
+    // If backend minted a new track_token, redirect to the full dispatch flow.
+    if (newTrack && newTrack !== token.value) {
+      await navigateTo(`/dispatch/${newTrack}`);
+    }
+  } catch (e: any) {
+    const status = e?.statusCode || e?.status;
+    if (status === 409) claimError.value = "Link sudah digunakan oleh relawan lain.";
+    else claimError.value = e?.data?.message || "Gagal mengklaim tiket";
+  } finally {
+    claiming.value = false;
   }
 }
 
@@ -339,9 +496,11 @@ async function confirmComplete() {
 
 onMounted(() => {
   void loadSession();
+  claimExpiryTimer = setInterval(updateClaimExpiry, 1000);
 });
 onUnmounted(() => {
   stopSharing();
+  if (claimExpiryTimer) clearInterval(claimExpiryTimer);
 });
 </script>
 
@@ -351,14 +510,14 @@ onUnmounted(() => {
       <div class="min-w-0 flex-1">
         <p class="text-base font-semibold ui-text-primary leading-tight">ButuhBantuan</p>
         <p
-          v-if="session?.ticket_number"
+          v-if="displayTicketNumber"
           class="text-xs ui-text-secondary font-mono tracking-wide"
         >
-          {{ session.ticket_number }}
+          {{ displayTicketNumber }}
         </p>
       </div>
       <div
-        v-if="stepIndex > 0 && step !== 'error' && step !== 'done'"
+        v-if="stepIndex > 0 && step !== 'error' && step !== 'done' && tokenKind === 'track'"
         class="flex items-center gap-1.5 shrink-0"
         aria-hidden="true"
       >
@@ -434,10 +593,18 @@ onUnmounted(() => {
                 {{ session?.requester_name || "Pelapor" }}
               </p>
               <p
-                v-if="session?.location"
+                v-if="displayLocation"
                 class="mt-1.5 text-sm ui-text-secondary leading-snug"
               >
-                {{ session.location }}
+                {{ displayLocation }}
+              </p>
+            </div>
+            <div v-if="displayCondition" class="rounded-lg bg-neutral-50 border border-neutral-100 px-3 py-2.5">
+              <p class="text-[10px] font-medium uppercase tracking-wide ui-text-secondary mb-1">
+                Kondisi
+              </p>
+              <p class="text-sm ui-text-primary leading-snug whitespace-pre-line">
+                {{ displayCondition }}
               </p>
             </div>
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -522,6 +689,137 @@ onUnmounted(() => {
                 Kirim via WhatsApp
               </a>
             </div>
+          </div>
+        </div>
+
+        <!-- Community volunteer claim -->
+        <div v-else-if="step === 'claim'" class="space-y-4">
+          <!-- Incident info card -->
+          <div class="ui-card overflow-hidden">
+            <div class="px-5 pt-5 pb-4 space-y-3">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="text-xs font-medium uppercase tracking-wide ui-text-secondary">
+                    Butuh Bantuan
+                  </p>
+                  <p class="mt-1 text-base font-semibold ui-text-primary truncate">
+                    {{ displayUnitName }}
+                  </p>
+                </div>
+                <div v-if="claimExpiresIn" class="text-right shrink-0">
+                  <p class="text-[10px] ui-text-secondary">Berakhir</p>
+                  <p
+                    class="text-sm font-bold tabular-nums"
+                    :class="claimExpiresIn === 'Kedaluwarsa' ? 'text-red-500' : 'text-amber-600'"
+                  >
+                    {{ claimExpiresIn }}
+                  </p>
+                </div>
+              </div>
+
+              <div v-if="displayLocation">
+                <p class="text-[10px] font-medium uppercase tracking-wide ui-text-secondary">Lokasi</p>
+                <p class="mt-1 text-sm ui-text-primary leading-snug">{{ displayLocation }}</p>
+              </div>
+
+              <div v-if="displayCondition" class="rounded-lg bg-neutral-50 border border-neutral-100 px-3 py-2.5">
+                <p class="text-[10px] font-medium uppercase tracking-wide ui-text-secondary mb-1">
+                  Kondisi
+                </p>
+                <p class="text-sm ui-text-primary leading-snug whitespace-pre-line">
+                  {{ displayCondition }}
+                </p>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <a
+                  v-if="mapsUrl"
+                  :href="mapsUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-1 text-sm font-medium text-primary-600"
+                >
+                  <Icon icon="lucide:map-pin" class="text-base" />
+                  Buka Maps
+                </a>
+                <button
+                  v-if="photoHref"
+                  type="button"
+                  class="inline-flex items-center gap-1 text-sm font-medium ui-text-secondary"
+                  @click="lightboxPhoto = photoHref"
+                >
+                  <Icon icon="lucide:camera" class="text-base" />
+                  Foto
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Volunteer form -->
+          <div class="ui-card overflow-hidden">
+            <div class="px-5 pt-5 pb-4 space-y-3">
+              <p class="text-sm font-semibold ui-text-primary">Isi data Anda untuk mengklaim</p>
+              <div class="space-y-3">
+                <div class="space-y-1">
+                  <label class="text-xs ui-text-secondary">
+                    Nama lengkap <span class="text-red-500">*</span>
+                  </label>
+                  <input
+                    v-model="volunteerName"
+                    type="text"
+                    placeholder="Nama Anda"
+                    class="w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-400"
+                  >
+                </div>
+                <div class="space-y-1">
+                  <label class="text-xs ui-text-secondary">Nomor HP (opsional)</label>
+                  <input
+                    v-model="volunteerPhone"
+                    type="tel"
+                    placeholder="08xxxxxxxxxx"
+                    class="w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-400"
+                  >
+                </div>
+              </div>
+              <p v-if="claimError" class="text-xs text-red-500">{{ claimError }}</p>
+            </div>
+            <div class="px-5 pb-5 space-y-2">
+              <button
+                type="button"
+                class="w-full py-3 rounded-lg bg-emerald-600 text-white font-semibold text-sm active:scale-[0.98] transition-transform disabled:opacity-50"
+                :disabled="claiming || !volunteerName.trim() || claimExpiresIn === 'Kedaluwarsa'"
+                @click="submitVolunteerClaim"
+              >
+                {{ claiming ? "Mengklaim…" : "Saya Bisa Bantu" }}
+              </button>
+              <p class="text-[11px] ui-text-secondary text-center leading-snug">
+                Dengan mengklaim, Anda setuju untuk segera menuju lokasi kejadian.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Claim success (before backend redirect, or on reload) -->
+        <div v-else-if="step === 'claim-done'" class="ui-card overflow-hidden">
+          <div class="px-4 py-2 text-center text-sm font-medium text-white bg-emerald-600">
+            Klaim berhasil
+          </div>
+          <div class="px-5 py-6 text-center space-y-3">
+            <div class="mx-auto w-11 h-11 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center">
+              <Icon icon="lucide:check" class="text-xl" />
+            </div>
+            <div class="min-w-0">
+              <p class="text-sm font-semibold ui-text-primary">Terima kasih relawan!</p>
+              <p
+                v-if="claimedTicketNumber"
+                class="mt-0.5 text-xs font-mono text-neutral-500 tracking-wide"
+              >
+                {{ claimedTicketNumber }}
+              </p>
+            </div>
+            <p class="text-sm ui-text-secondary leading-snug max-w-[16rem] mx-auto">
+              Anda sudah mengklaim tiket ini. Segera menuju lokasi kejadian.
+            </p>
           </div>
         </div>
 

@@ -697,6 +697,11 @@ func (s *OrderService) ClaimOrder(claimToken, volunteerName, volunteerPhone stri
 	if err != nil {
 		return nil, err
 	}
+	// Mint a fresh track token so the volunteer can share GPS / mark arrived / complete
+	// via the same /dispatch page WA units use.
+	if withTrack, terr := s.EnableTrack(updated.ID, "community"); terr == nil && withTrack != nil {
+		updated = withTrack
+	}
 	_ = s.RecordEvent(domain.OrderEvent{
 		OrderID:      updated.ID,
 		TicketNumber: updated.TicketNumber,

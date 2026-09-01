@@ -431,6 +431,7 @@ func mapOrder(row OrderTicketEntity) *domain.OrderTicket {
 		Status:            row.Status,
 		Source:            src,
 		HandlerName:          row.HandlerName,
+		HandlerPhone:         row.HandlerPhone,
 		HandlingNotes:        row.HandlingNotes,
 		ReferralHospitalID:   row.ReferralHospitalID,
 		ReferralHospitalName: row.ReferralHospitalName,
@@ -546,12 +547,15 @@ func (r *OrderRepo) ClaimOrder(claimToken, volunteerName, volunteerPhone string)
 	}
 	ticketUUID := row.UUID.String()
 
+	unitLabel := "Relawan · " + volunteerName
 	result := r.db.Model(&OrderTicketEntity{}).
 		Where("uuid = ? AND claim_token = ? AND status = ?", ticketUUID, claimToken, "pending").
 		Updates(map[string]any{
 			"status":           "accepted",
+			"unit_name":        unitLabel,
 			"handler_name":     volunteerName,
-			"handling_notes":   "Diklaim relawan komunitas · " + volunteerPhone,
+			"handler_phone":    volunteerPhone,
+			"handling_notes":   "Diklaim relawan komunitas",
 			"accepted_at":      now,
 			"claim_token":      "",
 			"claim_expires_at": nil,
