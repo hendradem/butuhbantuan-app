@@ -2,6 +2,7 @@ package domain
 
 import (
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -17,6 +18,7 @@ const (
 	CitizenPhaseOnScene    = "on_scene" // petugas sudah sampai lokasi
 	CitizenPhaseCompleted  = "completed"
 	CitizenPhaseCancelled  = "cancelled"
+	CitizenPhaseKoordinasi = "koordinasi" // relayed to community group, waiting for volunteer
 )
 
 // RejectReason values stored on dispatch attempts.
@@ -71,6 +73,12 @@ func ResolveCitizenPhase(o OrderTicket) string {
 		return CitizenPhaseCompleted
 	case "cancelled":
 		return CitizenPhaseCancelled
+	}
+
+	// Pending + active community claim window → koordinasi
+	if o.Status == "pending" && o.ClaimToken != "" &&
+		o.ClaimExpiresAt != nil && time.Now().Before(*o.ClaimExpiresAt) {
+		return CitizenPhaseKoordinasi
 	}
 
 	switch o.DispatchStatus {

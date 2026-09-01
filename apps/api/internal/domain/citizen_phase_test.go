@@ -23,6 +23,26 @@ func TestResolveCitizenPhase(t *testing.T) {
 		{"accepted + responder lat → OTW", OrderTicket{Status: "accepted", ResponderLat: -7.79}, CitizenPhaseInProgress},
 		{"accepted + arrived → on scene", OrderTicket{Status: "accepted", ArrivedAt: &now}, CitizenPhaseOnScene},
 		{"on scene", OrderTicket{Status: "in_progress", ArrivedAt: &now}, CitizenPhaseOnScene},
+		{
+			"koordinasi when pending with active claim window",
+			OrderTicket{
+				Status:         "pending",
+				DispatchStatus: "searching",
+				ClaimToken:     "some-token",
+				ClaimExpiresAt: func() *time.Time { t := now.Add(5 * time.Minute); return &t }(),
+			},
+			CitizenPhaseKoordinasi,
+		},
+		{
+			"searching when claim token present but expired",
+			OrderTicket{
+				Status:         "pending",
+				DispatchStatus: "searching",
+				ClaimToken:     "expired-token",
+				ClaimExpiresAt: func() *time.Time { t := now.Add(-1 * time.Minute); return &t }(),
+			},
+			CitizenPhaseSearching,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

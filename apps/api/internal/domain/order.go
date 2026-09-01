@@ -39,6 +39,10 @@ type OrderTicket struct {
 	PublicToken        string     `json:"public_token,omitempty"`
 	TrackEnabledAt     *time.Time `json:"track_enabled_at,omitempty"`
 	TrackExpiresAt     *time.Time `json:"track_expires_at,omitempty"`
+	// Community relay claim — WA unit may share this link to a volunteer group.
+	// ClaimToken is cleared once a volunteer claims or the window expires.
+	ClaimToken     string     `json:"claim_token,omitempty"`
+	ClaimExpiresAt *time.Time `json:"claim_expires_at,omitempty"`
 	ResponderLat       float64    `json:"responder_lat,omitempty"`
 	ResponderLng       float64    `json:"responder_lng,omitempty"`
 	ResponderUpdatedAt *time.Time `json:"responder_updated_at,omitempty"`
