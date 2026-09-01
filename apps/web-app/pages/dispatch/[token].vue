@@ -82,6 +82,8 @@ async function relayToCommunity() {
     if (ct) {
       claimUrl.value = `${window.location.origin}/claim/${ct}`;
       relayDone.value = true;
+    } else {
+      relayError.value = "Server tidak mengembalikan link. Coba lagi.";
     }
   } catch (e: any) {
     relayError.value = e?.message || "Terjadi kesalahan";
