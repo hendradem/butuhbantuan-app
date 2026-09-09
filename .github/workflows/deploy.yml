@@ -93,6 +93,7 @@ jobs:
         with:
           name: deploy-artifacts
           retention-days: 1
+          include-hidden-files: true       # .output is treated as hidden by default
           path: |
             apps/api/server
             apps/dashboard/.output
