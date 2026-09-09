@@ -1,0 +1,31 @@
+---
+description: Restart dev servers after changes that require a reload
+alwaysApply: true
+---
+
+# Dev server restart
+
+After making changes that need a running process to pick them up, restart the dev servers yourself — do not only tell the user to restart.
+
+## When to restart
+
+Restart after changes such as:
+- Go API code, routes, handlers, services, domain, or DB migrations (`apps/api/**`)
+- Shared packages consumed at build/runtime (`packages/**`)
+- Nuxt config, env, or dependency changes that affect dev startup
+
+Hot reload is usually enough for Vue/TS component edits in `apps/web-app` or `apps/dashboard`; restart if behavior still looks stale.
+
+## How to restart (this monorepo)
+
+1. Free ports if needed: `8080`, `3000`, `3001`
+2. API: `cd apps/api && make dev` (background)
+3. Frontends: `cd <repo-root> && pnpm dev` (background)
+4. Confirm all three ports are listening before reporting done
+
+## Reporting
+
+Briefly note that servers were restarted and list the URLs:
+- API: http://127.0.0.1:8080
+- Web-app: http://localhost:3000
+- Dashboard: http://localhost:3001

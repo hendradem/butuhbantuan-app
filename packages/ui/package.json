@@ -1,0 +1,9 @@
+{
+  "name": "@butuhbantuan/ui",
+  "version": "0.0.1",
+  "private": true,
+  "exports": { ".": "./index.ts" },
+  "dependencies": { "reka-ui": "^2.10.1" },
+  "devDependencies": { "vue": "^3.5.17", "typescript": "^5.8.3" },
+  "peerDependencies": { "vue": "^3.5.0" }
+}

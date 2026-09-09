@@ -1,0 +1,103 @@
+{
+  "3404": {
+    "province_id": "34",
+    "province_name": "DI Yogyakarta",
+    "regency_name": "Sleman",
+    "hospitals": [
+      {
+        "source_code": "stub-3404-rsud-sleman",
+        "name": "RSUD Sleman",
+        "address": "Jl. Bhayangkara No.48, Triharjo, Sleman",
+        "phone": "0274868317",
+        "class": "B",
+        "ownership": "Pemerintah",
+        "latitude": -7.6855,
+        "longitude": 110.3412
+      },
+      {
+        "source_code": "stub-3404-rs-sardjito",
+        "name": "RSUP Dr. Sardjito",
+        "address": "Jl. Kesehatan No.1, Sleman",
+        "phone": "0274631190",
+        "class": "A",
+        "ownership": "Pemerintah",
+        "latitude": -7.7689,
+        "longitude": 110.3745
+      },
+      {
+        "source_code": "stub-3404-rs-jogja-internasional",
+        "name": "RS Jogja International Hospital",
+        "address": "Jl. Ring Road Utara No.160, Condongcatur, Sleman",
+        "phone": "0274445353",
+        "class": "B",
+        "ownership": "Swasta",
+        "latitude": -7.7558,
+        "longitude": 110.4012
+      },
+      {
+        "source_code": "stub-3404-rs-panti-rapih",
+        "name": "RS Panti Rapih",
+        "address": "Jl. Cik Di Tiro No.30, Caturtunggal, Sleman",
+        "phone": "0274563355",
+        "class": "B",
+        "ownership": "Swasta",
+        "latitude": -7.7821,
+        "longitude": 110.3789
+      }
+    ]
+  },
+  "3471": {
+    "province_id": "34",
+    "province_name": "DI Yogyakarta",
+    "regency_name": "Kota Yogyakarta",
+    "hospitals": [
+      {
+        "source_code": "stub-3471-rsud-kota",
+        "name": "RSUD Kota Yogyakarta",
+        "address": "Jl. Ki Ageng Pemanahan No.1, Yogyakarta",
+        "phone": "0274371333",
+        "class": "B",
+        "ownership": "Pemerintah",
+        "latitude": -7.8334,
+        "longitude": 110.3832
+      },
+      {
+        "source_code": "stub-3471-rs-bethesda",
+        "name": "RS Bethesda Yogyakarta",
+        "address": "Jl. Jend. Sudirman No.70, Yogyakarta",
+        "phone": "0274586868",
+        "class": "B",
+        "ownership": "Swasta",
+        "latitude": -7.7829,
+        "longitude": 110.3698
+      }
+    ]
+  },
+  "3173": {
+    "province_id": "31",
+    "province_name": "DKI Jakarta",
+    "regency_name": "Jakarta Pusat",
+    "hospitals": [
+      {
+        "source_code": "stub-3173-rs-cipto",
+        "name": "RSUPN Dr. Cipto Mangunkusumo",
+        "address": "Jl. Diponegoro No.71, Jakarta Pusat",
+        "phone": "0211500135",
+        "class": "A",
+        "ownership": "Pemerintah",
+        "latitude": -6.1962,
+        "longitude": 106.8477
+      },
+      {
+        "source_code": "stub-3173-rs-abdi",
+        "name": "RS Abdi Waluyo",
+        "address": "Jl. HOS Cokroaminoto No.31-33, Jakarta Pusat",
+        "phone": "02131904108",
+        "class": "B",
+        "ownership": "Swasta",
+        "latitude": -6.1969,
+        "longitude": 106.8305
+      }
+    ]
+  }
+}

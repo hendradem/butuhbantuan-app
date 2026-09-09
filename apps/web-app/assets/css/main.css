@@ -1,0 +1,961 @@
+@import "./theme.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: var(--bb-bg-page);
+  color: var(--bb-text);
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: var(--bb-fw-body, 500);
+  font-optical-sizing: auto;
+  /* Subpixel keeps strokes a bit fuller than antialiased-only (less “thin”) */
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  text-rendering: optimizeLegibility;
+}
+
+/**
+ * Soft theme typography: stronger hierarchy like the design refs.
+ * Avoid light/thin; body ≈ medium, labels/titles = semibold/bold.
+ */
+html[data-ui-theme="soft"] {
+  --bb-fw-body: 500;
+  --bb-fw-secondary: 500;
+  --bb-fw-medium: 600;
+  --bb-fw-semibold: 700;
+  --bb-fw-bold: 800;
+}
+
+html[data-ui-theme="soft"] .font-light,
+html[data-ui-theme="soft"] .font-thin,
+html[data-ui-theme="soft"] .font-extralight {
+  font-weight: var(--bb-fw-secondary) !important;
+}
+
+html[data-ui-theme="soft"] .font-normal {
+  font-weight: var(--bb-fw-secondary) !important;
+}
+
+html[data-ui-theme="soft"] .font-medium {
+  font-weight: var(--bb-fw-medium) !important;
+}
+
+html[data-ui-theme="soft"] .font-semibold {
+  font-weight: var(--bb-fw-semibold) !important;
+}
+
+html[data-ui-theme="soft"] .font-bold,
+html[data-ui-theme="soft"] .font-extrabold,
+html[data-ui-theme="soft"] .font-black {
+  font-weight: var(--bb-fw-bold) !important;
+}
+
+html[data-ui-theme="soft"] h1,
+html[data-ui-theme="soft"] h2,
+html[data-ui-theme="soft"] h3,
+html[data-ui-theme="soft"] h4 {
+  font-weight: var(--bb-fw-semibold);
+  letter-spacing: -0.02em;
+  color: var(--bb-text);
+}
+
+.leaflet-routing-container {
+  display: none !important;
+}
+
+/* Smooth marker movement when Leaflet repositions icons via transform */
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+/* Don't animate during drag — Leaflet adds this class while dragging */
+.leaflet-dragging .leaflet-marker-icon,
+.leaflet-dragging .leaflet-marker-shadow {
+  transition: none !important;
+}
+/* Smooth tile fade-in */
+.leaflet-tile {
+  transition: opacity 0.15s ease;
+}
+
+@layer base {
+  *:focus {
+    @apply outline-none ring-0;
+  }
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer layout {
+  .default-layout {
+    @apply min-h-screen max-w-md mx-auto flex flex-col;
+  }
+}
+
+@layer components {
+  .badge {
+    @apply inline-flex items-center gap-1 text-xs;
+    font-weight: var(--bb-fw-medium, 600);
+    border-radius: var(--bb-radius-pill);
+    border: 1px solid var(--bb-border);
+    background: var(--bb-bg-muted);
+    color: var(--bb-text-secondary);
+    padding: 0.2rem 0.65rem;
+  }
+  .badge-icon {
+    @apply inline-flex items-center gap-1;
+  }
+  .searchbox {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 2.5rem; /* match SosButton h-10 */
+    border: 0;
+    background: var(--bb-bg-muted);
+    color: var(--bb-text);
+    font-size: 0.875rem;
+    font-weight: var(--bb-fw-secondary, 500);
+    line-height: 1.25rem;
+    border-radius: var(--bb-radius-control);
+    padding: 0 2.75rem 0 2.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    box-sizing: border-box;
+  }
+  .searchbox::placeholder {
+    color: var(--bb-text-tertiary);
+    font-weight: var(--bb-fw-secondary, 500);
+  }
+  .searchbox:focus {
+    outline: none;
+  }
+  .searchbox__skeleton {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 0.5rem;
+    height: 1.25rem;
+  }
+  .searchbox__skeleton-bar {
+    height: 0.75rem;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--bb-text-tertiary) 28%, transparent);
+  }
+  .btn-base {
+    @apply text-sm focus:outline-none;
+    font-weight: var(--bb-fw-medium, 600);
+    border-radius: var(--bb-radius-control);
+    padding: 0.625rem 1.25rem;
+  }
+  .btn-whatsapp {
+    @apply btn-base flex items-center w-full justify-center text-white transition;
+    background: #16a34a;
+    border-radius: var(--bb-radius-control);
+  }
+  .btn-whatsapp:hover {
+    background: #15803d;
+  }
+  .btn-report {
+    @apply btn-base flex items-center w-full justify-center text-white transition;
+    background: var(--bb-accent);
+    border-radius: var(--bb-radius-control);
+  }
+  .btn-report:hover {
+    filter: brightness(0.92);
+  }
+  .btn-report:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .btn-call {
+    @apply btn-base flex w-full items-center justify-center transition;
+    background: var(--bb-bg-surface);
+    color: var(--bb-text-secondary);
+    border: 1px solid var(--bb-border-strong);
+    border-radius: var(--bb-radius-control);
+  }
+  .btn-call:hover {
+    background: var(--bb-bg-muted);
+  }
+  .btn-dark {
+    @apply btn-base flex w-full items-center justify-center text-white transition;
+    background: var(--bb-accent);
+    border-radius: var(--bb-radius-control);
+  }
+  .btn-dark:hover {
+    filter: brightness(1.08);
+  }
+  .bottom-menu-shadow {
+    box-shadow: var(--bb-shadow-menu);
+  }
+  .bottom-sheet-shadow {
+    box-shadow: var(--bb-shadow-sheet);
+  }
+
+  .soft-skel {
+    border-radius: 0.5rem;
+    background-color: color-mix(in srgb, var(--bb-bg-muted) 80%, white);
+    background-image: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--bb-bg-muted) 55%, white) 0%,
+      var(--bb-bg-muted) 45%,
+      color-mix(in srgb, var(--bb-bg-muted) 55%, white) 100%
+    );
+    background-size: 200% 100%;
+    animation: soft-skel-shimmer 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes soft-skel-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Map markers — classic (circular) — kept for rollback via mapAppearance markers:classic */
+.current-location-marker {
+  background-image: url('/assets/icons/current-location-blue.svg');
+  padding: 10px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.ambulance-marker {
+  background-image: url('/assets/icons/ambulance-logo.svg');
+  background-color: #1e1e1e;
+  box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+  border: 2px solid #fff;
+  background-size: 12px 12px;
+  background-position: center;
+  background-repeat: no-repeat;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.fire-fighter-marker {
+  background-image: url('/assets/icons/fire-fighter-logo.svg');
+  background-color: #ef4444;
+  box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+  border: 2px solid #fff;
+  background-size: 12px 12px;
+  background-position: center;
+  background-repeat: no-repeat;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.hospital-marker {
+  background-image: url('/assets/icons/hospital-logo.svg');
+  background-color: #8b5cf6;
+  box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+  border: 2px solid #fff;
+  background-size: 12px 12px;
+  background-position: center;
+  background-repeat: no-repeat;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.sar-marker {
+  background-image: url('/assets/icons/sar-logo.svg');
+  background-color: #f97316;
+  box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+  border: 2px solid #fff;
+  background-size: 12px 12px;
+  background-position: center;
+  background-repeat: no-repeat;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* Route focus — other units/hospitals recede so the active path stays readable */
+.ambulance-marker.bb-marker--muted,
+.fire-fighter-marker.bb-marker--muted,
+.hospital-marker.bb-marker--muted,
+.sar-marker.bb-marker--muted {
+  background-color: #9ca3af !important;
+  filter: grayscale(1);
+  opacity: 0.7;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
+}
+
+.bb-svc-pin-wrap,
+.bb-user-pin-wrap {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Teardrop service pins (BMKG / Apple–inspired) */
+.bb-svc-pin {
+  width: 28px;
+  height: 34px;
+  position: relative;
+  cursor: pointer;
+  pointer-events: auto;
+  transform-origin: 50% 100%;
+}
+
+.bb-svc-pin__head {
+  width: 22px;
+  height: 22px;
+  border-radius: 50% 50% 50% 3px;
+  transform: rotate(-45deg);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2px auto 0;
+}
+
+.bb-svc-pin__icon {
+  display: block;
+  width: 11px;
+  height: 11px;
+  transform: rotate(45deg);
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.bb-svc-pin--ambulance .bb-svc-pin__head { background-color: #1e1e1e; }
+.bb-svc-pin--ambulance .bb-svc-pin__icon {
+  background-image: url('/assets/icons/ambulance-logo.svg');
+}
+
+.bb-svc-pin--damkar .bb-svc-pin__head { background-color: #ef4444; }
+.bb-svc-pin--damkar .bb-svc-pin__icon {
+  background-image: url('/assets/icons/fire-fighter-logo.svg');
+}
+
+.bb-svc-pin--hospital .bb-svc-pin__head { background-color: #8b5cf6; }
+.bb-svc-pin--hospital .bb-svc-pin__icon {
+  background-image: url('/assets/icons/hospital-logo.svg');
+}
+
+.bb-svc-pin--sar .bb-svc-pin__head { background-color: #f97316; }
+.bb-svc-pin--sar .bb-svc-pin__icon {
+  background-image: url('/assets/icons/sar-logo.svg');
+}
+
+.bb-svc-pin--muted {
+  opacity: 0.7;
+  filter: grayscale(1);
+}
+
+.bb-svc-pin--muted .bb-svc-pin__head {
+  background-color: #9ca3af !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
+}
+
+/* Apple Maps–style drop-in when markers (re)appear after location/data change */
+.bb-svc-pin--enter {
+  animation: bb-pin-drop 0.48s cubic-bezier(0.34, 1.45, 0.64, 1) both;
+}
+
+/* Selected / detail-card focus — larger pin + stronger pop */
+.bb-svc-pin--active {
+  width: 48px;
+  height: 58px;
+  z-index: 5;
+}
+
+.bb-svc-pin--active .bb-svc-pin__head {
+  width: 40px;
+  height: 40px;
+  border-width: 3px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.45);
+}
+
+.bb-svc-pin--active .bb-svc-pin__icon {
+  width: 18px;
+  height: 18px;
+}
+
+.bb-svc-pin--active.bb-svc-pin--enter {
+  animation: bb-pin-pop 0.7s cubic-bezier(0.22, 1.4, 0.36, 1) both;
+}
+
+/* Selected emergency — soft pulse rings (same language as user location) */
+.bb-svc-pin__pulse {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-radius: 9999px;
+  border: 2px solid rgba(26, 28, 46, 0.28);
+  background: rgba(26, 28, 46, 0.08);
+  animation: bb-svc-pulse 2s ease-out infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.bb-svc-pin__pulse--delay {
+  animation-delay: 1s;
+}
+
+.bb-svc-pin--active .bb-svc-pin__head {
+  position: relative;
+  z-index: 2;
+}
+
+@keyframes bb-svc-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes bb-pin-drop {
+  0% {
+    transform: translateY(-22px) scale(0.35);
+    opacity: 0;
+  }
+  55% {
+    transform: translateY(2px) scale(1.06);
+    opacity: 1;
+  }
+  75% {
+    transform: translateY(-1px) scale(0.97);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bb-pin-pop {
+  0% {
+    transform: translateY(-28px) scale(0.45);
+    opacity: 0;
+  }
+  45% {
+    transform: translateY(4px) scale(1.35);
+    opacity: 1;
+  }
+  68% {
+    transform: translateY(-6px) scale(0.92);
+  }
+  84% {
+    transform: translateY(2px) scale(1.08);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Current location — pulsing rings (Apple / BMKG style) */
+.bb-user-pin {
+  width: 44px;
+  height: 44px;
+  position: relative;
+  cursor: grab;
+  pointer-events: auto;
+}
+
+.bb-user-pin__core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 9999px;
+  background: #2563eb;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 8px rgba(37, 99, 235, 0.55);
+  z-index: 2;
+}
+
+.bb-user-pin__ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 9999px;
+  border: 2px solid rgba(37, 99, 235, 0.45);
+  background: rgba(59, 130, 246, 0.12);
+  animation: bb-user-pulse 2s ease-out infinite;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.bb-user-pin__ring--delay {
+  animation-delay: 1s;
+}
+
+@keyframes bb-user-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bb-user-pin__ring {
+    animation: none;
+    opacity: 0;
+  }
+  .bb-svc-pin--enter,
+  .bb-svc-pin--active.bb-svc-pin--enter {
+    animation: none;
+  }
+  .bb-svc-pin__pulse {
+    animation: none;
+    opacity: 0;
+  }
+  .bb-route-bubble {
+    animation: none;
+  }
+}
+
+/* Route ETA bubble — black chip + pointer to route + advice hint */
+.bb-route-bubble-wrap {
+  background: transparent !important;
+  border: none !important;
+  overflow: visible !important;
+}
+
+/* Badge must snap with the SVG polyline — no position lag during zoom/pan */
+.leaflet-marker-icon.bb-route-bubble-wrap {
+  transition: none !important;
+}
+
+.bb-route-bubble {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  animation: bb-route-bubble-pop 0.36s cubic-bezier(0.22, 1.2, 0.36, 1) both;
+  transform-origin: 50% 100%;
+  overflow: visible;
+}
+
+.bb-route-bubble__card {
+  background: #111111;
+  border-radius: 14px;
+  padding: 8px 12px 9px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  min-width: 120px;
+  max-width: 176px;
+  text-align: left;
+  border: none;
+}
+
+.bb-route-bubble__label {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.2;
+}
+
+.bb-route-bubble__value {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.bb-route-bubble__sep {
+  margin: 0 0.3em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.bb-route-bubble__hint {
+  margin: 5px 0 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.bb-route-bubble__hint[data-level="good"] {
+  color: #86efac;
+}
+
+.bb-route-bubble__hint[data-level="ok"] {
+  color: #fde68a;
+}
+
+.bb-route-bubble__hint[data-level="stretch"] {
+  color: #fdba74;
+}
+
+.bb-route-bubble__hint[data-level="far"] {
+  color: #fca5a5;
+}
+
+/* Triangle tip points down onto the route line */
+.bb-route-bubble__tail {
+  display: block;
+  width: 0;
+  height: 0;
+  margin-top: -1px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 9px solid #111111;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.18));
+}
+
+@keyframes bb-route-bubble-pop {
+  0% {
+    transform: translateY(6px) scale(0.72);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Zoomed-out state: hide route ETA badge and shrink service pins so the route line stays readable. */
+.bb-map--zoomed-out .bb-route-bubble-wrap {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.bb-map--zoomed-out .bb-svc-pin {
+  transform: scale(0.6) !important;
+  transform-origin: 50% 100%;
+}
+
+/* Scrollbar */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: #ffffff #ffffff;
+}
+*::-webkit-scrollbar { width: 2px; }
+*::-webkit-scrollbar-track { background: #ffffff; }
+*::-webkit-scrollbar-thumb {
+  background-color: #ffffff;
+  border-radius: 10px;
+}
+
+/* Sheet slide transitions */
+.sheet-enter-active {
+  transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+.sheet-leave-active {
+  transition: transform 0.26s cubic-bezier(0.55, 0, 1, 1);
+  will-change: transform;
+}
+.sheet-enter-from,
+.sheet-leave-to {
+  transform: translateY(100%);
+}
+
+/* Overlay fade transitions */
+.overlay-enter-active,
+.overlay-leave-active {
+  transition: opacity 0.25s ease;
+}
+.overlay-enter-from,
+.overlay-leave-to {
+  opacity: 0;
+}
+
+/* E-ticket: Untitled UI typography — true weights, not soft-theme bump */
+.eticket-ui {
+  color: #344054;
+  font-weight: 400;
+}
+
+html[data-ui-theme="soft"] .eticket-ui .font-normal,
+.eticket-ui .font-normal {
+  font-weight: 400 !important;
+}
+
+html[data-ui-theme="soft"] .eticket-ui .font-medium,
+.eticket-ui .font-medium {
+  font-weight: 500 !important;
+}
+
+html[data-ui-theme="soft"] .eticket-ui .font-semibold,
+.eticket-ui .font-semibold {
+  font-weight: 600 !important;
+}
+
+.eticket-label {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 400;
+  color: #667085;
+}
+
+.eticket-value {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+  color: #101828;
+}
+
+.eticket-value-emphasis {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: #101828;
+}
+
+.eticket-title {
+  font-size: 0.9375rem;
+  line-height: 1.375rem;
+  font-weight: 500;
+  color: #101828;
+}
+
+.eticket-meta {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 400;
+  color: #667085;
+}
+
+.eticket-divider {
+  border: none;
+  border-top: 1px solid #eaecf0;
+}
+
+.eticket-expand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0 1rem;
+}
+
+.eticket-expand::before,
+.eticket-expand::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #eaecf0;
+}
+
+.eticket-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  color: #475467;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.eticket-expand-btn:hover {
+  background: #f9fafb;
+  border-color: #98a2b3;
+}
+
+.eticket-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.25rem;
+}
+
+.eticket-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.eticket-panel {
+  border-top: 1px solid #eaecf0;
+  border-bottom: 1px solid #eaecf0;
+  overflow: hidden;
+  background: #fff;
+}
+
+.eticket-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f2f4f7;
+}
+
+.eticket-panel-row:last-child {
+  border-bottom: none;
+}
+
+.eticket-panel-row--stack {
+  align-items: flex-start;
+}
+
+.eticket-panel-row--action {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.eticket-panel-row--action:hover {
+  background: #f9fafb;
+}
+
+.eticket-panel-label {
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  font-weight: 400;
+  color: #667085;
+}
+
+.eticket-panel-value {
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  font-weight: 400;
+  color: #344054;
+}
+
+.eticket-subsection {
+  border-bottom: 1px solid #f2f4f7;
+}
+
+.eticket-subsection:last-child {
+  border-bottom: none;
+}
+
+.eticket-subsection-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.eticket-subsection-head:hover {
+  background: #f9fafb;
+}
+
+.eticket-subsection-hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  font-weight: 400;
+  color: #98a2b3;
+  text-align: right;
+}
+
+.eticket-subsection-body {
+  padding: 0 1rem 0.75rem;
+}
+
+.eticket-timeline {
+  padding: 0.25rem 1rem 0.75rem;
+}
+
+.eticket-timeline-item {
+  display: grid;
+  grid-template-columns: 2.75rem 1fr;
+  gap: 0.75rem;
+  padding-bottom: 0.875rem;
+  position: relative;
+}
+
+.eticket-timeline-item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 1.3125rem;
+  top: 1.125rem;
+  bottom: 0;
+  width: 1px;
+  background: #eaecf0;
+}
+
+.eticket-timeline-time {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 400;
+  color: #667085;
+  font-variant-numeric: tabular-nums;
+  padding-top: 0.0625rem;
+}
+
+.eticket-timeline-body {
+  position: relative;
+  min-width: 0;
+}
+
+.eticket-timeline-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+  color: #344054;
+}
+
+.eticket-timeline-more {
+  margin-left: 3.5rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  color: #667085;
+  cursor: pointer;
+}
+
+.eticket-timeline-more:hover {
+  color: #344054;
+}
+
+/* ── Route focus mode: hide everything except active unit + ETA ─────── */
+/* :has() is baseline-supported in all modern browsers (Chrome 105+, Safari 16+) */
+.bb-route-focus .bb-svc-pin-wrap:not(:has(.bb-svc-pin--active)) {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+

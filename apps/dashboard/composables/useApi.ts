@@ -1,0 +1,46 @@
+export function useApi() {
+  const config = useRuntimeConfig();
+  const baseUrl = config.public.apiBaseUrl as string;
+  const { token } = useAuth();
+
+  function adminHeaders(): Record<string, string> {
+    return token.value ? { "X-Admin-Key": token.value } : {};
+  }
+
+  return {
+    baseUrl,
+    get<T>(path: string) {
+      return $fetch<T>(`${baseUrl}${path}`);
+    },
+    authGet<T>(path: string, params?: Record<string, unknown>) {
+      return $fetch<T>(`${baseUrl}${path}`, { headers: adminHeaders(), params });
+    },
+    post<T>(path: string, body: Record<string, unknown>) {
+      return $fetch<T>(`${baseUrl}${path}`, {
+        method: "POST",
+        body,
+        headers: adminHeaders(),
+      });
+    },
+    put<T>(path: string, body: Record<string, unknown>) {
+      return $fetch<T>(`${baseUrl}${path}`, {
+        method: "PUT",
+        body,
+        headers: adminHeaders(),
+      });
+    },
+    patch<T>(path: string, body: Record<string, unknown>) {
+      return $fetch<T>(`${baseUrl}${path}`, {
+        method: "PATCH",
+        body,
+        headers: adminHeaders(),
+      });
+    },
+    del<T>(path: string) {
+      return $fetch<T>(`${baseUrl}${path}`, {
+        method: "DELETE",
+        headers: adminHeaders(),
+      });
+    },
+  };
+}

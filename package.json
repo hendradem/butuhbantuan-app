@@ -1,25 +1,20 @@
 {
-  "name": "butuhbantuan-monorepo",
-  "packageManager": "pnpm@9.2.0",
-  "version": "1.0.0",
+  "name": "butuhbantuan-app",
   "private": true,
-  "description": "",
-  "main": "index.js",
   "scripts": {
-    "dev": "turbo run dev --parallel",
-    "build": "turbo run build",
-    "lint": "turbo run lint"
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "clean": "turbo clean && rm -rf node_modules"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
-    "esbuild": "^0.27.3",
-    "turbo": "^2.8.6"
+    "turbo": "^2.5.4"
   },
-  "pnpm": {
-    "overrides": {
-      "esbuild": "^0.21.0"
-    }
-  }
+  "engines": {
+    "node": ">=20.0.0 <24.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
 }

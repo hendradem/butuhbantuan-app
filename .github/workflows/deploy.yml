@@ -1,94 +1,160 @@
-name: Deploy Backend (Systemd)
+name: Deploy
 
 on:
   push:
-    branches:
-      - master
-
+    branches: [master]
   workflow_dispatch:
-    inputs:
-      run_seed:
-        description: "Run database seeder?"
-        required: true
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: '1.23'
+  NODE_VERSION: '20'
 
 jobs:
-  deploy:
+  # ── 1. Test ──────────────────────────────────────────────────────────────────
+  test:
+    name: Test
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: apps/api/go.sum
 
-      # =========================
-      # BUILD IN CI
-      # =========================
-      - name: Build Go Binary
+      - name: Go tests
+        working-directory: apps/api
+        run: go test ./...
+
+  # ── 2. Build ─────────────────────────────────────────────────────────────────
+  build:
+    name: Build
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── API (Go, cross-compile linux/amd64) ────────────────────────────────
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: apps/api/go.sum
+
+      - name: Build API binary
+        working-directory: apps/api
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: '0'
+        run: go build -ldflags="-s -w" -o server ./cmd/main.go
+
+      # ── Nuxt apps ──────────────────────────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Get pnpm store dir
+        id: pnpm-cache
+        run: echo "path=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.path }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Dashboard (SSR)
+        working-directory: apps/dashboard
+        env:
+          NUXT_PUBLIC_API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          NUXT_PUBLIC_WEB_APP_URL:  ${{ secrets.WEB_APP_URL }}
+          NUXT_PUBLIC_ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+        run: pnpm nuxt build
+
+      - name: Generate Web-app (static PWA)
+        working-directory: apps/web-app
+        env:
+          NUXT_PUBLIC_API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          NUXT_PUBLIC_GEOAPIFY_API_KEY: ${{ secrets.GEOAPIFY_API_KEY }}
+        run: pnpm nuxt generate
+
+      # ── Bundle artifacts ───────────────────────────────────────────────────
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deploy-artifacts
+          retention-days: 1
+          path: |
+            apps/api/server
+            apps/dashboard/.output
+            apps/web-app/.output/public
+            scripts/deploy.sh
+
+  # ── 3. Deploy ────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to VPS
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: deploy-artifacts
+
+      - name: Setup SSH
         run: |
-          cd services/backend
-          go mod tidy
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-          go build -ldflags="-s -w" -o go-api-service ./cmd/api
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
-      # =========================
-      # CLEAN TARGET DIRECTORY
-      # =========================
-      - name: Clean VPS Backend Folder
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_PRIVATE_KEY }}
-          script: |
-            sudo mkdir -p /var/www/butuhbantuan-app/backend
-            sudo rm -rf /var/www/butuhbantuan-app/backend/*
-            sudo chown -R butuhbantuan:butuhbantuan /var/www/butuhbantuan-app
+      - name: Upload artifacts to VPS
+        env:
+          H: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
+          KEY: -i ~/.ssh/deploy_key
+        run: |
+          set -euo pipefail
 
-      # =========================
-      # UPLOAD BINARY
-      # =========================
-      - name: Upload Binary to VPS
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_PRIVATE_KEY }}
-          source: services/backend/go-api-service
-          target: /var/www/butuhbantuan-app/backend/
-          strip_components: 2
+          # Fresh staging dir on VPS
+          ssh $KEY $H "rm -rf /tmp/bb-deploy && mkdir -p /tmp/bb-deploy/{dashboard-output,webapp-dist}"
 
-      # =========================
-      # PERMISSION + OPTIONAL SEED + RESTART
-      # =========================
-      - name: Restart Backend Service (and optionally seed)
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_PRIVATE_KEY }}
-          script: |
-            sudo chmod 755 /var/www/butuhbantuan-app/backend/go-api-service
-            sudo chown butuhbantuan:butuhbantuan /var/www/butuhbantuan-app/backend/go-api-service
+          # API binary
+          scp $KEY apps/api/server $H:/tmp/bb-deploy/server
 
-            # Stop service before any operation
-            sudo systemctl stop backend
+          # Dashboard SSR (.output tree)
+          rsync -az --delete -e "ssh $KEY" \
+            apps/dashboard/.output/ \
+            $H:/tmp/bb-deploy/dashboard-output/
 
-            # Run seeder ONLY if manually triggered
-            if [ "${{ github.event.inputs.run_seed }}" = "true" ]; then
-              echo "🔧 Running Seeder..."
-              /var/www/butuhbantuan-app/backend/go-api-service --seed
-              echo "✅ Seeder completed"
-            fi
+          # Web-app static
+          rsync -az --delete -e "ssh $KEY" \
+            apps/web-app/.output/public/ \
+            $H:/tmp/bb-deploy/webapp-dist/
 
-            # Restart backend
-            sudo systemctl start backend
-            sudo systemctl status backend --no-pager
+          # Deploy script
+          scp $KEY scripts/deploy.sh $H:/tmp/bb-deploy/deploy.sh
+
+      - name: Execute deploy script on VPS
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "bash /tmp/bb-deploy/deploy.sh"
+
+      - name: Notify result
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Deploy berhasil — $(date '+%Y-%m-%d %H:%M %Z')"
+          else
+            echo "❌ Deploy gagal — cek log Actions & journalctl di VPS"
+          fi

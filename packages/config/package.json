@@ -1,0 +1,13 @@
+{
+  "name": "@butuhbantuan/config",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./eslint": "./eslint.config.mjs",
+    "./typescript": "./tsconfig.base.json"
+  },
+  "devDependencies": {
+    "@nuxt/eslint-config": "^1.17.0",
+    "typescript": "^5.8.3"
+  }
+}

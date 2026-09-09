@@ -1,0 +1,293 @@
+<script setup lang="ts">
+import { Icon } from "@iconify/vue";
+import { toast } from "~/utils/appToast";
+
+definePageMeta({ title: "Jenis Layanan", keepalive: true });
+
+const { get, post, put, del } = useApi();
+
+const { data, pending, refresh: refreshRaw } = await useAsyncData("types-manage", () =>
+  get<{ data: any[] }>("/api/v1/emergency/type")
+);
+const { data: emergencies } = await useAsyncData("emergencies-for-types", () =>
+  get<{ data: any[] }>("/api/v1/emergency/")
+);
+
+const refresh = useSoftRefresh(refreshRaw);
+const showSkeleton = computed(() => isInitialPending(pending.value, data.value));
+
+const search = ref("");
+const page = ref(1);
+const pageSize = 8;
+
+const filtered = computed(() => {
+  const list = data.value?.data ?? [];
+  if (!search.value) return list;
+  const q = search.value.toLowerCase();
+  return list.filter((t: any) => t.name?.toLowerCase().includes(q) || t.description?.toLowerCase().includes(q));
+});
+
+watch(search, () => { page.value = 1; });
+
+const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)));
+const paginated = computed(() => {
+  const start = (page.value - 1) * pageSize;
+  return filtered.value.slice(start, start + pageSize);
+});
+
+function countForType(typeName: string) {
+  return (emergencies.value?.data ?? []).filter((e: any) => e.emergency_type?.name === typeName).length;
+}
+
+const typeConfig: Record<string, { bg: string; icon: string }> = {
+  Ambulance: { bg: "bg-red-50", icon: "lucide:ambulance" },
+  Damkar: { bg: "bg-orange-50", icon: "lucide:flame" },
+  "Rumah Sakit": { bg: "bg-blue-50", icon: "lucide:hospital" },
+  SAR: { bg: "bg-green-50", icon: "lucide:life-buoy" },
+};
+function typeStyle(name: string) {
+  return typeConfig[name] ?? { bg: "bg-neutral-50", icon: "lucide:tag" };
+}
+
+// ── Create ──────────────────────────────────────────────────────────────────
+const showCreate = ref(false);
+const creating = ref(false);
+const createForm = reactive({ name: "", icon: "", description: "" });
+
+async function submitCreate() {
+  if (!createForm.name || !createForm.icon) return;
+  creating.value = true;
+  try {
+    await post("/api/v1/emergency/type", { name: createForm.name, icon: createForm.icon, description: createForm.description });
+    showCreate.value = false;
+    Object.assign(createForm, { name: "", icon: "", description: "" });
+    await refresh();
+    toast.success("Jenis layanan berhasil ditambahkan");
+  } catch {
+    toast.error("Gagal menambahkan jenis layanan");
+  } finally {
+    creating.value = false;
+  }
+}
+
+// ── Edit ─────────────────────────────────────────────────────────────────────
+const showEdit = ref(false);
+const editing = ref(false);
+const editTarget = ref<any>(null);
+const editForm = reactive({ name: "", icon: "", description: "" });
+
+function openEdit(type: any) {
+  editTarget.value = type;
+  Object.assign(editForm, { name: type.name ?? "", icon: type.icon ?? "", description: type.description ?? "" });
+  showEdit.value = true;
+}
+
+async function submitEdit() {
+  if (!editTarget.value || !editForm.name || !editForm.icon) return;
+  editing.value = true;
+  try {
+    await put(`/api/v1/emergency/type/${editTarget.value.id}`, {
+      name: editForm.name, icon: editForm.icon, description: editForm.description,
+    });
+    showEdit.value = false;
+    await refresh();
+    toast.success("Jenis layanan berhasil diperbarui");
+  } catch {
+    toast.error("Gagal memperbarui jenis layanan");
+  } finally {
+    editing.value = false;
+  }
+}
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+const deletingId = ref<number | null>(null);
+const showDeleteTypeConfirm = ref(false);
+const deleteTypeTarget = ref<{ id: number; name: string } | null>(null);
+
+function confirmDeleteType(id: number, name: string) {
+  deleteTypeTarget.value = { id, name };
+  showDeleteTypeConfirm.value = true;
+}
+
+async function executeDeleteType() {
+  if (!deleteTypeTarget.value) return;
+  deletingId.value = deleteTypeTarget.value.id;
+  showDeleteTypeConfirm.value = false;
+  try {
+    await del(`/api/v1/emergency/type/${deleteTypeTarget.value.id}`);
+    await refresh();
+    toast.success(`Jenis "${deleteTypeTarget.value.name}" berhasil dihapus`);
+  } catch {
+    toast.error("Gagal menghapus jenis layanan");
+  } finally {
+    deletingId.value = null;
+    deleteTypeTarget.value = null;
+  }
+}
+</script>
+
+<template>
+  <div>
+    <!-- Page header -->
+    <div class="page-subheader">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="page-subheader-title">Jenis Layanan</h1>
+          <p class="page-subheader-desc">{{ filtered.length }} jenis terdaftar</p>
+        </div>
+        <UiButton @click="showCreate = true">
+          <Icon icon="lucide:plus" class="text-sm" />
+          Tambah Jenis
+        </UiButton>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="bg-white border-b border-neutral-100 px-4 sm:px-6 py-3">
+      <UiSearchInput
+        v-model="search"
+        placeholder="Cari jenis layanan..."
+        class="max-w-xs"
+      />
+    </div>
+
+    <!-- Content -->
+    <div class="p-4 sm:p-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <template v-if="showSkeleton">
+          <div
+            v-for="i in 4"
+            :key="`skel-${i}`"
+            class="bg-white rounded-xl border border-neutral-200 p-5 flex flex-col gap-4"
+          >
+            <div class="flex items-start gap-3">
+              <div class="soft-skel w-10 h-10 rounded-xl shrink-0" />
+              <div class="flex-1 space-y-2 pt-1">
+                <div class="soft-skel h-3.5 w-28" />
+                <div class="soft-skel h-2.5 w-20" />
+              </div>
+            </div>
+            <div class="soft-skel h-9 rounded-lg" />
+            <div class="soft-skel h-2.5 w-full" />
+            <div class="flex justify-end gap-2 border-t border-neutral-100 pt-3">
+              <div class="soft-skel h-7 w-14" />
+              <div class="soft-skel h-7 w-14" />
+            </div>
+          </div>
+        </template>
+
+        <template v-else>
+          <div
+            v-for="type in paginated"
+            :key="type.id"
+            class="bg-white rounded-xl border border-neutral-200 p-5 flex flex-col gap-4 hover:border-neutral-300 transition-colors"
+          >
+            <div class="flex items-start gap-3">
+              <div :class="['w-10 h-10 rounded-xl flex items-center justify-center shrink-0', typeStyle(type.name).bg]">
+                <Icon :icon="typeStyle(type.name).icon" class="text-lg text-neutral-600" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-semibold text-neutral-900 text-sm">{{ type.name }}</p>
+                <p class="text-xs text-neutral-400 mt-0.5 truncate">{{ type.icon }}</p>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between px-3 py-2 bg-neutral-50 rounded-lg">
+              <span class="text-xs text-neutral-500">Layanan aktif</span>
+              <span class="text-sm font-bold text-neutral-900">{{ countForType(type.name) }}</span>
+            </div>
+
+            <p v-if="type.description" class="text-xs text-neutral-500 line-clamp-2 -mt-1">{{ type.description }}</p>
+
+            <div class="flex justify-end gap-2 border-t border-neutral-100 pt-3">
+              <UiButton variant="secondary" size="sm" @click="openEdit(type)">
+                <Icon icon="lucide:pencil" class="text-xs" />
+                Edit
+              </UiButton>
+              <UiButton
+                variant="danger"
+                size="sm"
+                :loading="deletingId === type.id"
+                @click="confirmDeleteType(type.id, type.name)"
+              >
+                <Icon icon="lucide:trash-2" class="text-xs" />
+                Hapus
+              </UiButton>
+            </div>
+          </div>
+
+          <div v-if="!filtered.length" class="col-span-full">
+            <UiEmptyState title="Belum ada jenis layanan" description="Tambah kategori untuk mulai mengelola layanan darurat.">
+              <template #icon>
+                <Icon icon="lucide:tag" class="text-neutral-400 text-2xl" />
+              </template>
+              <UiButton size="sm" variant="secondary" @click="showCreate = true">
+                <Icon icon="lucide:plus" class="text-sm" />
+                Tambah Jenis Pertama
+              </UiButton>
+            </UiEmptyState>
+          </div>
+        </template>
+      </div>
+
+      <div v-if="!showSkeleton && totalPages > 1" class="mt-4 px-1">
+        <UiPagination v-model:page="page" :total-pages="totalPages" />
+      </div>
+    </div>
+
+    <!-- Create modal -->
+    <UiModal v-model:open="showCreate" title="Tambah Jenis Layanan" description="Buat kategori baru untuk layanan darurat.">
+      <template #trigger><span /></template>
+      <div class="space-y-4">
+        <UiFormField label="Nama" required>
+          <UiInput v-model="createForm.name" placeholder="mis. Ambulance" />
+        </UiFormField>
+        <UiFormField label="Icon" required hint="Format iconify string, mis. mdi:ambulance">
+          <UiInput v-model="createForm.icon" placeholder="mis. mdi:ambulance" />
+        </UiFormField>
+        <UiFormField label="Deskripsi">
+          <UiTextarea v-model="createForm.description" :rows="2" placeholder="Deskripsi singkat..." />
+        </UiFormField>
+      </div>
+      <template #footer>
+        <UiButton variant="secondary" size="sm" @click="showCreate = false">Batal</UiButton>
+        <UiButton size="sm" :loading="creating" :disabled="!createForm.name || !createForm.icon" @click="submitCreate">Simpan</UiButton>
+      </template>
+    </UiModal>
+
+    <!-- Edit modal -->
+    <UiModal v-model:open="showEdit" title="Edit Jenis Layanan" description="Ubah data kategori layanan darurat.">
+      <template #trigger><span /></template>
+      <div class="space-y-4">
+        <UiFormField label="Nama" required>
+          <UiInput v-model="editForm.name" />
+        </UiFormField>
+        <UiFormField label="Icon" required>
+          <UiInput v-model="editForm.icon" />
+        </UiFormField>
+        <UiFormField label="Deskripsi">
+          <UiTextarea v-model="editForm.description" :rows="2" />
+        </UiFormField>
+      </div>
+      <template #footer>
+        <UiButton variant="secondary" size="sm" @click="showEdit = false">Batal</UiButton>
+        <UiButton size="sm" :loading="editing" :disabled="!editForm.name || !editForm.icon" @click="submitEdit">Simpan Perubahan</UiButton>
+      </template>
+    </UiModal>
+
+    <!-- Delete confirm modal -->
+    <UiModal v-model:open="showDeleteTypeConfirm" title="Hapus Jenis Layanan" description="Tindakan ini tidak dapat dibatalkan.">
+      <template #trigger><span /></template>
+      <p class="text-sm text-neutral-600">
+        Apakah kamu yakin ingin menghapus jenis <span class="font-semibold">{{ deleteTypeTarget?.name }}</span>?
+      </p>
+      <template #footer>
+        <UiButton variant="secondary" size="sm" @click="showDeleteTypeConfirm = false">Batal</UiButton>
+        <UiButton variant="danger" size="sm" @click="executeDeleteType">
+          <Icon icon="lucide:trash-2" class="text-sm" />
+          Hapus
+        </UiButton>
+      </template>
+    </UiModal>
+  </div>
+</template>

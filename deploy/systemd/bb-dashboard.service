@@ -1,0 +1,20 @@
+[Unit]
+Description=ButuhBantuan Dashboard (Nuxt SSR)
+After=network.target
+
+[Service]
+Type=simple
+User=bb
+Group=bb
+WorkingDirectory=/opt/butuhbantuan/dashboard
+EnvironmentFile=/opt/butuhbantuan/dashboard/.env
+ExecStart=/usr/bin/node .output/server/index.mjs
+Restart=always
+RestartSec=5
+MemoryMax=500M
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bb-dashboard
+
+[Install]
+WantedBy=multi-user.target
