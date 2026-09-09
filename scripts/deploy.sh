@@ -39,6 +39,12 @@ rsync -a --delete "$DEPLOY_DIR/dashboard-output/" "$APP_DIR/dashboard/.output/"
 log "Syncing web-app static dist…"
 rsync -a --delete "$DEPLOY_DIR/webapp-dist/" "$APP_DIR/web-app/dist/"
 
+# Sync seed data (JSON files). Never --delete: existing runtime uploads / edits stay.
+if [[ -d "$DEPLOY_DIR/data" ]]; then
+  log "Syncing API data/ (seed JSONs)…"
+  rsync -a "$DEPLOY_DIR/data/" "$APP_DIR/api/data/"
+fi
+
 # ── Restart services ──────────────────────────────────────────────────────────
 
 log "Restarting bb-api…"

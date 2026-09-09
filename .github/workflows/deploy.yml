@@ -96,6 +96,7 @@ jobs:
           include-hidden-files: true       # .output is treated as hidden by default
           path: |
             apps/api/server
+            apps/api/data
             apps/dashboard/.output
             apps/web-app/.output/public
             scripts/deploy.sh
@@ -126,10 +127,15 @@ jobs:
           set -euo pipefail
 
           # Fresh staging dir on VPS
-          ssh $KEY $H "rm -rf /tmp/bb-deploy && mkdir -p /tmp/bb-deploy/{dashboard-output,webapp-dist}"
+          ssh $KEY $H "rm -rf /tmp/bb-deploy && mkdir -p /tmp/bb-deploy/{dashboard-output,webapp-dist,data}"
 
           # API binary
           scp $KEY apps/api/server $H:/tmp/bb-deploy/server
+
+          # API seed data (JSON files)
+          rsync -az --delete -e "ssh $KEY" \
+            apps/api/data/ \
+            $H:/tmp/bb-deploy/data/
 
           # Dashboard SSR (.output tree)
           rsync -az --delete -e "ssh $KEY" \
