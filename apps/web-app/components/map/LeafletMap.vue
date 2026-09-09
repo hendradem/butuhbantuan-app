@@ -17,6 +17,7 @@ import {
   getMapAppearance,
   tileAttribution,
   tileLayerUrl,
+  tileSubdomains,
   userLocationIconHtml,
 } from "~/utils/mapAppearance";
 import { getColorMode } from "~/utils/colorMode";
@@ -96,11 +97,12 @@ onMounted(async () => {
     easeLinearity: 0.2,
   });
 
-  // Same-origin tile proxy — provider from mapAppearance + color mode.
+  // Direct-CDN tiles — static build has no Nitro proxy route.
   const initialTiles = effectiveTileStyle(mapAppearance.tiles, getColorMode());
   baseTileLayer = L.tileLayer(tileLayerUrl(initialTiles), {
     attribution: tileAttribution(initialTiles),
     maxZoom: initialTiles === "classic" ? 19 : 20,
+    subdomains: tileSubdomains(initialTiles),
   }).addTo(map);
 
   const onColorMode = (e: Event) => {
@@ -111,6 +113,7 @@ onMounted(async () => {
     baseTileLayer = L.tileLayer(tileLayerUrl(next), {
       attribution: tileAttribution(next),
       maxZoom: next === "classic" ? 19 : 20,
+      subdomains: tileSubdomains(next),
     }).addTo(map);
     baseTileLayer.bringToBack?.();
     const tilePane = map.getPane("tilePane") as HTMLElement | undefined;

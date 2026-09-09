@@ -88,9 +88,20 @@ export function setMapAppearance(next: Partial<MapAppearance> | null) {
 }
 
 export function tileLayerUrl(tiles: MapTileStyle): string {
-  const provider =
-    tiles === "dark" ? "dark" : tiles === "voyager" ? "voyager" : "osm";
-  return `/map-tiles/{z}/{x}/{y}?provider=${provider}`;
+  // Direct CDN — same-origin proxy (/map-tiles) needs Nitro SSR, but the
+  // web-app ships as a static build (`nuxt generate`) so the route is absent.
+  if (tiles === "dark") {
+    return `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png`;
+  }
+  if (tiles === "voyager") {
+    return `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png`;
+  }
+  return `https://tile.openstreetmap.org/{z}/{x}/{y}.png`;
+}
+
+/** Leaflet subdomains — CARTO shards a/b/c/d, OSM has none. */
+export function tileSubdomains(tiles: MapTileStyle): string[] {
+  return tiles === "classic" ? [] : ["a", "b", "c", "d"];
 }
 
 export function tileAttribution(tiles: MapTileStyle): string {
