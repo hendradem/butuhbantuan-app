@@ -7,11 +7,11 @@ const showBanner = ref(false);
 
 onMounted(() => {
   if (localStorage.getItem(STORAGE_KEY) === "true") return;
-  showBanner.value = true;
 
   const handleBeforeInstall = (e: Event) => {
     e.preventDefault();
     deferredPrompt.value = e;
+    showBanner.value = true;
   };
   const handleInstalled = () => hidePermanently();
   window.addEventListener("beforeinstallprompt", handleBeforeInstall);

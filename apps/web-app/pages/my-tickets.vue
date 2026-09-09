@@ -39,6 +39,29 @@ const tickets = ref<MyTicket[]>([]);
 const codeExpiresIn = ref(0);
 let expiryTimer: ReturnType<typeof setInterval> | null = null;
 
+// Quick-lookup fallback: paste link/ID from WhatsApp when PWA deep link fails.
+const quickLookup = ref("");
+const quickLookupError = ref("");
+
+function openFromLink() {
+  quickLookupError.value = "";
+  const raw = quickLookup.value.trim();
+  if (!raw) return;
+
+  // Extract token from full URL if pasted, else use raw text
+  let token = raw;
+  const urlMatch = raw.match(/\/ticket\/([^?#/\s]+)/i);
+  if (urlMatch) token = urlMatch[1]!;
+
+  // Strip stray whitespace / URL-encoded chars
+  token = token.replace(/\s+/g, "");
+  if (!token || token.length < 8) {
+    quickLookupError.value = "Format tidak dikenali. Paste link lengkap atau ID tiket.";
+    return;
+  }
+  router.push(`/ticket/${encodeURIComponent(token)}`);
+}
+
 function normalizePhone(v: string): string {
   return String(v || "").replace(/[^\d+]/g, "");
 }
@@ -281,6 +304,44 @@ onUnmounted(() => {
 
     <div class="flex flex-col items-center px-4 py-6">
       <div class="w-full max-w-sm space-y-3">
+        <!-- Quick access · paste ticket link (fallback for PWA deep-link failure) -->
+        <section v-if="step === 'phone'" class="ui-card overflow-hidden">
+          <div class="px-5 pt-5 pb-2">
+            <p class="text-sm font-semibold ui-text-primary flex items-center gap-2">
+              <Icon icon="lucide:link-2" class="text-base" />
+              Punya link tiket?
+            </p>
+            <p class="mt-0.5 text-xs ui-text-secondary">
+              Paste link dari WhatsApp untuk langsung buka tanpa OTP.
+            </p>
+          </div>
+          <div class="px-5 pb-5 space-y-2">
+            <input
+              v-model="quickLookup"
+              type="text"
+              inputmode="url"
+              placeholder="butuhbantuan.space/ticket/... atau ID"
+              class="w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-400"
+              @keydown.enter="openFromLink"
+            >
+            <p v-if="quickLookupError" class="text-xs text-red-500">{{ quickLookupError }}</p>
+            <button
+              type="button"
+              class="w-full py-2.5 rounded-lg border border-neutral-300 text-sm font-medium active:scale-[0.98] transition-transform disabled:opacity-50"
+              :disabled="!quickLookup.trim()"
+              @click="openFromLink"
+            >
+              Buka tiket
+            </button>
+          </div>
+        </section>
+
+        <div v-if="step === 'phone'" class="flex items-center gap-3 py-1">
+          <div class="flex-1 h-px bg-neutral-200"></div>
+          <span class="text-[11px] ui-text-secondary uppercase tracking-wide">atau</span>
+          <div class="flex-1 h-px bg-neutral-200"></div>
+        </div>
+
         <!-- Step 1 · phone -->
         <section v-if="step === 'phone'" class="ui-card overflow-hidden">
           <div class="px-5 pt-5 pb-3">

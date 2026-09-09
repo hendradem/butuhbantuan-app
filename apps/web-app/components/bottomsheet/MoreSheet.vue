@@ -212,7 +212,7 @@ function openDetail(id: "about" | "support") {
         </div>
         <div class="min-w-0 flex-1">
           <p class="text-sm font-semibold ui-text-primary">Tiket saya</p>
-          <p class="text-xs ui-text-secondary mt-0.5 leading-snug">Cek tiket darurat dengan nomor HP</p>
+          <p class="text-xs ui-text-secondary mt-0.5 leading-snug">Cek tiket via HP atau paste link WhatsApp</p>
         </div>
         <Icon icon="lucide:chevron-right" class="shrink-0" style="color: var(--bb-text-tertiary)" />
       </button>

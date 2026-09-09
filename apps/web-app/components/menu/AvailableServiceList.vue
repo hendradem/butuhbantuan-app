@@ -59,7 +59,7 @@ function openMore() {
           <Icon icon="lucide:sparkles" class="text-[26px]" />
         </div>
         <div class="mx-2">
-          <h3 class="text-center text-[13px] mt-1.5 ui-text-secondary font-medium leading-[1.3]">
+          <h3 class="text-center text-[13px] mt-1.5 ui-text-secondary font-medium leading-[1.3] whitespace-nowrap">
             Butuh apa?
           </h3>
         </div>
@@ -76,7 +76,7 @@ function openMore() {
           <Icon :icon="(service.icon as string) || 'lucide:shield'" class="text-[26px]" />
         </div>
         <div class="mx-2">
-          <h3 class="text-center text-[13px] mt-1.5 ui-text-secondary font-medium leading-[1.3]">
+          <h3 class="text-center text-[13px] mt-1.5 ui-text-secondary font-medium leading-[1.3] whitespace-nowrap">
             {{ service.name }}
           </h3>
         </div>
@@ -99,7 +99,7 @@ function openMore() {
           <Icon icon="ph:dots-nine" class="text-[26px] text-[color:var(--bb-text-secondary)]" />
         </div>
         <div class="mx-2">
-          <h3 class="text-center text-[13px] mt-1.5 ui-text-secondary font-medium leading-[1.3]">
+          <h3 class="text-center text-[13px] mt-1.5 ui-text-secondary font-medium leading-[1.3] whitespace-nowrap">
             Lainnya
           </h3>
         </div>
