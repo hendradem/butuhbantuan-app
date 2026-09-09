@@ -78,10 +78,12 @@ if ! check "bb-dashboard" "http://127.0.0.1:3002/"; then
   fail "Dashboard unhealthy. journalctl -u bb-dashboard -n 100"
 fi
 
-# Static web-app: probe via nginx on :80
-if ! check "web-app" "http://127.0.0.1/"; then
-  fail "Web-app not served — check nginx: nginx -t && journalctl -u nginx -n 50"
+# Web-app is static (served by Nginx) — verify the built entry file exists.
+# Skip HTTP probe: nginx vhost may be domain-scoped so 127.0.0.1 won't match.
+if [[ ! -s "$APP_DIR/web-app/dist/index.html" ]]; then
+  fail "Web-app not deployed — $APP_DIR/web-app/dist/index.html missing/empty"
 fi
+log "✓ web-app dist present"
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 
