@@ -34,7 +34,7 @@ if [[ -z "$DOMAIN" ]]; then
   log "Mode: IP (no domain). Access via http://<VPS-IP>:{80,8080,8081}."
 else
   MODE="domain"
-  log "Mode: domain ($DOMAIN). Will configure api./app./dashboard. subdomains."
+  log "Mode: domain ($DOMAIN). Web-app on root + www; api. and dashboard. subdomains."
 fi
 
 # ── 1. System packages ────────────────────────────────────────────────────────
@@ -158,9 +158,9 @@ ADMIN_KEY=$(openssl rand -hex 24)
 
 if [[ "$MODE" == "domain" ]]; then
   API_URL="https://api.$DOMAIN"
-  APP_URL="https://app.$DOMAIN"
+  APP_URL="https://$DOMAIN"
   DASH_URL="https://dashboard.$DOMAIN"
-  ALLOW_ORIGINS="$APP_URL,$DASH_URL"
+  ALLOW_ORIGINS="$APP_URL,https://www.$DOMAIN,$DASH_URL"
 else
   # IP mode — try to auto-detect public IP; fall back to placeholder if all lookups fail
   log "Detecting public IP…"
@@ -244,8 +244,8 @@ if [[ "$MODE" == "domain" ]]; then
 
 cat > "$NGINX_CONF" <<NGINX
 # ButuhBantuan — domain mode
-# After DNS points api./app./dashboard.$DOMAIN → this server, run:
-#   sudo certbot --nginx -d api.$DOMAIN -d app.$DOMAIN -d dashboard.$DOMAIN
+# After DNS points $DOMAIN, www.$DOMAIN, api.$DOMAIN, dashboard.$DOMAIN → this server, run:
+#   sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN -d api.$DOMAIN -d dashboard.$DOMAIN
 
 # ── API ──────────────────────────────────────────────────────────────────────
 server {
@@ -278,10 +278,10 @@ server {
     }
 }
 
-# ── Web-app (static PWA) ─────────────────────────────────────────────────────
+# ── Web-app (static PWA) — root domain + www ─────────────────────────────────
 server {
     listen 80;
-    server_name app.$DOMAIN;
+    server_name $DOMAIN www.$DOMAIN;
 
     root $APP_DIR/web-app/dist;
     gzip on;
@@ -520,7 +520,7 @@ warn "       WEB_APP_URL      → $APP_URL"
 warn "       ADMIN_API_KEY    → $ADMIN_KEY"
 if [[ "$MODE" == "domain" ]]; then
   warn "  5. Once DNS is live:"
-  warn "     certbot --nginx -d api.$DOMAIN -d app.$DOMAIN -d dashboard.$DOMAIN"
+  warn "     certbot --nginx -d $DOMAIN -d www.$DOMAIN -d api.$DOMAIN -d dashboard.$DOMAIN"
 fi
 echo ""
 warn "Admin API key (also in $APP_DIR/api/.env): $ADMIN_KEY"
