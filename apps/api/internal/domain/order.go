@@ -10,6 +10,9 @@ type OrderTicket struct {
 	TicketNumber   string     `json:"ticket_number"`
 	EmergencyUUID  string     `json:"emergency_uuid"`
 	UnitName       string     `json:"unit_name"`
+	// PreviousUnitName is the immediately prior UnitName from the last reassign.
+	// Empty when the ticket has never been reassigned (DispatchRound <= 1).
+	PreviousUnitName string `json:"previous_unit_name,omitempty"`
 	RequesterName  string     `json:"requester_name"`
 	RequesterPhone string     `json:"requester_phone"`
 	JenisPelayanan   string            `json:"jenis_pelayanan,omitempty"`

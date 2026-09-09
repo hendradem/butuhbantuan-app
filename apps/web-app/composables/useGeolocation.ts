@@ -371,13 +371,23 @@ export function useGeolocation() {
     const lng = userLocation.gpsLong;
     const acc = userLocation.gpsAccuracyM;
     if (!lat || !lng || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    if (acc > 0 && acc > MAX_CACHE_ACCURACY_M) return null;
+    // Accept any accuracy — the map watch already shows the blue dot at this position,
+    // so using it is always better than a false-positive "GPS denied" error.
     return {
       lat,
       long: lng,
       fromGps: true,
       accuracyM: acc > 0 ? acc : undefined,
     };
+  }
+
+  /** Last-resort: return whatever the background map watch has, even if stale. */
+  function watchFallback(): GeoFix | null {
+    const lat = userLocation.gpsLat;
+    const lng = userLocation.gpsLong;
+    if (!lat || !lng || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const acc = userLocation.gpsAccuracyM;
+    return { lat, long: lng, fromGps: true, accuracyM: acc > 0 ? acc : undefined };
   }
 
     if (opts?.preferGps) {
@@ -400,6 +410,10 @@ export function useGeolocation() {
           return fix;
         } catch (e: any) {
           if (e?.code === 1) {
+            // Permission denied — but the map watch may already have a position.
+            // Use it instead of showing a false-positive GPS error.
+            const wb = watchFallback();
+            if (wb) { opts?.onSample?.(wb); return wb; }
             return { ...DIY_CENTER, fromGps: false, errorCode: 1 };
           }
         }
@@ -415,6 +429,8 @@ export function useGeolocation() {
           return fix;
         } catch (e: any) {
           if (e?.code === 1) {
+            const wb = watchFallback();
+            if (wb) { opts?.onSample?.(wb); return wb; }
             return { ...DIY_CENTER, fromGps: false, errorCode: 1 };
           }
         }

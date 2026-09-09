@@ -394,6 +394,78 @@ async function submit() {
   }
 }
 
+// ── Google Maps link parser ───────────────────────────────────────────────────
+const mapsLinkInput = ref("");
+const mapsLinkError = ref("");
+const showMapsInput = ref(false);
+
+function parseMapsCoords(input: string): { lat: number; lng: number } | null {
+  const s = input.trim();
+  if (!s) return null;
+  const isValid = (lat: number, lng: number) =>
+    Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+  // ?q=lat,lng or &q=lat,lng
+  let m = s.match(/[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (m) { const [lat, lng] = [parseFloat(m[1]), parseFloat(m[2])]; if (isValid(lat, lng)) return { lat, lng }; }
+  // /@lat,lng,zoom in path
+  m = s.match(/\/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (m) { const [lat, lng] = [parseFloat(m[1]), parseFloat(m[2])]; if (isValid(lat, lng)) return { lat, lng }; }
+  // ?ll=lat,lng
+  m = s.match(/[?&]ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (m) { const [lat, lng] = [parseFloat(m[1]), parseFloat(m[2])]; if (isValid(lat, lng)) return { lat, lng }; }
+  // raw lat,lng
+  m = s.match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/);
+  if (m) { const [lat, lng] = [parseFloat(m[1]), parseFloat(m[2])]; if (isValid(lat, lng)) return { lat, lng }; }
+  return null;
+}
+
+const resolvingMapsLink = ref(false);
+
+async function resolveMapsCoords(input: string): Promise<{ lat: number; lng: number } | null> {
+  const local = parseMapsCoords(input);
+  if (local) return local;
+  const s = input.trim();
+  if (!/^https?:\/\//i.test(s)) return null;
+  try {
+    const res = await get<{ data: { latitude: number; longitude: number } }>(
+      `/api/v1/geocoding/resolve-maps?url=${encodeURIComponent(s)}`,
+    );
+    const lat = Number(res.data?.latitude);
+    const lng = Number(res.data?.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+async function applyMapsLink() {
+  mapsLinkError.value = "";
+  resolvingMapsLink.value = true;
+  try {
+    const coords = await resolveMapsCoords(mapsLinkInput.value);
+    if (!coords) {
+      mapsLinkError.value = "Link tidak valid. Coba salin ulang dari Google Maps.";
+      return;
+    }
+    form.requester_lat = coords.lat;
+    form.requester_lng = coords.lng;
+    try {
+      const res = await get<{ data: any }>(`/api/v1/geocoding/reverse?latitude=${coords.lat}&longitude=${coords.lng}`);
+      form.location = String(res.data?.display_name || `${coords.lat}, ${coords.lng}`);
+    } catch {
+      form.location = `${coords.lat}, ${coords.lng}`;
+    }
+    locQuery.value = form.location;
+    locResults.value = [];
+    locPicked.value = true;
+    mapsLinkInput.value = "";
+    showMapsInput.value = false;
+  } finally {
+    resolvingMapsLink.value = false;
+  }
+}
+
 // ── Community relay ───────────────────────────────────────────────────────────
 const relaying = ref(false);
 const relayError = ref("");
@@ -679,6 +751,42 @@ function createAnother() {
             <p v-else class="mt-1.5 text-[11px] text-neutral-400">
               Pilih dari hasil pencarian agar petugas bisa buka Google Maps.
             </p>
+
+            <!-- Preview map -->
+            <div v-if="locPicked && form.requester_lat && form.requester_lng" class="mt-2">
+              <OrderLocationMap
+                :key="`${form.requester_lat}-${form.requester_lng}`"
+                :lat="form.requester_lat"
+                :lng="form.requester_lng"
+                :label="form.location"
+              />
+            </div>
+
+            <!-- Maps link alternative -->
+            <div class="mt-2">
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 text-[11px] text-primary-600 hover:text-primary-700"
+                @click="showMapsInput = !showMapsInput"
+              >
+                <Icon icon="lucide:link" class="text-[10px]" />
+                Tempel link Google Maps
+              </button>
+              <div v-if="showMapsInput" class="mt-1.5 flex items-stretch gap-1.5">
+                <input
+                  v-model="mapsLinkInput"
+                  type="text"
+                  class="flex-1 rounded-lg border border-neutral-300 shadow-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 placeholder:text-neutral-400"
+                  placeholder="maps.google.com/?q=-7.78,110.36 atau maps.app.goo.gl/..."
+                  :disabled="resolvingMapsLink"
+                  @keydown.enter.prevent="applyMapsLink"
+                />
+                <UiButton size="sm" variant="secondary" :loading="resolvingMapsLink" @click="applyMapsLink">
+                  Gunakan
+                </UiButton>
+              </div>
+              <p v-if="mapsLinkError" class="mt-1 text-[11px] text-red-500">{{ mapsLinkError }}</p>
+            </div>
           </div>
 
           <div class="md:col-span-2">

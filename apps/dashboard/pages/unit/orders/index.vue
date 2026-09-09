@@ -27,7 +27,7 @@ const { tab: statusFilter, setTab: setStatusFilter } = usePersistedTab(
   "status",
 );
 
-const VIEW_VALUES = ["map", "table"] as const;
+const VIEW_VALUES = ["map", "table", "kanban"] as const;
 const { tab: viewMode, setTab: setViewMode } = usePersistedTab(
   "bb-unit-orders-view",
   "map",
@@ -564,6 +564,17 @@ function sendFollowUpWA(order: any) {
               <Icon icon="lucide:table" class="text-sm" />
               Tabel
             </button>
+            <button
+              type="button"
+              :class="[
+                'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5',
+                viewMode === 'kanban' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700',
+              ]"
+              @click="setViewMode('kanban')"
+            >
+              <Icon icon="lucide:kanban" class="text-sm" />
+              Kanban
+            </button>
           </div>
           <UiButton variant="primary" class="flex-1 sm:flex-none justify-center" @click="openCreateTicket">
             <Icon icon="lucide:ticket-plus" class="text-sm" />
@@ -626,10 +637,14 @@ function sendFollowUpWA(order: any) {
     <div class="p-4 sm:p-6">
       <UiTableCard
         :badge="filtered.length"
-        :title="viewMode === 'map' ? 'Sebaran Pesanan' : 'Daftar Pesanan'"
+        :title="viewMode === 'map'
+          ? 'Sebaran Pesanan'
+          : viewMode === 'kanban' ? 'Papan Kanban' : 'Daftar Pesanan'"
         :description="viewMode === 'map'
           ? 'Sebaran live — panggilan masuk muncul di peta & kartu'
-          : 'Daftar live — filter & periode sama dengan sebaran'"
+          : viewMode === 'kanban'
+            ? 'Seret kartu ke kolom berikutnya untuk maju status'
+            : 'Daftar live — filter & periode sama dengan sebaran'"
       >
         <template #actions>
           <UiSearchInput
@@ -751,6 +766,15 @@ function sendFollowUpWA(order: any) {
               <div class="soft-skel h-[580px] rounded-none" />
             </template>
           </ClientOnly>
+        </div>
+
+        <!-- Kanban -->
+        <div v-else-if="viewMode === 'kanban'">
+          <UnitKanbanBoard
+            :orders="sortedFiltered"
+            :loading="showOrdersSkeleton"
+            @refresh="refresh"
+          />
         </div>
 
         <!-- Table / mobile cards -->

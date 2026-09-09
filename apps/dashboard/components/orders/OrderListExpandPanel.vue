@@ -50,6 +50,24 @@ const detailLine = computed(() => orderServiceDetailLine(props.order));
       <div v-if="variant === 'admin' && order.unit_name" class="xl:hidden">
         <p class="text-[11px] font-medium uppercase tracking-wide text-neutral-400">Unit</p>
         <p class="mt-0.5 font-medium text-neutral-900">{{ order.unit_name }}</p>
+        <p v-if="order.previous_unit_name" class="mt-0.5 flex items-center gap-1 text-[11px] text-amber-700">
+          <Icon icon="lucide:arrow-left" class="text-[10px] shrink-0" />
+          dari {{ order.previous_unit_name }}
+        </p>
+      </div>
+      <div v-if="order.previous_unit_name" class="sm:col-span-2 lg:col-span-2">
+        <p class="text-[11px] font-medium uppercase tracking-wide text-neutral-400">Dispatch trail</p>
+        <p class="mt-0.5 text-neutral-800 flex items-center gap-1.5">
+          <span class="text-neutral-500 line-through">{{ order.previous_unit_name }}</span>
+          <Icon icon="lucide:arrow-right" class="text-neutral-400 text-xs shrink-0" />
+          <span class="font-medium text-neutral-900">{{ order.unit_name || "—" }}</span>
+          <span
+            v-if="order.dispatch_round && order.dispatch_round > 1"
+            class="ml-1 rounded-full bg-neutral-100 px-1.5 py-px text-[10px] font-medium text-neutral-600"
+          >
+            Round {{ order.dispatch_round }}
+          </span>
+        </p>
       </div>
       <div v-if="etaMinutes != null && etaMinutes > 0" class="md:hidden">
         <p class="text-[11px] font-medium uppercase tracking-wide text-neutral-400">ETA</p>

@@ -896,7 +896,7 @@ onBeforeUnmount(() => {
 
       <!-- Map -->
       <div class="flex-1 relative overflow-hidden min-w-0 isolate" style="contain: layout paint">
-        <div ref="mapEl" class="w-full h-full" style="background: #e5e3df" />
+        <div ref="mapEl" class="absolute inset-0" style="background: #e5e3df" />
 
         <!-- Loading -->
         <div v-if="loading && props.points.length === 0" class="absolute inset-0 z-[500] flex items-center justify-center bg-white/70">

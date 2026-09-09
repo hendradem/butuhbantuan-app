@@ -640,3 +640,92 @@ func (r *AnalyticsRepo) GetUnitPeriodAggregates(emergencyUUID string, periodDays
 
 	return out, nil
 }
+
+// GetAllUnitScores aggregates orders + feedback grouped by emergency_uuid so
+// the admin scoreboard can render all units in two queries instead of N+1.
+func (r *AnalyticsRepo) GetAllUnitScores(periodDays int) ([]domain.UnitScoreRow, error) {
+	if periodDays <= 0 || periodDays > 365 {
+		periodDays = 30
+	}
+
+	type orderRow struct {
+		EmergencyUUID  string
+		Total          int64
+		Completed      int64
+		Cancelled      int64
+		Pending        int64
+		InProgress     int64
+		AvgResponseSec float64
+		AvgArrivalSec  float64
+	}
+	var orderRows []orderRow
+	if err := r.db.Raw(fmt.Sprintf(`
+		SELECT
+			emergency_uuid,
+			COUNT(*) AS total,
+			COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) AS completed,
+			COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) AS cancelled,
+			COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) AS pending,
+			COALESCE(SUM(CASE WHEN status IN ('accepted','in_progress') THEN 1 ELSE 0 END), 0) AS in_progress,
+			COALESCE(ROUND(AVG(CASE WHEN accepted_at IS NOT NULL
+				THEN TIMESTAMPDIFF(SECOND, created_at, accepted_at) END), 0), 0) AS avg_response_sec,
+			COALESCE(ROUND(AVG(CASE WHEN arrived_at IS NOT NULL AND accepted_at IS NOT NULL
+				THEN TIMESTAMPDIFF(SECOND, accepted_at, arrived_at) END), 0), 0) AS avg_arrival_sec
+		FROM %s
+		WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+		  AND emergency_uuid <> ''
+		GROUP BY emergency_uuid
+	`, tOrder), periodDays).Scan(&orderRows).Error; err != nil {
+		return nil, err
+	}
+
+	type fbRow struct {
+		EmergencyUUID string
+		Total         int64
+		Helpful       int64
+	}
+	var fbRows []fbRow
+	if err := r.db.Raw(fmt.Sprintf(`
+		SELECT
+			emergency_uuid,
+			COUNT(*) AS total,
+			COALESCE(SUM(CASE WHEN unit_helpful = 1 THEN 1 ELSE 0 END), 0) AS helpful
+		FROM %s
+		WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+		  AND emergency_uuid <> ''
+		GROUP BY emergency_uuid
+	`, tFeedback), periodDays).Scan(&fbRows).Error; err != nil {
+		return nil, err
+	}
+
+	byUUID := make(map[string]*domain.UnitScoreRow, len(orderRows))
+	for _, o := range orderRows {
+		byUUID[o.EmergencyUUID] = &domain.UnitScoreRow{
+			EmergencyUUID:  o.EmergencyUUID,
+			TotalOrders:    o.Total,
+			Completed:      o.Completed,
+			Cancelled:      o.Cancelled,
+			Pending:        o.Pending,
+			InProgress:     o.InProgress,
+			AvgResponseSec: o.AvgResponseSec,
+			AvgArrivalSec:  o.AvgArrivalSec,
+		}
+	}
+	for _, f := range fbRows {
+		if e, ok := byUUID[f.EmergencyUUID]; ok {
+			e.FeedbackTotal = f.Total
+			e.FeedbackHelpful = f.Helpful
+			continue
+		}
+		byUUID[f.EmergencyUUID] = &domain.UnitScoreRow{
+			EmergencyUUID:   f.EmergencyUUID,
+			FeedbackTotal:   f.Total,
+			FeedbackHelpful: f.Helpful,
+		}
+	}
+	out := make([]domain.UnitScoreRow, 0, len(byUUID))
+	for _, row := range byUUID {
+		out = append(out, *row)
+	}
+	return out, nil
+}

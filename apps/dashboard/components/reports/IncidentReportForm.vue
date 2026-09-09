@@ -449,17 +449,6 @@ async function flushSave(): Promise<boolean> {
   return persistReport();
 }
 
-const saveStatusLabel = computed(() => {
-  if (savingRemote.value) return "Menyimpan ke server…";
-  if (saveError.value) return saveError.value;
-  if (dirty.value && !savedRemoteAt.value) {
-    return savedLocalAt.value ? `Draft lokal ${savedLocalAt.value} · belum ke server` : "Ada perubahan belum disimpan";
-  }
-  if (savedRemoteAt.value) return `Tersimpan server ${savedRemoteAt.value}`;
-  if (savedLocalAt.value) return `Draft lokal ${savedLocalAt.value}`;
-  return "";
-});
-
 watch(
   () => [props.ticket?.id, props.ticket?.ticket_number] as const,
   ([_id, number], prev) => {
@@ -476,6 +465,71 @@ watch(
 const message = computed(() => buildIncidentReportMessage(formSnapshot.value, template.value));
 
 const copied = ref(false);
+
+// ── Google Maps link → lokasi ─────────────────────────────────────────────────
+const mapsLinkForLocation = ref("");
+const mapsLinkLocError = ref("");
+const showMapsLinkLoc = ref(false);
+
+function parseMapsCoords(input: string): { lat: number; lng: number } | null {
+  const s = input.trim();
+  if (!s) return null;
+  const isValid = (lat: number, lng: number) =>
+    Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+  let m = s.match(/[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (m) { const [lat, lng] = [parseFloat(m[1]), parseFloat(m[2])]; if (isValid(lat, lng)) return { lat, lng }; }
+  m = s.match(/\/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (m) { const [lat, lng] = [parseFloat(m[1]), parseFloat(m[2])]; if (isValid(lat, lng)) return { lat, lng }; }
+  m = s.match(/[?&]ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (m) { const [lat, lng] = [parseFloat(m[1]), parseFloat(m[2])]; if (isValid(lat, lng)) return { lat, lng }; }
+  m = s.match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/);
+  if (m) { const [lat, lng] = [parseFloat(m[1]), parseFloat(m[2])]; if (isValid(lat, lng)) return { lat, lng }; }
+  return null;
+}
+
+const resolvingMapsLoc = ref(false);
+
+async function resolveMapsCoordsLoc(input: string): Promise<{ lat: number; lng: number } | null> {
+  const local = parseMapsCoords(input);
+  if (local) return local;
+  const s = input.trim();
+  if (!/^https?:\/\//i.test(s)) return null;
+  try {
+    const res = await $fetch<{ data: { latitude: number; longitude: number } }>(
+      `${baseUrl}/api/v1/geocoding/resolve-maps?url=${encodeURIComponent(s)}`,
+    );
+    const lat = Number((res as any)?.data?.latitude);
+    const lng = Number((res as any)?.data?.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+async function applyMapsLinkToLocation() {
+  mapsLinkLocError.value = "";
+  resolvingMapsLoc.value = true;
+  try {
+    const coords = await resolveMapsCoordsLoc(mapsLinkForLocation.value);
+    if (!coords) {
+      mapsLinkLocError.value = "Link tidak valid. Coba salin ulang dari Google Maps.";
+      return;
+    }
+    try {
+      const res = await $fetch<{ data: any }>(
+        `${baseUrl}/api/v1/geocoding/reverse?latitude=${coords.lat}&longitude=${coords.lng}`,
+      );
+      location.value = String((res as any)?.data?.display_name || `${coords.lat}, ${coords.lng}`);
+    } catch {
+      location.value = `${coords.lat}, ${coords.lng}`;
+    }
+    mapsLinkForLocation.value = "";
+    showMapsLinkLoc.value = false;
+  } finally {
+    resolvingMapsLoc.value = false;
+  }
+}
 
 watch([savedLocalAt, savedRemoteAt, savingRemote, copied, dirty, saveError], () => {
   emit("status", {
@@ -571,28 +625,7 @@ defineExpose({ copyMessage, shareWhatsApp, saveNow: flushSave });
 <template>
   <div class="p-4 sm:p-6 pb-24 lg:pb-6">
     <div class="max-w-6xl mx-auto">
-      <div
-        v-if="saveStatusLabel || dirty || savingRemote"
-        class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3.5 py-2.5 text-sm"
-        :class="saveError ? 'border-red-200 bg-red-50 text-red-700' : 'border-neutral-200 bg-neutral-50 text-neutral-600'"
-      >
-        <span class="flex items-center gap-2 min-w-0">
-          <Icon
-            :icon="savingRemote ? 'lucide:loader-2' : dirty ? 'lucide:hard-drive' : 'lucide:cloud-check'"
-            :class="['shrink-0', savingRemote && 'animate-spin', !saveError && !dirty && savedRemoteAt && 'text-emerald-600']"
-          />
-          <span class="truncate">{{ saveStatusLabel }}</span>
-        </span>
-        <UiButton
-          size="sm"
-          variant="secondary"
-          :loading="savingRemote"
-          :disabled="!dirty && !!savedRemoteAt"
-          @click="flushSave()"
-        >
-          Simpan
-        </UiButton>
-      </div>
+      
 
       <!-- Mobile: Nav | Form -->
       <div class="lg:hidden sticky top-[4.25rem] z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 mb-3 bg-neutral-50/95 backdrop-blur border-b border-neutral-100">
@@ -692,7 +725,7 @@ defineExpose({ copyMessage, shareWhatsApp, saveNow: flushSave });
               </span>
             </div>
 
-            <div class="p-4 sm:p-5 space-y-4">
+            <div class="p-3 sm:p-4">
               <!-- Waktu -->
               <div v-show="activeSection === 'waktu'" class="space-y-4">
                 <UiFormField label="Tanggal kejadian">
@@ -718,6 +751,30 @@ defineExpose({ copyMessage, shareWhatsApp, saveNow: flushSave });
                 </UiFormField>
                 <UiFormField label="Lokasi">
                   <UiTextarea v-model="location" :rows="3" placeholder="Alamat lengkap kejadian" />
+                  <div class="mt-1.5">
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1 text-[11px] text-primary-600 hover:text-primary-700"
+                      @click="showMapsLinkLoc = !showMapsLinkLoc"
+                    >
+                      <Icon icon="lucide:link" class="text-[10px]" />
+                      Tempel link Google Maps
+                    </button>
+                    <div v-if="showMapsLinkLoc" class="mt-1.5 flex items-stretch gap-1.5">
+                      <input
+                        v-model="mapsLinkForLocation"
+                        type="text"
+                        class="flex-1 rounded-lg border border-neutral-300 shadow-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 placeholder:text-neutral-400"
+                        placeholder="maps.google.com/?q=-7.78,110.36 atau maps.app.goo.gl/..."
+                        :disabled="resolvingMapsLoc"
+                        @keydown.enter.prevent="applyMapsLinkToLocation"
+                      />
+                      <UiButton size="sm" variant="secondary" :loading="resolvingMapsLoc" @click="applyMapsLinkToLocation">
+                        Gunakan
+                      </UiButton>
+                    </div>
+                    <p v-if="mapsLinkLocError" class="mt-1 text-[11px] text-red-500">{{ mapsLinkLocError }}</p>
+                  </div>
                 </UiFormField>
                 <div class="grid grid-cols-2 gap-3 max-w-md">
                   <UiFormField label="Korban L">

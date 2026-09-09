@@ -295,11 +295,12 @@ func (r *OrderRepo) FindPendingPastSLA(now time.Time) ([]domain.OrderTicket, err
 	return result, nil
 }
 
-func (r *OrderRepo) Reassign(id, fromUUID, emergencyUUID, unitName string, round int, slaDeadline *time.Time, dispatchStatus string) (*domain.OrderTicket, error) {
+func (r *OrderRepo) Reassign(id, fromUUID, emergencyUUID, unitName, previousUnitName string, round int, slaDeadline *time.Time, dispatchStatus string) (*domain.OrderTicket, error) {
 	updates := map[string]any{
-		"emergency_uuid":  emergencyUUID,
-		"unit_name":       unitName,
-		"dispatch_round":  round,
+		"emergency_uuid":      emergencyUUID,
+		"unit_name":           unitName,
+		"previous_unit_name":  previousUnitName,
+		"dispatch_round":      round,
 		"sla_deadline":    slaDeadline,
 		"dispatch_status": dispatchStatus,
 		"status":          "pending",
@@ -398,6 +399,25 @@ func (r *OrderRepo) FindActiveByPhone(phone string, typeID uint) (*domain.OrderT
 	return mapOrder(row), nil
 }
 
+func (r *OrderRepo) FindByPhoneSince(phone string, since time.Time) ([]domain.OrderTicket, error) {
+	variants := domain.PhoneVariants(phone)
+	if len(variants) == 0 {
+		return nil, nil
+	}
+	var rows []OrderTicketEntity
+	if err := r.db.
+		Where("requester_phone IN ? AND created_at >= ?", variants, since).
+		Order("created_at DESC").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]domain.OrderTicket, len(rows))
+	for i, row := range rows {
+		out[i] = *mapOrder(row)
+	}
+	return out, nil
+}
+
 func marshalAssessment(o domain.OrderTicket) string {
 	if o.Assessment == nil {
 		return ""
@@ -419,6 +439,7 @@ func mapOrder(row OrderTicketEntity) *domain.OrderTicket {
 		TicketNumber:      row.TicketNumber,
 		EmergencyUUID:     row.EmergencyUUID,
 		UnitName:          row.UnitName,
+		PreviousUnitName:  row.PreviousUnitName,
 		RequesterName:     row.RequesterName,
 		RequesterPhone:    row.RequesterPhone,
 		JenisPelayanan:    row.JenisPelayanan,
@@ -504,7 +525,7 @@ func (r *OrderRepo) SetReferralHospital(id, hospitalID, hospitalName string) err
 
 func (r *OrderRepo) SetClaimToken(id, token string, expiresAt time.Time) (*domain.OrderTicket, error) {
 	result := r.db.Model(&OrderTicketEntity{}).
-		Where("uuid = ? AND status = ?", id, "pending").
+		Where("uuid = ? AND status IN ?", id, []string{"pending", "accepted"}).
 		Updates(map[string]any{
 			"claim_token":      token,
 			"claim_expires_at": expiresAt,
@@ -535,11 +556,11 @@ func (r *OrderRepo) FindByClaimToken(token string) (*domain.OrderTicket, error) 
 	return mapOrder(row), nil
 }
 
-func (r *OrderRepo) ClaimOrder(claimToken, volunteerName, volunteerPhone string) (*domain.OrderTicket, error) {
+func (r *OrderRepo) ClaimOrder(claimToken string, in repository.ClaimInput) (*domain.OrderTicket, error) {
 	now := time.Now()
 	var row OrderTicketEntity
-	if err := r.db.Where("claim_token = ? AND claim_expires_at > ? AND status = ?",
-		claimToken, now, "pending").First(&row).Error; err != nil {
+	if err := r.db.Where("claim_token = ? AND claim_expires_at > ? AND status IN ?",
+		claimToken, now, []string{"pending", "accepted"}).First(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, repository.ErrConflict
 		}
@@ -547,15 +568,23 @@ func (r *OrderRepo) ClaimOrder(claimToken, volunteerName, volunteerPhone string)
 	}
 	ticketUUID := row.UUID.String()
 
-	unitLabel := "Relawan · " + volunteerName
+	unitLabel := strings.TrimSpace(in.UnitLabel)
+	if unitLabel == "" {
+		unitLabel = "Relawan · " + in.VolunteerName
+	}
+	notes := "Diklaim relawan komunitas"
+	if in.UnitLabel != "" {
+		notes = "Diklaim relawan komunitas via " + strings.TrimSpace(in.UnitLabel)
+	}
+
 	result := r.db.Model(&OrderTicketEntity{}).
-		Where("uuid = ? AND claim_token = ? AND status = ?", ticketUUID, claimToken, "pending").
+		Where("uuid = ? AND claim_token = ? AND status IN ?", ticketUUID, claimToken, []string{"pending", "accepted"}).
 		Updates(map[string]any{
 			"status":           "accepted",
 			"unit_name":        unitLabel,
-			"handler_name":     volunteerName,
-			"handler_phone":    volunteerPhone,
-			"handling_notes":   "Diklaim relawan komunitas",
+			"handler_name":     in.VolunteerName,
+			"handler_phone":    in.VolunteerPhone,
+			"handling_notes":   notes,
 			"accepted_at":      now,
 			"claim_token":      "",
 			"claim_expires_at": nil,

@@ -252,7 +252,14 @@ func main() {
 
 	complianceSvc := service.NewAmbulanceComplianceService(emergencyRepo)
 
-	router.Register(app, emergencySvc, emergencySvc, regionSvc, feedbackSvc, orderSvc, unitAuthSvc, sosSvc, pushSvc, analyticsSvc, dispatchSvc, unitCredRepo, mapTilesSvc, wilayahResolver, hospitalSvc, assessmentSvc, complianceSvc, cfg, eventHub)
+	// Ticket lookup (citizen "cek tiket saya" via HP + OTP). Falls back to a
+	// dev-mode log sender until an SMS/WA gateway is wired.
+	var ticketLookupSvc *service.TicketLookupService
+	if orderRepo != nil {
+		ticketLookupSvc = service.NewTicketLookupService(orderRepo, nil)
+	}
+
+	router.Register(app, emergencySvc, emergencySvc, regionSvc, feedbackSvc, orderSvc, unitAuthSvc, sosSvc, pushSvc, analyticsSvc, dispatchSvc, unitCredRepo, mapTilesSvc, wilayahResolver, hospitalSvc, assessmentSvc, complianceSvc, ticketLookupSvc, cfg, eventHub)
 
 	// Graceful shutdown on SIGINT / SIGTERM
 	quit := make(chan os.Signal, 1)

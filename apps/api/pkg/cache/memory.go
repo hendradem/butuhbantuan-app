@@ -52,3 +52,9 @@ func (c *TTL[K, V]) Set(key K, value V, ttl time.Duration) {
 	defer c.mu.Unlock()
 	c.entries[key] = entry[V]{value: value, expiresAt: time.Now().Add(ttl)}
 }
+
+func (c *TTL[K, V]) Delete(key K) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.entries, key)
+}

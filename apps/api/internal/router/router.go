@@ -30,6 +30,7 @@ func Register(
 	hospitalSvc service.HospitalUseCase,
 	assessmentSvc service.AssessmentUseCase,
 	complianceSvc service.AmbulanceComplianceUseCase,
+	ticketLookupSvc *service.TicketLookupService,
 	cfg *config.Config,
 	eventHub *hub.Hub,
 ) {
@@ -64,6 +65,10 @@ func Register(
 	var complianceH *handler.AmbulanceComplianceHandler
 	if complianceSvc != nil {
 		complianceH = handler.NewAmbulanceComplianceHandler(complianceSvc)
+	}
+	var lookupH *handler.TicketLookupHandler
+	if ticketLookupSvc != nil {
+		lookupH = handler.NewTicketLookupHandler(ticketLookupSvc)
 	}
 
 	adminAuth := middleware.AdminAuth(cfg.AdminAPIKey)
@@ -131,6 +136,7 @@ func Register(
 	geo := v1.Group("/geocoding")
 	geo.Get("/reverse", geocoding.ReverseGeocoding)
 	geo.Get("/search", geocoding.SearchGeocoding)
+	geo.Get("/resolve-maps", geocoding.ResolveMapsURL)
 	geo.Post("/emergency/trip", geocoding.GetEmergencyWithTripEstimates)
 
 	fb := v1.Group("/feedback")
@@ -174,6 +180,15 @@ func Register(
 	claim := v1.Group("/claim")
 	claim.Get("/:token", orderH.GetClaimPage)
 	claim.Post("/:token", limitOrder, orderH.SubmitClaim)
+
+	if lookupH != nil {
+		limitLookup := middleware.RateLimit(15, time.Minute)
+		lookup := v1.Group("/lookup", limitLookup)
+		lookup.Post("/request-otp", lookupH.RequestOTP)
+		lookup.Post("/verify-otp", lookupH.VerifyOTP)
+		lookup.Get("/tickets", lookupH.ListMyTickets)
+		lookup.Post("/logout", lookupH.EndSession)
+	}
 
 	unit := v1.Group("/unit")
 	unit.Post("/auth/login", limitUnitLogin, unitH.Login)
@@ -243,6 +258,7 @@ func Register(
 	admin.Put("/orders/:id/report", adminAuth, unitH.AdminSaveIncidentReport)
 	admin.Get("/analytics", adminAuth, analyticsH.Get)
 	admin.Get("/analytics/heatmap", adminAuth, analyticsH.GetHeatmap)
+	admin.Get("/analytics/unit-scoreboard", adminAuth, analyticsH.GetUnitScoreboard)
 	admin.Get("/maps/tiles", adminAuth, mapTilesH.Status)
 	admin.Get("/stream", adminAuth, streamH.AdminStream)
 

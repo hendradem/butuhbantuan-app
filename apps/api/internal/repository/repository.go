@@ -79,11 +79,14 @@ type OrderRepository interface {
 	FindPendingPastSLA(now time.Time) ([]domain.OrderTicket, error)
 	// Reassign atomically moves a ticket. When fromUUID is non-empty, the ticket must
 	// still be assigned to fromUUID (prevents double-reassign races).
-	Reassign(id, fromUUID, emergencyUUID, unitName string, round int, slaDeadline *time.Time, dispatchStatus string) (*domain.OrderTicket, error)
+	Reassign(id, fromUUID, emergencyUUID, unitName, previousUnitName string, round int, slaDeadline *time.Time, dispatchStatus string) (*domain.OrderTicket, error)
 	MarkDispatchExhausted(id string) (*domain.OrderTicket, error)
 	MarkEscalated(id, hotline, label, emergencyUUID, unitName string) (*domain.OrderTicket, error)
 	// FindActiveByPhone returns the newest open ticket matching phone (+ optional type).
 	FindActiveByPhone(phone string, typeID uint) (*domain.OrderTicket, error)
+	// FindByPhoneSince returns tickets for a phone number created on/after `since`,
+	// newest first. Used by the citizen "my tickets" lookup.
+	FindByPhoneSince(phone string, since time.Time) ([]domain.OrderTicket, error)
 	EnableTrack(id, token string, expiresAt time.Time) (*domain.OrderTicket, error)
 	// ExtendTrackExpiry keeps the same token, only pushes track_expires_at forward.
 	ExtendTrackExpiry(id string, expiresAt time.Time) error
@@ -101,8 +104,16 @@ type OrderRepository interface {
 	// FindByClaimToken returns the ticket with an active (non-expired) claim token.
 	FindByClaimToken(token string) (*domain.OrderTicket, error)
 	// ClaimOrder atomically accepts a ticket by claim token.
-	// volunteerName and volunteerPhone are stored as handler_name / handling_notes.
-	ClaimOrder(claimToken, volunteerName, volunteerPhone string) (*domain.OrderTicket, error)
+	ClaimOrder(claimToken string, input ClaimInput) (*domain.OrderTicket, error)
+}
+
+// ClaimInput carries the volunteer details submitted with a community claim.
+// UnitLabel is optional free text (e.g. "PMI Sleman", "SAR Yogya", "Relawan").
+// Admin can categorize later from the ticket timeline.
+type ClaimInput struct {
+	VolunteerName  string
+	VolunteerPhone string
+	UnitLabel      string
 }
 
 type DispatchAttemptRepository interface {
@@ -151,6 +162,10 @@ type AnalyticsRepository interface {
 	GetAnalytics(periodDays int) (domain.Analytics, error)
 	GetHeatmap(periodDays int) ([]domain.HeatmapPoint, error)
 	GetUnitPeriodAggregates(emergencyUUID string, periodDays int) (domain.UnitPeriodAggregates, error)
+	// GetAllUnitScores returns per-unit aggregates for every unit that had at
+	// least one order OR one feedback record in the window. Used by the admin
+	// scoreboard so we avoid N+1 queries.
+	GetAllUnitScores(periodDays int) ([]domain.UnitScoreRow, error)
 }
 
 type RegionRepository interface {

@@ -668,8 +668,9 @@ func (h *OrderHandler) SubmitClaim(c *fiber.Ctx) error {
 		return response.Error(c, fiber.StatusBadRequest, "token required")
 	}
 	var body struct {
-		Name  string `json:"name"`
-		Phone string `json:"phone"`
+		Name      string `json:"name"`
+		Phone     string `json:"phone"`
+		UnitLabel string `json:"unit_label"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "invalid body")
@@ -677,7 +678,11 @@ func (h *OrderHandler) SubmitClaim(c *fiber.Ctx) error {
 	if strings.TrimSpace(body.Name) == "" {
 		return response.Error(c, fiber.StatusBadRequest, "name required")
 	}
-	updated, err := h.svc.ClaimOrder(token, strings.TrimSpace(body.Name), strings.TrimSpace(body.Phone))
+	updated, err := h.svc.ClaimOrder(token, service.CommunityClaimInput{
+		VolunteerName:  strings.TrimSpace(body.Name),
+		VolunteerPhone: strings.TrimSpace(body.Phone),
+		UnitLabel:      strings.TrimSpace(body.UnitLabel),
+	})
 	if errors.Is(err, repository.ErrConflict) || errors.Is(err, repository.ErrNotFound) {
 		return response.Error(c, fiber.StatusConflict, "link sudah digunakan atau kedaluwarsa")
 	}

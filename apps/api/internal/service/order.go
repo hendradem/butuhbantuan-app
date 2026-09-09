@@ -634,7 +634,7 @@ func (s *OrderService) emitArrived(before, updated *domain.OrderTicket) {
 }
 
 func (s *OrderService) relayCore(ticket *domain.OrderTicket, windowSecs int) (*domain.OrderTicket, error) {
-	if ticket.Status != "pending" {
+	if ticket.Status != "pending" && ticket.Status != "accepted" {
 		return nil, repository.ErrConflict
 	}
 	if windowSecs <= 0 {
@@ -687,26 +687,34 @@ func (s *OrderService) GetClaim(claimToken string) (*domain.OrderTicket, error) 
 	return ticket, nil
 }
 
-func (s *OrderService) ClaimOrder(claimToken, volunteerName, volunteerPhone string) (*domain.OrderTicket, error) {
-	volunteerName = strings.TrimSpace(volunteerName)
-	volunteerPhone = strings.TrimSpace(volunteerPhone)
+func (s *OrderService) ClaimOrder(claimToken string, in CommunityClaimInput) (*domain.OrderTicket, error) {
+	volunteerName := strings.TrimSpace(in.VolunteerName)
 	if volunteerName == "" {
 		return nil, ErrDispatchConflict
 	}
-	updated, err := s.repo.ClaimOrder(claimToken, volunteerName, volunteerPhone)
+
+	updated, err := s.repo.ClaimOrder(claimToken, repository.ClaimInput{
+		VolunteerName:  volunteerName,
+		VolunteerPhone: strings.TrimSpace(in.VolunteerPhone),
+		UnitLabel:      strings.TrimSpace(in.UnitLabel),
+	})
 	if err != nil {
 		return nil, err
 	}
-	// Mint a fresh track token so the volunteer can share GPS / mark arrived / complete
-	// via the same /dispatch page WA units use.
+	// Mint a fresh track token so the volunteer can share GPS / mark arrived /
+	// complete via the same /dispatch page WA units use.
 	if withTrack, terr := s.EnableTrack(updated.ID, "community"); terr == nil && withTrack != nil {
 		updated = withTrack
+	}
+	handlerLabel := volunteerName
+	if updated.UnitName != "" && !strings.HasPrefix(updated.UnitName, "Relawan · ") {
+		handlerLabel = updated.UnitName + " · " + volunteerName
 	}
 	_ = s.RecordEvent(domain.OrderEvent{
 		OrderID:      updated.ID,
 		TicketNumber: updated.TicketNumber,
 		Type:         domain.OrderEventAccepted,
-		Message:      "Diklaim oleh relawan komunitas: " + volunteerName,
+		Message:      "Diklaim oleh relawan komunitas: " + handlerLabel,
 		Actor:        "community",
 	})
 	s.pub.PublishScoped(updated.EmergencyUUID, updated.RegencyID, updated.ProvinceID,
@@ -714,7 +722,7 @@ func (s *OrderService) ClaimOrder(claimToken, volunteerName, volunteerPhone stri
 	if s.pushSvc != nil {
 		s.pushSvc.Notify(updated.TicketNumber,
 			"Relawan komunitas merespons",
-			"Pesanan Anda akan ditangani oleh "+volunteerName+".",
+			"Pesanan Anda akan ditangani oleh "+handlerLabel+".",
 		)
 	}
 	return updated, nil
@@ -802,7 +810,7 @@ func (s *NoopOrderService) RelayToCommunityByID(_ string, _ int) (*domain.OrderT
 func (s *NoopOrderService) GetClaim(_ string) (*domain.OrderTicket, error) {
 	return nil, repository.ErrNotFound
 }
-func (s *NoopOrderService) ClaimOrder(_, _, _ string) (*domain.OrderTicket, error) {
+func (s *NoopOrderService) ClaimOrder(_ string, _ CommunityClaimInput) (*domain.OrderTicket, error) {
 	return nil, repository.ErrNotSupported
 }
 

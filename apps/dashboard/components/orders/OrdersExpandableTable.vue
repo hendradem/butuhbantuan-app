@@ -199,6 +199,14 @@ watch(
               >
                 SOS
               </span>
+              <span
+                v-if="order.previous_unit_name"
+                class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-px text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200"
+                :title="`Dialihkan dari ${order.previous_unit_name}`"
+              >
+                <Icon icon="lucide:arrow-left-right" class="text-[10px]" />
+                {{ variant === "unit" ? "dialihkan ke unit Anda" : `dari ${order.previous_unit_name}` }}
+              </span>
             </div>
             <!-- Badges on narrow screens where columns are hidden -->
             <div class="mt-1.5 flex flex-wrap items-center gap-1 sm:hidden">
@@ -219,6 +227,14 @@ watch(
           <td v-if="variant === 'admin'" class="hidden xl:table-cell">
             <p class="text-sm text-neutral-700 truncate max-w-[11rem]">
               {{ order.unit_name || "—" }}
+            </p>
+            <p
+              v-if="order.previous_unit_name"
+              class="mt-0.5 flex items-center gap-1 text-[11px] text-amber-700 truncate max-w-[11rem]"
+              :title="`Dialihkan dari ${order.previous_unit_name}`"
+            >
+              <Icon icon="lucide:arrow-left" class="text-[10px] shrink-0" />
+              <span class="truncate">dari {{ order.previous_unit_name }}</span>
             </p>
           </td>
           <td class="hidden sm:table-cell">

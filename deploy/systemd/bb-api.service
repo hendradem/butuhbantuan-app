@@ -1,0 +1,21 @@
+[Unit]
+Description=ButuhBantuan API (Go/Fiber)
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=bb
+Group=bb
+WorkingDirectory=/opt/butuhbantuan/api
+EnvironmentFile=/opt/butuhbantuan/api/.env
+ExecStart=/opt/butuhbantuan/api/bin/server
+Restart=always
+RestartSec=5
+MemoryMax=200M
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bb-api
+
+[Install]
+WantedBy=multi-user.target

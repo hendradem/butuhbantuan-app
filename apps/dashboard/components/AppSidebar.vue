@@ -24,6 +24,7 @@ const groups: NavGroup[] = [
       { label: "Antrian Dispatch", to: "/orders/queue",    icon: "lucide:columns-3" },
       { label: "SLA Breach",      to: "/orders/sla",      icon: "lucide:alarm-clock", badgeKey: "sla" },
       { label: "Live Map Ops",    to: "/ops/map",         icon: "lucide:map" },
+      { label: "Skor Unit",       to: "/analytics/unit-scoreboard", icon: "lucide:trophy" },
       { label: "Feedback",        to: "/feedback",        icon: "lucide:message-square-heart" },
       { label: "Laporan",         to: "/reports",         icon: "lucide:file-text" },
     ],

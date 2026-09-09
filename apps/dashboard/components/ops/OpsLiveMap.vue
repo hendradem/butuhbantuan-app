@@ -38,6 +38,8 @@ const props = defineProps<{
   loading?: boolean;
   /** Prefer this ticket for auto-focus / route (e.g. active unit offer). */
   focusTicket?: string | null;
+  /** Base path for ticket links. Defaults to /orders (admin). Unit map passes /unit/orders. */
+  orderBasePath?: string;
 }>();
 
 const config = useRuntimeConfig();
@@ -46,9 +48,60 @@ const apiBase = config.public.apiBaseUrl as string;
 const mapEl = ref<HTMLDivElement | null>(null);
 const ready = ref(false);
 const selected = ref<string | null>(null);
-const showUnits = ref(true);
 const fStatus = ref("");
 let routeToken = 0;
+
+// ── Category filter (per-type clustering) ────────────────────────────────────
+type UnitCategory = "hospital" | "ambulance" | "damkar" | "sar" | "other";
+
+const CATEGORY_META: Record<UnitCategory, { label: string; icon: string; color: string; ring: string; bg: string }> = {
+  hospital:  { label: "RS",       icon: "lucide:hospital",     color: "#7c3aed", ring: "ring-violet-200",  bg: "bg-violet-50 text-violet-700" },
+  ambulance: { label: "Ambulans", icon: "lucide:ambulance",    color: "#0f172a", ring: "ring-neutral-300", bg: "bg-neutral-100 text-neutral-800" },
+  damkar:    { label: "Damkar",   icon: "lucide:flame",        color: "#dc2626", ring: "ring-red-200",     bg: "bg-red-50 text-red-700" },
+  sar:       { label: "SAR",      icon: "lucide:life-buoy",    color: "#059669", ring: "ring-emerald-200", bg: "bg-emerald-50 text-emerald-700" },
+  other:     { label: "Lainnya",  icon: "lucide:map-pin",      color: "#64748b", ring: "ring-slate-200",   bg: "bg-slate-50 text-slate-700" },
+};
+const CATEGORY_ORDER: UnitCategory[] = ["hospital", "ambulance", "damkar", "sar", "other"];
+
+const visibleCategories = ref<Record<UnitCategory, boolean>>({
+  hospital: true,
+  ambulance: true,
+  damkar: true,
+  sar: true,
+  other: true,
+});
+
+function categoryOf(typeName?: string): UnitCategory {
+  const t = String(typeName ?? "").trim().toLowerCase();
+  if (t === "rumah sakit" || t.includes("hospital") || t.includes("rs")) return "hospital";
+  if (t.includes("ambulan")) return "ambulance";
+  if (t.includes("damkar") || t.includes("pemadam") || t.includes("fire")) return "damkar";
+  if (t.includes("sar")) return "sar";
+  return "other";
+}
+
+const categoryCounts = computed<Record<UnitCategory, number>>(() => {
+  const out: Record<UnitCategory, number> = {
+    hospital: 0, ambulance: 0, damkar: 0, sar: 0, other: 0,
+  };
+  for (const u of props.units) out[categoryOf(u.type)]++;
+  return out;
+});
+
+function toggleCategory(cat: UnitCategory) {
+  visibleCategories.value = { ...visibleCategories.value, [cat]: !visibleCategories.value[cat] };
+}
+function setAllCategories(v: boolean) {
+  const next = {} as Record<UnitCategory, boolean>;
+  for (const c of CATEGORY_ORDER) next[c] = v;
+  visibleCategories.value = next;
+}
+const allCategoriesOn = computed(() =>
+  CATEGORY_ORDER.every((c) => visibleCategories.value[c]),
+);
+const anyCategoryOn = computed(() =>
+  CATEGORY_ORDER.some((c) => visibleCategories.value[c]),
+);
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "#f59e0b",
@@ -79,7 +132,8 @@ const selectedIncident = computed(() =>
 let map: any = null;
 let L: any = null;
 let incidentLayer: any = null;
-let unitLayer: any = null;
+/** One cluster group per category so hospitals don't collapse into ambulances. */
+const unitClusterLayers: Partial<Record<UnitCategory, any>> = {};
 let routeLayer: any = null;
 
 function statusColor(s: string) {
@@ -118,6 +172,23 @@ function gpsFreshnessLabel(i: OpsIncident) {
   return `GPS lapangan · ${min} mnt lalu`;
 }
 
+const TYPE_MOD: Record<string, string> = {
+  Ambulance: "ambulance",
+  Damkar: "damkar",
+  "Rumah Sakit": "hospital",
+  SAR: "sar",
+};
+
+function unitPinMod(typeName?: string) {
+  return TYPE_MOD[typeName ?? ""] ?? "ambulance";
+}
+
+function unitPinHtml(typeName?: string, muted = false) {
+  const mod = unitPinMod(typeName);
+  const mutedCls = muted ? " bb-svc-pin--muted" : "";
+  return `<div class="bb-svc-pin bb-svc-pin--${mod}${mutedCls}"><div class="bb-svc-pin__head"><span class="bb-svc-pin__icon"></span></div></div>`;
+}
+
 function divIcon(html: string, size: [number, number], anchor: [number, number]) {
   return L.divIcon({
     className: "ops-live-marker",
@@ -131,13 +202,6 @@ function pinSvg(fill: string) {
   return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
     <path d="M12 22s7-7.2 7-12.2A7 7 0 0 0 5 9.8C5 14.8 12 22 12 22Z" fill="${fill}"/>
     <circle cx="12" cy="9.5" r="2.6" fill="#fff"/>
-  </svg>`;
-}
-
-function unitSvg(fill: string) {
-  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path d="M3 13h13l3-4h2v9h-2M5 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" stroke="${fill}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M5 14V8h7v6" stroke="${fill}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
 }
 
@@ -156,7 +220,7 @@ function drawIncidents() {
     const marker = L.marker([i.requester_lat, i.requester_lng], {
       icon: divIcon(
         `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;transform:translateY(-4px)">
-          <div style="position:relative;width:${size}px;height:${size}px;border-radius:9999px;background:#fff;border:3px solid ${color};box-shadow:0 6px 16px rgba(15,23,42,.28),0 0 0 1px rgba(15,23,42,.06);display:flex;align-items:center;justify-center">
+          <div style="position:relative;width:${size}px;height:${size}px;border-radius:9999px;background:#fff;border:3px solid ${color};box-shadow:0 6px 16px rgba(15,23,42,.28),0 0 0 1px rgba(15,23,42,.06);display:flex;align-items:center;justify-content:center">
             ${pulse}
             ${pinSvg(color)}
           </div>
@@ -181,34 +245,50 @@ function drawIncidents() {
 }
 
 function drawUnits() {
-  if (!map || !L || !unitLayer) return;
-  unitLayer.clearLayers();
-  if (!showUnits.value) return;
+  if (!map || !L) return;
+  for (const cat of CATEGORY_ORDER) unitClusterLayers[cat]?.clearLayers();
+
   for (const u of props.units) {
     if (!u.lat && !u.lng) continue;
+    const cat = categoryOf(u.type);
+    const layer = unitClusterLayers[cat];
+    if (!layer) continue;
+
     const avail = u.available ?? 0;
-    const color = !u.is_active ? "#94a3b8" : avail > 0 ? "#059669" : "#e11d48";
     const name = String(u.name || "Unit").replace(/</g, "&lt;");
-    const short =
-      name.length > 18 ? `${name.slice(0, 16)}…` : name;
+    const short = name.length > 20 ? `${name.slice(0, 18)}…` : name;
+    const muted = !u.is_active;
     const marker = L.marker([u.lat, u.lng], {
-      icon: divIcon(
-        `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;opacity:${u.is_active ? 1 : 0.75}">
-          <div style="width:34px;height:34px;border-radius:10px;background:#fff;border:2.5px solid ${color};box-shadow:0 4px 12px rgba(15,23,42,.22);display:flex;align-items:center;justify-content:center">
-            ${unitSvg(color)}
-          </div>
-          <span style="font-size:10px;font-weight:700;color:#1e293b;background:rgba(255,255,255,.96);border:1px solid #e2e8f0;padding:1px 6px;border-radius:6px;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-shadow:0 1px 4px rgba(15,23,42,.1)">${short}</span>
+      icon: L.divIcon({
+        className: "bb-svc-pin-wrap",
+        html: `<div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+          ${unitPinHtml(u.type, muted)}
+          <span style="font-size:10px;font-weight:700;color:#1e293b;background:rgba(255,255,255,.96);border:1px solid #e2e8f0;padding:1px 6px;border-radius:6px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-shadow:0 1px 4px rgba(15,23,42,.1)">${short}</span>
         </div>`,
-        [110, 56],
-        [55, 28],
-      ),
+        iconSize: [28, 58],
+        iconAnchor: [14, 34],
+      }),
       zIndexOffset: 250,
     });
     marker.bindTooltip(
       `<strong>${name}</strong><br/>${avail}/${u.total ?? "?"} armada · ${u.type || "unit"}${u.is_active === false ? "<br/>Nonaktif" : ""}`,
       { direction: "top", opacity: 0.96 },
     );
-    marker.addTo(unitLayer);
+    marker.addTo(layer);
+  }
+  syncCategoryVisibility();
+}
+
+/** Add/remove per-category cluster layers to the map based on chip state. */
+function syncCategoryVisibility() {
+  if (!map) return;
+  for (const cat of CATEGORY_ORDER) {
+    const layer = unitClusterLayers[cat];
+    if (!layer) continue;
+    const shouldShow = visibleCategories.value[cat];
+    const isOnMap = map.hasLayer(layer);
+    if (shouldShow && !isOnMap) layer.addTo(map);
+    else if (!shouldShow && isOnMap) map.removeLayer(layer);
   }
 }
 
@@ -331,8 +411,9 @@ function fitBounds() {
     if (lat === 0 && lng === 0) continue;
     pts.push([lat, lng]);
   }
-  if (showUnits.value) {
+  if (anyCategoryOn.value) {
     for (const u of props.units) {
+      if (!visibleCategories.value[categoryOf(u.type)]) continue;
       const lat = Number(u.lat);
       const lng = Number(u.lng);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
@@ -360,6 +441,12 @@ async function initMap() {
   if (!mapEl.value || map) return;
   const leaflet = await import("leaflet");
   L = leaflet.default ?? leaflet;
+  // Marker clustering — collapses dense same-category pins into a numbered
+  // circle. Import for side-effect so L.markerClusterGroup becomes available.
+  await import("leaflet.markercluster");
+  await import("leaflet.markercluster/dist/MarkerCluster.css");
+  await import("leaflet.markercluster/dist/MarkerCluster.Default.css");
+
   map = L.map(mapEl.value, { zoomControl: true, attributionControl: true }).setView(
     [-2.5, 118],
     5,
@@ -369,9 +456,23 @@ async function initMap() {
     maxZoom: 19,
   }).addTo(map);
 
-  unitLayer = L.layerGroup().addTo(map);
+  for (const cat of CATEGORY_ORDER) {
+    unitClusterLayers[cat] = L.markerClusterGroup({
+      showCoverageOnHover: false,
+      spiderfyOnMaxZoom: true,
+      maxClusterRadius: 55,
+      disableClusteringAtZoom: 16,
+      iconCreateFunction: (cluster: any) => makeCategoryClusterIcon(cat, cluster.getChildCount()),
+    });
+  }
   routeLayer = L.layerGroup().addTo(map);
-  incidentLayer = L.layerGroup().addTo(map);
+  incidentLayer = L.markerClusterGroup({
+    showCoverageOnHover: false,
+    spiderfyOnMaxZoom: true,
+    maxClusterRadius: 45,
+    disableClusteringAtZoom: 15,
+    iconCreateFunction: (cluster: any) => makeIncidentClusterIcon(cluster.getChildCount()),
+  }).addTo(map);
 
   map.on("click", () => {
     selected.value = null;
@@ -384,13 +485,43 @@ async function initMap() {
   fitBounds();
 }
 
+/** Category-specific cluster bubble — matches the category chip / pin color. */
+function makeCategoryClusterIcon(cat: UnitCategory, count: number) {
+  const { color } = CATEGORY_META[cat];
+  const size = count >= 100 ? 46 : count >= 25 ? 42 : 36;
+  return L.divIcon({
+    className: "bb-cluster",
+    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${color};color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(15,23,42,.28),0 0 0 3px rgba(255,255,255,.95),0 0 0 4px ${color}55;">${count}</div>`,
+    iconSize: [size, size],
+  });
+}
+
+/** Incident cluster bubble — neutral slate so it doesn't fight category colors. */
+function makeIncidentClusterIcon(count: number) {
+  const size = count >= 100 ? 46 : count >= 25 ? 42 : 36;
+  return L.divIcon({
+    className: "bb-cluster",
+    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:#0f172a;color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(15,23,42,.35),0 0 0 3px rgba(255,255,255,.95),0 0 0 4px rgba(15,23,42,.35);">${count}</div>`,
+    iconSize: [size, size],
+  });
+}
+
 watch(
-  () => [props.incidents, props.units, props.focusTicket, fStatus.value, showUnits.value] as const,
+  () => [props.incidents, props.units, props.focusTicket, fStatus.value] as const,
   () => {
     if (!ready.value) return;
     ensureSelection();
     drawUnits();
     drawIncidents();
+  },
+  { deep: true },
+);
+
+watch(
+  visibleCategories,
+  () => {
+    if (!ready.value) return;
+    syncCategoryVisibility();
   },
   { deep: true },
 );
@@ -410,8 +541,8 @@ onBeforeUnmount(() => {
     map = null;
   }
   incidentLayer = null;
-  unitLayer = null;
   routeLayer = null;
+  for (const cat of CATEGORY_ORDER) unitClusterLayers[cat] = null;
 });
 
 function etaLabel(i: OpsIncident) {
@@ -440,19 +571,34 @@ function etaLabel(i: OpsIncident) {
         <option value="in_progress">Diproses</option>
       </UiSelect>
 
-      <button
-        type="button"
-        class="text-xs font-medium flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors"
-        :class="
-          showUnits
-            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-            : 'bg-white text-neutral-500 border-neutral-200 hover:text-neutral-700'
-        "
-        @click="showUnits = !showUnits"
-      >
-        <Icon icon="lucide:building-2" class="text-sm" />
-        Unit HQ
-      </button>
+      <!-- Category chips: cluster per-category, toggle each independently -->
+      <div class="flex items-center gap-1 flex-wrap">
+        <template v-for="cat in CATEGORY_ORDER" :key="cat">
+          <button
+            v-if="categoryCounts[cat] > 0"
+            type="button"
+            class="text-xs font-medium flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors"
+            :class="
+              visibleCategories[cat]
+                ? `${CATEGORY_META[cat].bg} border-transparent ring-1 ring-inset ${CATEGORY_META[cat].ring}`
+                : 'bg-white text-neutral-400 border-neutral-200 hover:text-neutral-700'
+            "
+            @click="toggleCategory(cat)"
+          >
+            <Icon :icon="CATEGORY_META[cat].icon" class="text-sm" />
+            {{ CATEGORY_META[cat].label }}
+            <span class="tabular-nums opacity-75">{{ categoryCounts[cat] }}</span>
+          </button>
+        </template>
+        <button
+          type="button"
+          class="text-xs font-medium text-neutral-500 hover:text-neutral-800 px-1.5 py-1"
+          :title="allCategoriesOn ? 'Sembunyikan semua unit' : 'Tampilkan semua unit'"
+          @click="setAllCategories(!allCategoriesOn)"
+        >
+          {{ allCategoriesOn ? "Sembunyikan semua" : "Tampilkan semua" }}
+        </button>
+      </div>
 
       <button
         type="button"
@@ -468,13 +614,12 @@ function etaLabel(i: OpsIncident) {
         <template v-if="mappedIncidents.length !== filteredIncidents.length">
           · {{ mappedIncidents.length }} di peta
         </template>
-        <template v-if="showUnits"> · {{ units.length }} unit</template>
       </span>
     </div>
 
     <div class="flex flex-col lg:flex-row" style="height: min(70vh, 640px)">
       <div class="flex-1 relative overflow-hidden min-w-0 min-h-[320px]">
-        <div ref="mapEl" class="w-full h-full" style="background: #e5e3df" />
+        <div ref="mapEl" class="absolute inset-0" style="background: #e5e3df" />
         <div
           v-if="loading && !incidents.length"
           class="absolute inset-0 z-[1000] flex items-center justify-center bg-white/70"
@@ -497,7 +642,7 @@ function etaLabel(i: OpsIncident) {
             <span class="w-2.5 h-2.5 rounded-full bg-orange-500" /> Diproses
           </div>
           <div class="flex items-center gap-1.5">
-            <span class="w-2.5 h-2.5 bg-emerald-500 rotate-45" style="width:8px;height:8px" /> Unit HQ
+            <span class="ops-legend-pin" /> Unit HQ
           </div>
           <div class="flex items-center gap-1.5">
             <span class="w-2.5 h-2.5 rounded-full bg-blue-600" /> GPS lapangan
@@ -572,7 +717,7 @@ function etaLabel(i: OpsIncident) {
           </p>
           <div class="mt-2 flex gap-1.5">
             <NuxtLink
-              :to="`/orders/${i.ticket_number}`"
+              :to="`${orderBasePath ?? '/orders'}/${i.ticket_number}`"
               class="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-50"
               @click.stop
             >
@@ -586,6 +731,7 @@ function etaLabel(i: OpsIncident) {
 </template>
 
 <style>
+/* ── Incident marker (requester position) ─────────────────────────── */
 @keyframes ops-marker-pulse {
   0% { transform: scale(0.85); opacity: 0.55; }
   70% { transform: scale(1.35); opacity: 0; }
@@ -594,5 +740,76 @@ function etaLabel(i: OpsIncident) {
 .ops-live-marker {
   background: transparent !important;
   border: none !important;
+}
+
+/* ── Unit teardrop pins (matches web-app bb-svc-pin) ─────────────── */
+.bb-svc-pin-wrap {
+  background: transparent !important;
+  border: none !important;
+}
+
+.bb-svc-pin {
+  width: 28px;
+  height: 34px;
+  position: relative;
+  cursor: pointer;
+  pointer-events: auto;
+  transform-origin: 50% 100%;
+}
+
+.bb-svc-pin__head {
+  width: 22px;
+  height: 22px;
+  border-radius: 50% 50% 50% 3px;
+  transform: rotate(-45deg);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2px auto 0;
+}
+
+.bb-svc-pin__icon {
+  display: block;
+  width: 11px;
+  height: 11px;
+  transform: rotate(45deg);
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.bb-svc-pin--ambulance .bb-svc-pin__head { background-color: #1e1e1e; }
+.bb-svc-pin--ambulance .bb-svc-pin__icon { background-image: url('/assets/icons/ambulance-logo.svg'); }
+
+.bb-svc-pin--damkar .bb-svc-pin__head { background-color: #ef4444; }
+.bb-svc-pin--damkar .bb-svc-pin__icon { background-image: url('/assets/icons/fire-fighter-logo.svg'); }
+
+.bb-svc-pin--hospital .bb-svc-pin__head { background-color: #8b5cf6; }
+.bb-svc-pin--hospital .bb-svc-pin__icon { background-image: url('/assets/icons/hospital-logo.svg'); }
+
+.bb-svc-pin--sar .bb-svc-pin__head { background-color: #f97316; }
+.bb-svc-pin--sar .bb-svc-pin__icon { background-image: url('/assets/icons/sar-logo.svg'); }
+
+.bb-svc-pin--muted {
+  opacity: 0.7;
+  filter: grayscale(1);
+}
+.bb-svc-pin--muted .bb-svc-pin__head {
+  background-color: #9ca3af !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
+}
+
+/* Legend mini-pin swatch */
+.ops-legend-pin {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50% 50% 50% 2px;
+  transform: rotate(-45deg);
+  background: #1e1e1e;
+  border: 1.5px solid #fff;
+  box-shadow: 0 1px 3px rgba(15,23,42,.3);
 }
 </style>

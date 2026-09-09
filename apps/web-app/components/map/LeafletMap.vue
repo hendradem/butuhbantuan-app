@@ -37,19 +37,11 @@ const mapAppearance = getMapAppearance();
 const mapContainer = ref<HTMLElement | null>(null);
 let map: LeafletMap | null = null;
 let baseTileLayer: any = null;
-// ── Per-category cluster data ─────────────────────────────────────────
-const CATEGORY_ORDER = ["hospital", "ambulance", "damkar", "sar", "other"] as const;
-type UnitCategory = (typeof CATEGORY_ORDER)[number];
-
-/** One MarkerClusterGroup per service category. Populated in onMounted after markercluster loads. */
-const unitClusterLayers: Partial<Record<UnitCategory, any>> = {};
-/** True once leaflet.markercluster has loaded and cluster groups are attached to the map. */
-let clusterReady = false;
-
+let markers: Marker[] = [];
 /** emergency id → leaflet marker (for select/highlight). */
 const markersById = new Map<string, Marker>();
-/** emergency id → meta for icon rebuild + cluster group lookup. */
-const markerMetaById = new Map<string, { typeName: string; item: any; cat: UnitCategory }>();
+/** emergency id → type name for rebuilding icons. */
+const markerMetaById = new Map<string, { typeName: string; item: any }>();
 let activeEmergencyId = "";
 let currentLocationMarker: Marker | null = null;
 let accuracyCircle: any = null;
@@ -79,6 +71,8 @@ const NEARBY_HALF_DEG = 0.03;
 const EXPAND_MAX_HALF_DEG = 0.12;
 /** Floor when expanding to show far markers. */
 const OVERVIEW_FLOOR_ZOOM = 11;
+/** Below this zoom the ETA badge is hidden and service pins shrink so the route stays readable. */
+const ROUTE_OVERLAY_MIN_ZOOM = 13;
 
 onMounted(async () => {
   if (!mapContainer.value) return;
@@ -131,30 +125,6 @@ onMounted(async () => {
   onColorModeChange = onColorMode;
   window.addEventListener("bb-color-mode", onColorMode);
 
-  // ── MarkerCluster — async import keeps initial bundle lean ───────────
-  try {
-    await import("leaflet.markercluster");
-    await import("leaflet.markercluster/dist/MarkerCluster.css");
-    await import("leaflet.markercluster/dist/MarkerCluster.Default.css");
-
-    for (const cat of CATEGORY_ORDER) {
-      const group = (L as any).markerClusterGroup({
-        maxClusterRadius: 60,
-        disableClusteringAtZoom: 15,
-        animate: true,
-        chunkedLoading: true,
-        iconCreateFunction: (cluster: any) =>
-          makeCategoryClusterIcon(L, cat, cluster.getChildCount()),
-      });
-      unitClusterLayers[cat] = group;
-      map!.addLayer(group);
-    }
-    clusterReady = true;
-  } catch {
-    // markercluster unavailable (offline / CSP) — renderMarkers falls back to direct addTo
-    clusterReady = false;
-  }
-
   // Leaflet often needs a reflow when mounted inside % height containers.
   requestAnimationFrame(() => {
     map?.invalidateSize();
@@ -184,7 +154,9 @@ onMounted(async () => {
     const z = map.getZoom();
     leafletStore.setMapZoom(z);
     mapUrl.syncZoom(z);
+    applyZoomOverlayState(z);
   });
+  applyZoomOverlayState(map!.getZoom());
 
   let mapClickTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -394,12 +366,6 @@ onUnmounted(() => {
     window.removeEventListener("bb-color-mode", onColorModeChange);
     onColorModeChange = null;
   }
-  for (const cat of CATEGORY_ORDER) {
-    if (unitClusterLayers[cat]) {
-      map?.removeLayer(unitClusterLayers[cat]!);
-      delete unitClusterLayers[cat];
-    }
-  }
 });
 
 /** Move blue pin to an explicit lat/lng (map click / drag). Stops GPS from yanking it back.
@@ -603,11 +569,8 @@ function renderCurrentLocation(
 }
 
 function renderMarkers(L: any, data: any[]) {
-  if (clusterReady) {
-    for (const cat of CATEGORY_ORDER) unitClusterLayers[cat]?.clearLayers();
-  } else {
-    for (const marker of markersById.values()) marker.remove();
-  }
+  markers.forEach((m) => m.remove());
+  markers = [];
   markersById.clear();
   markerMetaById.clear();
   if (!map) return;
@@ -626,7 +589,6 @@ function renderMarkers(L: any, data: any[]) {
 
     const id = String(e.id ?? "");
     const typeName = e.emergency_type?.name || "";
-    const cat = categoryOf(typeName);
     const isActive = !!id && id === selectedId;
     const muted = muteOthers && !isActive;
 
@@ -648,20 +610,17 @@ function renderMarkers(L: any, data: any[]) {
     const marker = L.marker([+e.coordinates[1], +e.coordinates[0]], {
       icon,
       zIndexOffset: isActive ? 800 : muted ? -200 : 0,
-    }).on("click", (ev: any) => {
-      L.DomEvent.stopPropagation(ev);
-      onMarkerClick(item);
-    });
+    })
+      .addTo(map!)
+      .on("click", (ev: any) => {
+        L.DomEvent.stopPropagation(ev);
+        onMarkerClick(item);
+      });
 
-    if (clusterReady && unitClusterLayers[cat]) {
-      unitClusterLayers[cat]!.addLayer(marker);
-    } else {
-      marker.addTo(map!);
-    }
-
+    markers.push(marker);
     if (id) {
       markersById.set(id, marker);
-      markerMetaById.set(id, { typeName, item, cat });
+      markerMetaById.set(id, { typeName, item });
     }
   });
 
@@ -704,35 +663,6 @@ function applyMutedMarkers() {
     if (id === selectedId) marker.setZIndexOffset(900);
     else marker.setZIndexOffset(muted ? -200 : 0);
   }
-}
-
-/** Map emergency type name → cluster category. Unknowns go to "other", not the pin default "ambulance". */
-function categoryOf(typeName: string): UnitCategory {
-  switch (typeName) {
-    case "Rumah Sakit": return "hospital";
-    case "Ambulance":   return "ambulance";
-    case "Damkar":      return "damkar";
-    case "SAR":         return "sar";
-    default:            return "other";
-  }
-}
-
-const CLUSTER_COLORS: Record<UnitCategory, string> = {
-  hospital:  "#8b5cf6",
-  ambulance: "#1e1e1e",
-  damkar:    "#ef4444",
-  sar:       "#f97316",
-  other:     "#64748b",
-};
-
-/** Colored cluster bubble matching the category pin color. */
-function makeCategoryClusterIcon(L: any, cat: UnitCategory, count: number) {
-  return L.divIcon({
-    className: "bb-cluster",
-    html: `<div style="background:${CLUSTER_COLORS[cat]}">${count}</div>`,
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
-  });
 }
 
 function buildServicePinIcon(
@@ -782,24 +712,14 @@ function setActiveEmergencyMarker(L: any, nextId: string) {
   const meta = markerMetaById.get(nextId);
   if (!marker || !meta) return;
 
-  const applyActiveIcon = () => {
-    marker.setIcon(
-      buildServicePinIcon(L, meta.typeName, { enter: true, active: true }),
-    );
-    marker.setZIndexOffset(900);
-    map?.panTo(marker.getLatLng(), { animate: true });
-  };
+  // Force a fresh pop animation by swapping the icon DOM
+  marker.setIcon(
+    buildServicePinIcon(L, meta.typeName, { enter: true, active: true }),
+  );
+  marker.setZIndexOffset(900);
 
-  if (clusterReady) {
-    const clusterGroup = unitClusterLayers[meta.cat];
-    if (clusterGroup) {
-      // Reveals the marker if it's inside a collapsed cluster, then fires the callback.
-      clusterGroup.zoomToShowLayer(marker, applyActiveIcon);
-      return;
-    }
-  }
-
-  applyActiveIcon();
+  const ll = marker.getLatLng();
+  map?.panTo(ll, { animate: true });
 }
 
 function onMarkerClick(item: any) {
@@ -905,6 +825,12 @@ function animateRouteDraw(
     };
     requestAnimationFrame(tick);
   });
+}
+
+function applyZoomOverlayState(zoom: number) {
+  const el = mapContainer.value;
+  if (!el) return;
+  el.classList.toggle("bb-map--zoomed-out", zoom < ROUTE_OVERLAY_MIN_ZOOM);
 }
 
 function clearRouteOverlays() {

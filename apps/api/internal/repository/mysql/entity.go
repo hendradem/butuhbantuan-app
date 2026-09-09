@@ -175,6 +175,9 @@ type OrderTicketEntity struct {
 	TicketNumber      string     `gorm:"type:varchar(30);uniqueIndex;not null"`
 	EmergencyUUID     string     `gorm:"type:char(36);index"`
 	UnitName          string     `gorm:"type:varchar(255)"`
+	// PreviousUnitName: last unit before the most recent reassign, for showing
+	// dispatch trail in list views without joining events.
+	PreviousUnitName  string     `gorm:"type:varchar(255)"`
 	RequesterName     string     `gorm:"type:varchar(255)"`
 	RequesterPhone    string     `gorm:"type:varchar(50)"`
 	JenisPelayanan    string     `gorm:"type:varchar(40);index"`

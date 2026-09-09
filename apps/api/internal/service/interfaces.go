@@ -92,7 +92,15 @@ type OrderUseCase interface {
 	// GetClaim returns sanitized (no-PII) ticket info for the public claim page.
 	GetClaim(claimToken string) (*domain.OrderTicket, error)
 	// ClaimOrder allows a community volunteer to accept the ticket by claim token.
-	ClaimOrder(claimToken, volunteerName, volunteerPhone string) (*domain.OrderTicket, error)
+	ClaimOrder(claimToken string, in CommunityClaimInput) (*domain.OrderTicket, error)
+}
+
+// CommunityClaimInput describes a volunteer's response to a community claim
+// link. UnitLabel is optional free text (e.g. "PMI Sleman", "SAR Yogya").
+type CommunityClaimInput struct {
+	VolunteerName  string
+	VolunteerPhone string
+	UnitLabel      string
 }
 
 // UnitAuthUseCase is the interface handlers use for unit authentication.
@@ -111,6 +119,10 @@ type AnalyticsUseCase interface {
 	GetHeatmap(periodDays int) ([]domain.HeatmapPoint, error)
 	GetPublicUnitStats(emergencyUUID string, periodDays int) (*domain.PublicUnitStats, error)
 	GetUnitOwnStats(emergencyUUID string, periodDays int) (*domain.PublicUnitStats, error)
+	// GetUnitScoreboard returns per-unit performance metrics for the admin
+	// scoreboard. Units with zero orders and zero feedback in the window are
+	// omitted to keep the view focused.
+	GetUnitScoreboard(periodDays int) ([]domain.UnitScoreEntry, error)
 }
 
 // RegionUseCase is the interface handlers use for available region operations.

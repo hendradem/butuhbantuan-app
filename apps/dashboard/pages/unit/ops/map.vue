@@ -90,7 +90,7 @@ const units = computed<OpsUnit[]>(() =>
         type: e.emergency_type?.name || e.type_name,
         available: e.fleet?.available ?? e.available_units,
         total: e.fleet?.total ?? e.total_units,
-        is_active: e.is_active !== false && e.operational?.is_active !== false && e.operational !== false,
+        is_active: e.operational?.is_active !== false,
       } as OpsUnit;
     })
     .filter(Boolean) as OpsUnit[],
@@ -186,6 +186,7 @@ useOrderNotification(
         :units="units"
         :loading="loading"
         :focus-ticket="focusTicket"
+        order-base-path="/unit/orders"
       />
     </div>
   </div>

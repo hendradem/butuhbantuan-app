@@ -59,6 +59,7 @@ const rejected = ref(false);
 // Volunteer claim state
 const volunteerName = ref("");
 const volunteerPhone = ref("");
+const volunteerUnit = ref("");
 const claiming = ref(false);
 const claimError = ref("");
 const claimSuccess = ref(false);
@@ -310,7 +311,11 @@ async function submitVolunteerClaim() {
       data: { ticket_number?: string; track_token?: string };
     }>(`${apiBase}/api/v1/claim/${token.value}`, {
       method: "POST",
-      body: { name, phone: volunteerPhone.value.trim() },
+      body: {
+        name,
+        phone: volunteerPhone.value.trim(),
+        unit_label: volunteerUnit.value.trim(),
+      },
     });
     const ticketNumber = res.data?.ticket_number || claimSession.value?.ticket_number || "";
     const newTrack = res.data?.track_token || "";
@@ -693,51 +698,51 @@ onUnmounted(() => {
         </div>
 
         <!-- Community volunteer claim -->
-        <div v-else-if="step === 'claim'" class="space-y-4">
-          <!-- Incident info card -->
-          <div class="ui-card overflow-hidden">
-            <div class="px-5 pt-5 pb-4 space-y-3">
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                  <p class="text-xs font-medium uppercase tracking-wide ui-text-secondary">
-                    Butuh Bantuan
-                  </p>
-                  <p class="mt-1 text-base font-semibold ui-text-primary truncate">
+        <div v-else-if="step === 'claim'" class="space-y-3">
+          <!-- Incident info -->
+          <section class="ui-card overflow-hidden">
+            <div class="px-4 py-2 flex items-center justify-between gap-3 text-xs font-medium tracking-wide text-white bg-red-600">
+              <span class="uppercase">Butuh bantuan</span>
+              <span
+                v-if="claimExpiresIn"
+                class="tabular-nums"
+                :class="claimExpiresIn === 'Kedaluwarsa' ? 'text-white/90' : 'text-white/90'"
+              >
+                Berakhir · {{ claimExpiresIn }}
+              </span>
+            </div>
+            <div class="px-5 pt-4 pb-4 space-y-3.5">
+              <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                  <Icon icon="lucide:siren" class="text-lg" />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="text-base font-semibold ui-text-primary leading-tight truncate">
                     {{ displayUnitName }}
                   </p>
-                </div>
-                <div v-if="claimExpiresIn" class="text-right shrink-0">
-                  <p class="text-[10px] ui-text-secondary">Berakhir</p>
-                  <p
-                    class="text-sm font-bold tabular-nums"
-                    :class="claimExpiresIn === 'Kedaluwarsa' ? 'text-red-500' : 'text-amber-600'"
-                  >
-                    {{ claimExpiresIn }}
+                  <p v-if="displayTicketNumber" class="mt-0.5 text-xs font-mono text-neutral-500">
+                    {{ displayTicketNumber }}
                   </p>
                 </div>
               </div>
 
-              <div v-if="displayLocation">
-                <p class="text-[10px] font-medium uppercase tracking-wide ui-text-secondary">Lokasi</p>
-                <p class="mt-1 text-sm ui-text-primary leading-snug">{{ displayLocation }}</p>
+              <div v-if="displayLocation" class="rounded-lg bg-neutral-50 border border-neutral-100 px-3 py-2.5">
+                <p class="text-[10px] font-medium uppercase tracking-wide text-neutral-500 mb-1">Lokasi</p>
+                <p class="text-sm ui-text-primary leading-snug">{{ displayLocation }}</p>
               </div>
 
               <div v-if="displayCondition" class="rounded-lg bg-neutral-50 border border-neutral-100 px-3 py-2.5">
-                <p class="text-[10px] font-medium uppercase tracking-wide ui-text-secondary mb-1">
-                  Kondisi
-                </p>
-                <p class="text-sm ui-text-primary leading-snug whitespace-pre-line">
-                  {{ displayCondition }}
-                </p>
+                <p class="text-[10px] font-medium uppercase tracking-wide text-neutral-500 mb-1">Kondisi</p>
+                <p class="text-sm ui-text-primary leading-snug whitespace-pre-line">{{ displayCondition }}</p>
               </div>
 
-              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <a
                   v-if="mapsUrl"
                   :href="mapsUrl"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="inline-flex items-center gap-1 text-sm font-medium text-primary-600"
+                  class="inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-700"
                 >
                   <Icon icon="lucide:map-pin" class="text-base" />
                   Buka Maps
@@ -745,7 +750,7 @@ onUnmounted(() => {
                 <button
                   v-if="photoHref"
                   type="button"
-                  class="inline-flex items-center gap-1 text-sm font-medium ui-text-secondary"
+                  class="inline-flex items-center gap-1.5 text-sm font-medium ui-text-secondary hover:text-neutral-800"
                   @click="lightboxPhoto = photoHref"
                 >
                   <Icon icon="lucide:camera" class="text-base" />
@@ -753,37 +758,47 @@ onUnmounted(() => {
                 </button>
               </div>
             </div>
-          </div>
+          </section>
 
-          <!-- Volunteer form -->
-          <div class="ui-card overflow-hidden">
-            <div class="px-5 pt-5 pb-4 space-y-3">
-              <p class="text-sm font-semibold ui-text-primary">Isi data Anda untuk mengklaim</p>
-              <div class="space-y-3">
-                <div class="space-y-1">
-                  <label class="text-xs ui-text-secondary">
-                    Nama lengkap <span class="text-red-500">*</span>
-                  </label>
-                  <input
-                    v-model="volunteerName"
-                    type="text"
-                    placeholder="Nama Anda"
-                    class="w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-400"
-                  >
-                </div>
-                <div class="space-y-1">
-                  <label class="text-xs ui-text-secondary">Nomor HP (opsional)</label>
-                  <input
-                    v-model="volunteerPhone"
-                    type="tel"
-                    placeholder="08xxxxxxxxxx"
-                    class="w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-400"
-                  >
-                </div>
+          <!-- Data claimer (satu kartu, 3 field) -->
+          <section class="ui-card overflow-hidden">
+            <div class="px-5 pt-5 pb-3">
+              <p class="text-sm font-semibold ui-text-primary">Isi data untuk mengklaim</p>
+              <p class="mt-0.5 text-xs ui-text-secondary">Yang wajib hanya nama Anda.</p>
+            </div>
+            <div class="px-5 pb-4 space-y-2.5">
+              <div class="space-y-1">
+                <label class="text-[11px] ui-text-secondary">
+                  Nama lengkap <span class="text-red-500">*</span>
+                </label>
+                <input
+                  v-model="volunteerName"
+                  type="text"
+                  placeholder="Nama Anda"
+                  class="w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-400"
+                >
               </div>
-              <p v-if="claimError" class="text-xs text-red-500">{{ claimError }}</p>
+              <div class="space-y-1">
+                <label class="text-[11px] ui-text-secondary">Anda dari mana? (opsional)</label>
+                <input
+                  v-model="volunteerUnit"
+                  type="text"
+                  placeholder="misal PMI Sleman, SAR Yogya, Relawan pribadi"
+                  class="w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-400"
+                >
+              </div>
+              <div class="space-y-1">
+                <label class="text-[11px] ui-text-secondary">Nomor HP (opsional)</label>
+                <input
+                  v-model="volunteerPhone"
+                  type="tel"
+                  placeholder="08xxxxxxxxxx"
+                  class="w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-400"
+                >
+              </div>
             </div>
             <div class="px-5 pb-5 space-y-2">
+              <p v-if="claimError" class="text-xs text-red-500 text-center">{{ claimError }}</p>
               <button
                 type="button"
                 class="w-full py-3 rounded-lg bg-emerald-600 text-white font-semibold text-sm active:scale-[0.98] transition-transform disabled:opacity-50"
@@ -796,7 +811,7 @@ onUnmounted(() => {
                 Dengan mengklaim, Anda setuju untuk segera menuju lokasi kejadian.
               </p>
             </div>
-          </div>
+          </section>
         </div>
 
         <!-- Claim success (before backend redirect, or on reload) -->
