@@ -161,6 +161,15 @@ onMounted(async () => {
   });
   applyZoomOverlayState(map!.getZoom());
 
+  // Toggle `.bb-map-interacting` on the container while the user is actively
+  // zooming/panning. CSS in main.css keys transitions off this class so markers
+  // snap during interaction and only transition when the map is idle.
+  const setInteracting = (on: boolean) => {
+    mapContainer.value?.classList.toggle("bb-map-interacting", on);
+  };
+  map.on("zoomstart movestart dragstart", () => setInteracting(true));
+  map.on("zoomend moveend dragend", () => setInteracting(false));
+
   let mapClickTimer: ReturnType<typeof setTimeout> | null = null;
 
   map.on("click", (e: any) => {

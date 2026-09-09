@@ -511,6 +511,7 @@ onUnmounted(() => {
 
 <template>
   <div class="ui-page min-h-screen">
+    <OpenInAppBanner />
     <div class="ui-topbar">
       <div class="min-w-0 flex-1">
         <p class="text-base font-semibold ui-text-primary leading-tight">ButuhBantuan</p>

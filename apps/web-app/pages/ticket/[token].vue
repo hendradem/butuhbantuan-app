@@ -63,6 +63,7 @@ function onPushToggle() {
 
 <template>
   <div class="ui-page min-h-screen bg-neutral-50 eticket-ui">
+    <OpenInAppBanner />
     <header class="sticky top-0 z-10 flex items-center gap-3 border-b border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur">
       <button
         type="button"

@@ -2,27 +2,37 @@
   "id": "/",
   "name": "Butuhbantuan",
   "short_name": "Butuhbantuan",
-  "description": "An emergency assistant for you",
+  "description": "Bantuan darurat lebih dekat.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#ffffff",
   "theme_color": "#0f172a",
   "orientation": "portrait",
   "handle_links": "preferred",
   "launch_handler": {
-    "client_mode": "navigate-existing"
+    "client_mode": ["navigate-existing", "auto"]
   },
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://butuhbantuan.space/manifest.json",
+      "id": "https://butuhbantuan.space/"
+    }
+  ],
   "icons": [
     {
       "src": "/ambulance-logo.jpg",
       "sizes": "192x192",
-      "type": "image/jpeg"
+      "type": "image/jpeg",
+      "purpose": "any"
     },
     {
       "src": "/ambulance-logo.jpg",
       "sizes": "512x512",
-      "type": "image/jpeg"
+      "type": "image/jpeg",
+      "purpose": "any"
     }
   ]
 }

@@ -327,6 +327,7 @@ onUnmounted(() => {
 
 <template>
   <div class="ui-page min-h-screen">
+    <OpenInAppBanner />
     <div class="ui-topbar">
       <div class="w-9 h-9 shrink-0 ui-icon-well--danger flex items-center justify-center" style="border-radius: var(--bb-radius-pill)">
         <Icon
