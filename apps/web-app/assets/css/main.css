@@ -65,14 +65,28 @@ html[data-ui-theme="soft"] h4 {
   display: none !important;
 }
 
-/* Smooth marker movement when Leaflet repositions icons via transform */
+/* Smooth marker movement when Leaflet repositions icons via transform.
+ * MUST be disabled during zoom/drag/pan — Leaflet re-projects markers on
+ * zoomend and expects an immediate snap. A 250ms transition here causes
+ * markers to "lag" behind the zoom, then slide into place.
+ */
 .leaflet-marker-icon,
 .leaflet-marker-shadow {
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  will-change: transform;
 }
-/* Don't animate during drag — Leaflet adds this class while dragging */
+/* No transition while Leaflet is actively animating zoom */
+.leaflet-container.leaflet-zoom-anim .leaflet-marker-icon,
+.leaflet-container.leaflet-zoom-anim .leaflet-marker-shadow,
+.leaflet-touching .leaflet-marker-icon,
+.leaflet-touching .leaflet-marker-shadow,
 .leaflet-dragging .leaflet-marker-icon,
 .leaflet-dragging .leaflet-marker-shadow {
+  transition: none !important;
+}
+/* Route polyline / SVG overlays must also snap during zoom */
+.leaflet-container.leaflet-zoom-anim .leaflet-overlay-pane,
+.leaflet-container.leaflet-zoom-anim .leaflet-overlay-pane svg {
   transition: none !important;
 }
 /* Smooth tile fade-in */
