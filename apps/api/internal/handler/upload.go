@@ -22,13 +22,13 @@ var allowedImageExt = map[string]string{
 
 // UploadFile requires admin or unit auth (dashboard / ops).
 func UploadFile(c *fiber.Ctx) error {
-	return saveImageUpload(c, 5*1024*1024)
+	return saveImageUpload(c, 10*1024*1024)
 }
 
 // UploadIncidentPhoto is a hardened public endpoint for citizen SOS/order photos.
 // Rate-limited via middleware; magic-byte + extension allowlist only.
 func UploadIncidentPhoto(c *fiber.Ctx) error {
-	return saveImageUpload(c, 5*1024*1024)
+	return saveImageUpload(c, 10*1024*1024)
 }
 
 func saveImageUpload(c *fiber.Ctx, maxBytes int64) error {
@@ -36,8 +36,13 @@ func saveImageUpload(c *fiber.Ctx, maxBytes int64) error {
 	if err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "no file provided")
 	}
-	if file.Size <= 0 || file.Size > maxBytes {
-		return response.Error(c, fiber.StatusBadRequest, "file too large (max 5MB)")
+	if file.Size <= 0 {
+		return response.Error(c, fiber.StatusBadRequest, "file is empty or unreadable")
+	}
+	if file.Size > maxBytes {
+		return response.Error(c, fiber.StatusBadRequest,
+			fmt.Sprintf("file too large (%.1f MB, max %d MB)",
+				float64(file.Size)/1024/1024, maxBytes/1024/1024))
 	}
 
 	ext := strings.ToLower(filepath.Ext(file.Filename))
