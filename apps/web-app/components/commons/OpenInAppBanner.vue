@@ -1,26 +1,35 @@
 <script setup lang="ts">
 /**
- * Shown at the top of deep-link pages (ticket / dispatch / track) when the user
- * lands in a browser view but has the PWA installed. Chrome's link-handler
- * consent flow may skip the PWA on the first tap; this banner nudges them to
- * open in the installed app for a better experience.
+ * Deep-link entry-point banner (ticket / dispatch / track pages).
  *
- * Detection strategy:
- *   1. Skip if already inside the PWA (display-mode: standalone).
- *   2. Ask Chrome via `navigator.getInstalledRelatedApps()` — the only reliable
- *      cross-tab signal that the PWA is installed. Not supported on iOS
- *      Safari; banner simply stays hidden there (iOS has its own share sheet).
+ * Shown when:
+ *   - Current view is a browser tab (NOT PWA standalone), AND
+ *   - The Butuhbantuan PWA is installed on this device.
  *
- * Once dismissed, we suppress the banner for the rest of the session.
+ * Detection: `navigator.getInstalledRelatedApps()` (Chrome/Edge Android).
+ * On iOS/Safari the API doesn't exist → banner stays hidden.
+ *
+ * The banner does NOT try to force-launch the PWA (Chrome/Android does not
+ * expose an API to do so from web content; that path always requires user
+ * consent). Instead it teaches the user: tap the app icon on their home
+ * screen. Once they enable "Supported links" for the PWA in Android Chrome
+ * settings, future taps will auto-route to the PWA.
  */
 import { Icon } from "@iconify/vue";
 
 const DISMISS_KEY = "bb-open-in-app-dismissed";
 const show = ref(false);
 
-async function detectInstalledPwa(): Promise<boolean> {
+function isStandalone(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.matchMedia?.("(display-mode: standalone)").matches) return true;
+  if ((window.navigator as unknown as { standalone?: boolean }).standalone) return true;
+  return false;
+}
+
+async function pwaIsInstalled(): Promise<boolean> {
   const nav = navigator as Navigator & {
-    getInstalledRelatedApps?: () => Promise<Array<{ platform?: string; id?: string; url?: string }>>;
+    getInstalledRelatedApps?: () => Promise<Array<{ platform?: string; url?: string }>>;
   };
   if (typeof nav.getInstalledRelatedApps !== "function") return false;
   try {
@@ -31,18 +40,30 @@ async function detectInstalledPwa(): Promise<boolean> {
   }
 }
 
-function isStandalone(): boolean {
-  if (typeof window === "undefined") return false;
-  if (window.matchMedia?.("(display-mode: standalone)").matches) return true;
-  // iOS Safari legacy
-  if ((window.navigator as unknown as { standalone?: boolean }).standalone) return true;
-  return false;
+const PENDING_KEY = "bb-pending-deep-link";
+
+function recordPendingDeepLink() {
+  try {
+    localStorage.setItem(
+      PENDING_KEY,
+      JSON.stringify({
+        url: window.location.pathname + window.location.search,
+        ts: Date.now(),
+      }),
+    );
+  } catch { /* private mode / quota */ }
 }
 
 onMounted(async () => {
   if (isStandalone()) return;
   if (sessionStorage.getItem(DISMISS_KEY) === "1") return;
-  if (await detectInstalledPwa()) show.value = true;
+  if (await pwaIsInstalled()) {
+    show.value = true;
+    // Bridge: if the user opens the PWA from their home screen next, the
+    // pwa-deep-link plugin picks this up and navigates the PWA to the URL
+    // they were viewing here. Removes the "PWA opens on blank home page" trap.
+    recordPendingDeepLink();
+  }
 });
 
 function dismiss() {
@@ -54,28 +75,33 @@ function dismiss() {
 </script>
 
 <template>
-  <Transition name="slide-down">
+  <Transition name="bb-oiab">
     <aside
       v-if="show"
-      class="fixed top-0 left-0 right-0 max-w-md mx-auto z-40 flex items-center gap-3 px-4 py-3"
-      style="background: var(--bb-bg-surface); border-bottom: 1px solid var(--bb-border); box-shadow: var(--bb-shadow-soft)"
       role="status"
       aria-live="polite"
+      class="fixed inset-x-0 top-0 z-40 mx-auto flex max-w-md items-center gap-3 px-4 py-3"
+      style="background: var(--bb-bg-surface); border-bottom: 1px solid var(--bb-border); box-shadow: var(--bb-shadow-soft)"
     >
-      <div class="shrink-0 w-9 h-9 rounded-full flex items-center justify-center" style="background: var(--bb-accent-soft, rgba(239, 68, 68, 0.1))">
-        <Icon icon="lucide:smartphone" class="text-lg" style="color: var(--bb-accent)" />
+      <div
+        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+        style="background: rgba(239, 68, 68, 0.1); color: var(--bb-accent)"
+      >
+        <Icon icon="lucide:smartphone-nfc" class="text-lg" />
       </div>
+
       <div class="min-w-0 flex-1">
-        <p class="text-sm font-semibold leading-tight ui-text-primary">
+        <p class="text-[13px] font-semibold leading-tight ui-text-primary">
           Buka di aplikasi Butuhbantuan
         </p>
-        <p class="text-xs ui-text-secondary leading-tight mt-0.5">
-          Ketuk ikon Butuhbantuan di homescreen untuk pengalaman penuh.
+        <p class="mt-0.5 text-[11px] leading-snug ui-text-secondary">
+          Ketuk ikon aplikasi di homescreen untuk pengalaman terbaik.
         </p>
       </div>
+
       <button
         type="button"
-        class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center active:bg-neutral-200"
+        class="shrink-0 rounded-full p-2 transition-opacity hover:opacity-70 active:opacity-50"
         aria-label="Tutup"
         @click="dismiss"
       >
@@ -86,13 +112,14 @@ function dismiss() {
 </template>
 
 <style scoped>
-.slide-down-enter-active,
-.slide-down-leave-active {
-  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.35s ease;
+.bb-oiab-enter-active,
+.bb-oiab-leave-active {
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1),
+              opacity 0.25s ease;
 }
-.slide-down-enter-from,
-.slide-down-leave-to {
-  transform: translateY(-100%);
+.bb-oiab-enter-from,
+.bb-oiab-leave-to {
+  transform: translateY(-110%);
   opacity: 0;
 }
 </style>
