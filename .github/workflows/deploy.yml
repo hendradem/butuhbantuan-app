@@ -58,8 +58,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
+        # No version specified — inferred from package.json `packageManager` field
 
       - name: Get pnpm store dir
         id: pnpm-cache
