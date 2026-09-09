@@ -4,6 +4,12 @@ export default defineNuxtConfig({
   compatibilityDate: "2025-05-15",
   devtools: { enabled: true },
 
+  // Pure SPA build. All routes (including dynamic /ticket/:token,
+  // /dispatch/:token, /track/:token) are handled by Vue Router client-side,
+  // hydrated from a single index.html. Avoids the "nginx SPA-fallback returns
+  // HTML for _payload.json" trap that breaks hydration in prerender mode.
+  ssr: false,
+
   modules: ["@nuxtjs/tailwindcss", "@nuxt/eslint", "@pinia/nuxt"],
 
   css: ["~/assets/css/main.css"],
