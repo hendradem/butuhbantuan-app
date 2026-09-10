@@ -54,7 +54,7 @@ watch(hasItems, (ok) => {
   <button
     v-if="hasItems"
     type="button"
-    class="bb-map-fab shrink-0 relative w-11 h-11 flex items-center justify-center transition-opacity active:opacity-85"
+    class="bb-map-fab shrink-0 relative w-11 h-11 flex items-center justify-center transition-opacity active:opacity-85 pointer-events-auto"
     :aria-label="showNipple ? 'Unit kamu — ada yang baru dihubungi' : 'Unit kamu'"
     @click="openSheet"
   >

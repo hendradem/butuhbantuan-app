@@ -143,7 +143,7 @@ async function goToSavedPlace(place: SavedPlace) {
           </div>
 
           <div class="absolute bottom-0 left-0 right-0 z-[100] pointer-events-none">
-            <div class="pointer-events-auto px-3 pb-2 flex flex-col items-end gap-2">
+            <div class="px-3 pb-2 flex flex-col items-end gap-2">
               <SavedPlacesDock @go="goToSavedPlace" />
               <UnitsDock />
             </div>

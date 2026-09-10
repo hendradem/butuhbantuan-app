@@ -1,102 +1,765 @@
 {
+  "3401": {
+    "province_id": "34",
+    "province_name": "Daerah Istimewa Yogyakarta",
+    "regency_name": "Kulon Progo",
+    "hospitals": []
+  },
+  "3402": {
+    "province_id": "34",
+    "province_name": "Daerah Istimewa Yogyakarta",
+    "regency_name": "Bantul",
+    "hospitals": [
+      {
+        "source_code": "osm-3402-r8527745",
+        "name": "RS Elisabeth",
+        "address": "Jalan Ganjuran",
+        "phone": "",
+        "class": "general",
+        "ownership": "Swasta",
+        "latitude": -7.925664,
+        "longitude": 110.318662
+      },
+      {
+        "source_code": "osm-3402-w374397543",
+        "name": "RS Khusus Ibu dan Anak Adinda",
+        "address": "Jalan Soragan No.14, Soragan, Ngestiharjo, Kasihan, Bantul, Daerah Istimewa Yogyakarta 55184",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.785442,
+        "longitude": 110.348699
+      },
+      {
+        "source_code": "osm-3402-w418521933",
+        "name": "RS Khusus Ibu dan Anak Kahyangan",
+        "address": "Jalan Tino Sidin No.390, Kadipiro, Baru, Kdipiro, Ngestiharjo, Kasihan, Bantul, Daerah Istimewa Yogyakarta 55184",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.79828,
+        "longitude": 110.344963
+      },
+      {
+        "source_code": "osm-3402-n3724392322",
+        "name": "RS Rajawali Citra",
+        "address": "Kabupaten Bantul",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.84833,
+        "longitude": 110.410242
+      },
+      {
+        "source_code": "osm-3402-w447657872",
+        "name": "RS Terpadu Penyandang Disabilitas",
+        "address": "Jalan Piring, Srihardono, Srihardono",
+        "phone": "+622746464177",
+        "class": "",
+        "ownership": "Pemerintah",
+        "latitude": -7.958415,
+        "longitude": 110.344544
+      },
+      {
+        "source_code": "osm-3402-w722721176",
+        "name": "RS Universitas Islam Indonesia",
+        "address": "Kabupaten Bantul",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.909138,
+        "longitude": 110.296052
+      },
+      {
+        "source_code": "osm-3402-w616517916",
+        "name": "RSKIA Ummi Khasanah",
+        "address": "Jalan Pemuda",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.87857,
+        "longitude": 110.330624
+      },
+      {
+        "source_code": "osm-3402-w783886543",
+        "name": "RSPAU dr. S. Hardjolukito",
+        "address": "Jalan Janti Yogyakarta, Lanud Adisutjipto, Jl. Ringroad Timur, Karang Janbe, Banguntapan, Kec. Banguntapan, Bantul, Daerah Istimewa Yogyakarta 55198",
+        "phone": "",
+        "class": "",
+        "ownership": "Pemerintah",
+        "latitude": -7.79751,
+        "longitude": 110.411574
+      },
+      {
+        "source_code": "osm-3402-w366465707",
+        "name": "RSU PKU Muhammadiyah",
+        "address": "Jalan Jendral Sudirman",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.886924,
+        "longitude": 110.330344
+      },
+      {
+        "source_code": "osm-3402-w616249114",
+        "name": "RSUD Panembahan Senopati",
+        "address": "Jalan Dr. Wahidin Sudiro Husodo, Area Sawah, Trirenggo, Kec. Bantul, Bantul, Daerah Istimewa Yogyakarta 55714",
+        "phone": "+62274367386",
+        "class": "",
+        "ownership": "Pemerintah",
+        "latitude": -7.892427,
+        "longitude": 110.337966
+      },
+      {
+        "source_code": "osm-3402-w535953749",
+        "name": "Rumah Sakit Khusus Bedah",
+        "address": "Jl. Ring Road Selatan",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.834155,
+        "longitude": 110.360409
+      },
+      {
+        "source_code": "osm-3402-w458344310",
+        "name": "Rumah Sakit Khusus Paru Respira",
+        "address": "Jalan Panembahan Senopati",
+        "phone": "",
+        "class": "cardiology",
+        "ownership": "Swasta",
+        "latitude": -7.905647,
+        "longitude": 110.320257
+      },
+      {
+        "source_code": "osm-3402-w614432401",
+        "name": "Rumah Sakit Nur Hidayah",
+        "address": "Jalan Imogiri Timur KM. 11.5",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.88622,
+        "longitude": 110.387985
+      },
+      {
+        "source_code": "osm-3402-w1134739784",
+        "name": "Rumah Sakit Permata Husada",
+        "address": "Kabupaten Bantul",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.865759,
+        "longitude": 110.408265
+      },
+      {
+        "source_code": "osm-3402-w619125299",
+        "name": "Rumah Sakit Rajawali Citra",
+        "address": "jalan pleret, banguntapan",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.848608,
+        "longitude": 110.410236
+      },
+      {
+        "source_code": "osm-3402-w616862644",
+        "name": "Rumah Sakit Umum Rachma Husada",
+        "address": "Jalan Parangtritis Km. 16, Patalan Jetis Bantul Yogyakarta",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.932132,
+        "longitude": 110.345904
+      },
+      {
+        "source_code": "osm-3402-w120838420",
+        "name": "Rumah Sakit Umum Veteran Patmasuri",
+        "address": "Jl. Kyai Haji Ali Maksum Krapyak",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.829997,
+        "longitude": 110.359943
+      },
+      {
+        "source_code": "osm-3402-n10705747215",
+        "name": "Rumah Sakit Universitas Islam Indonesia",
+        "address": "Kabupaten Bantul",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.90917,
+        "longitude": 110.295898
+      }
+    ]
+  },
+  "3403": {
+    "province_id": "34",
+    "province_name": "Daerah Istimewa Yogyakarta",
+    "regency_name": "Gunungkidul",
+    "hospitals": [
+      {
+        "source_code": "osm-3403-n8385985634",
+        "name": "RS Nurrohmah",
+        "address": "Kabupaten Gunungkidul",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.922417,
+        "longitude": 110.561476
+      },
+      {
+        "source_code": "osm-3403-n9751906945",
+        "name": "RSU Pelita Husada",
+        "address": "Kabupaten Gunungkidul",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.989143,
+        "longitude": 110.632045
+      },
+      {
+        "source_code": "osm-3403-w530314270",
+        "name": "RSUD Wonosari",
+        "address": "Wonosari",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.961915,
+        "longitude": 110.603916
+      },
+      {
+        "source_code": "osm-3403-n12866255147",
+        "name": "Rumah Sakit Panti Rahayu",
+        "address": "Kabupaten Gunungkidul",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.956385,
+        "longitude": 110.658099
+      }
+    ]
+  },
   "3404": {
     "province_id": "34",
-    "province_name": "DI Yogyakarta",
+    "province_name": "Daerah Istimewa Yogyakarta",
     "regency_name": "Sleman",
     "hospitals": [
       {
-        "source_code": "stub-3404-rsud-sleman",
+        "source_code": "osm-3404-n13822874465",
+        "name": "RS Gigi dan Mulut UGM Prof. Soedomo",
+        "address": "Jalan Kesehatan, Sleman",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.770347,
+        "longitude": 110.373729
+      },
+      {
+        "source_code": "osm-3404-n13800401439",
+        "name": "RS Muhammadiyah Gamping",
+        "address": "Jalan Wates, Kabupaten Sleman",
+        "phone": "",
+        "class": "general",
+        "ownership": "Pemerintah",
+        "latitude": -7.800356,
+        "longitude": 110.317736
+      },
+      {
+        "source_code": "osm-3404-w620543767",
+        "name": "RS Panti Nugroho",
+        "address": "Jalan Kaliurang KM 17",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.668743,
+        "longitude": 110.417139
+      },
+      {
+        "source_code": "osm-3404-w198739428",
+        "name": "RS Panti Rini",
+        "address": "Jl. Jogja - Solo",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.771665,
+        "longitude": 110.466539
+      },
+      {
+        "source_code": "osm-3404-w364887978",
+        "name": "RS PARU PARU",
+        "address": "KRINGINAN",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.77322,
+        "longitude": 110.464385
+      },
+      {
+        "source_code": "osm-3404-w363733122",
+        "name": "RS PKU muhammadiyah Sleman",
+        "address": "Kabupaten Sleman",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.709468,
+        "longitude": 110.357975
+      },
+      {
+        "source_code": "osm-3404-w620520051",
+        "name": "RS Puri Husada",
+        "address": "jl palagan tentara pelajar",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.70581,
+        "longitude": 110.386452
+      },
+      {
+        "source_code": "osm-3404-w617106472",
+        "name": "RS Sakina Idaman",
+        "address": "Jalan Monjali No.106, Kutu Dukuh, Sinduadi, Mlati, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55284",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.767584,
+        "longitude": 110.367842
+      },
+      {
+        "source_code": "osm-3404-w530763479",
+        "name": "RSKIA Sadewa",
+        "address": "Jalan Babarsari Tb 16 no 18",
+        "phone": "",
+        "class": "perinatologi",
+        "ownership": "",
+        "latitude": -7.771111,
+        "longitude": 110.415809
+      },
+      {
+        "source_code": "osm-3404-w533314778",
+        "name": "RSU Gramedika",
+        "address": "jalan raya besi jangka no.10 ngaglik",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.701409,
+        "longitude": 110.416986
+      },
+      {
+        "source_code": "osm-3404-w1138796873",
+        "name": "RSU Mitra Paramedika",
+        "address": "Kabupaten Sleman",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.71407,
+        "longitude": 110.448186
+      },
+      {
+        "source_code": "osm-3404-w620520372",
+        "name": "RSU PANTI BAKTININGSIH",
+        "address": "Klepu, Sendangmulyo, Minggir",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.75507,
+        "longitude": 110.242376
+      },
+      {
+        "source_code": "osm-3404-w533746481",
+        "name": "RSUD PRAMBANAN",
+        "address": "DELEGAN, SUMBERHARJO",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.804711,
+        "longitude": 110.483267
+      },
+      {
+        "source_code": "osm-3404-n13822872312",
+        "name": "RSUD Saedjito",
+        "address": "Jalan Kesehatan, Sleman",
+        "phone": "",
+        "class": "",
+        "ownership": "Pemerintah",
+        "latitude": -7.767906,
+        "longitude": 110.373521
+      },
+      {
+        "source_code": "osm-3404-n13797621007",
         "name": "RSUD Sleman",
-        "address": "Jl. Bhayangkara No.48, Triharjo, Sleman",
-        "phone": "0274868317",
-        "class": "B",
-        "ownership": "Pemerintah",
-        "latitude": -7.6855,
-        "longitude": 110.3412
+        "address": "Kabupaten Sleman",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.687431,
+        "longitude": 110.342348
       },
       {
-        "source_code": "stub-3404-rs-sardjito",
+        "source_code": "osm-3404-w616520162",
         "name": "RSUP Dr. Sardjito",
-        "address": "Jl. Kesehatan No.1, Sleman",
-        "phone": "0274631190",
-        "class": "A",
+        "address": "Jalan Kesehatan No. 1, Sinduadi, Mlati, Senolowo, Sinduadi, Mlati, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55281",
+        "phone": "",
+        "class": "",
         "ownership": "Pemerintah",
-        "latitude": -7.7689,
-        "longitude": 110.3745
+        "latitude": -7.768796,
+        "longitude": 110.372516
       },
       {
-        "source_code": "stub-3404-rs-jogja-internasional",
-        "name": "RS Jogja International Hospital",
-        "address": "Jl. Ring Road Utara No.160, Condongcatur, Sleman",
-        "phone": "0274445353",
-        "class": "B",
-        "ownership": "Swasta",
-        "latitude": -7.7558,
-        "longitude": 110.4012
+        "source_code": "osm-3404-w233729584",
+        "name": "Rumah Sakit Akademik UGM",
+        "address": "Jalan Kabupaten, Sleman",
+        "phone": "+622744530404",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.7432,
+        "longitude": 110.35041
       },
       {
-        "source_code": "stub-3404-rs-panti-rapih",
-        "name": "RS Panti Rapih",
-        "address": "Jl. Cik Di Tiro No.30, Caturtunggal, Sleman",
-        "phone": "0274563355",
-        "class": "B",
+        "source_code": "osm-3404-w620578145",
+        "name": "Rumah Sakit At-Turots Al-Islamy",
+        "address": "Klaci I, Margoluwih, Seyegan, Sleman",
+        "phone": "",
+        "class": "",
         "ownership": "Swasta",
-        "latitude": -7.7821,
-        "longitude": 110.3789
+        "latitude": -7.75045,
+        "longitude": 110.29392
+      },
+      {
+        "source_code": "osm-3404-w491025622",
+        "name": "Rumah Sakit Bhayangkara",
+        "address": "Jalan Solo KM 14 Yogyakarta",
+        "phone": "",
+        "class": "",
+        "ownership": "Pemerintah",
+        "latitude": -7.766205,
+        "longitude": 110.471613
+      },
+      {
+        "source_code": "osm-3404-w1134408330",
+        "name": "Rumah Sakit Condong Catur",
+        "address": "Kabupaten Sleman",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.754271,
+        "longitude": 110.405808
+      },
+      {
+        "source_code": "osm-3404-w533713529",
+        "name": "Rumah Sakit Dharma",
+        "address": "Jl Wonosari Km 8,5Gandu,SendangTirto, Berbah,Sleman",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.825506,
+        "longitude": 110.429955
+      },
+      {
+        "source_code": "osm-3404-w362511092",
+        "name": "Rumah Sakit Hermina",
+        "address": "Jalan Selokan Mataram",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.770074,
+        "longitude": 110.432575
+      },
+      {
+        "source_code": "osm-3404-w591934313",
+        "name": "Rumah Sakit JIH",
+        "address": "Jalan Ring Road Utara",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.757809,
+        "longitude": 110.403468
+      },
+      {
+        "source_code": "osm-3404-w620526505",
+        "name": "Rumah Sakit Jiwa Grhasia",
+        "address": "jalan kaliurang km. 17",
+        "phone": "",
+        "class": "",
+        "ownership": "Pemerintah",
+        "latitude": -7.661907,
+        "longitude": 110.421812
+      },
+      {
+        "source_code": "osm-3404-n12298790416",
+        "name": "Rumah Sakit Khusus Bedah (RSKB) Sinduadi",
+        "address": "Jalan Wijaya Kusuma, Kabupaten Sleman",
+        "phone": "",
+        "class": "surgery",
+        "ownership": "",
+        "latitude": -7.757357,
+        "longitude": 110.363368
+      },
+      {
+        "source_code": "osm-3404-w610149135",
+        "name": "Rumah Sakit Khusus Bedah An-Nur",
+        "address": "Jalan Colombo",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.778097,
+        "longitude": 110.386838
+      },
+      {
+        "source_code": "osm-3404-w620278791",
+        "name": "Rumah Sakit Medika Respati",
+        "address": "Jalan Raya Tajem",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.748343,
+        "longitude": 110.433773
+      },
+      {
+        "source_code": "osm-3404-w270040187",
+        "name": "Rumah Sakit Panti Rapih",
+        "address": "Jalan Cik Di Tiro No 30",
+        "phone": "+62274514014",
+        "class": "general",
+        "ownership": "Swasta",
+        "latitude": -7.777183,
+        "longitude": 110.377625
+      },
+      {
+        "source_code": "osm-3404-w349955138",
+        "name": "Rumah Sakit PKU Muhammadiyah Gamping",
+        "address": "Jalan Wates KM 5.5, Ambarketawang, Sleman",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.800527,
+        "longitude": 110.317477
+      },
+      {
+        "source_code": "osm-3404-w616883613",
+        "name": "Rumah Sakit Umum Queen Latifa",
+        "address": "Jalan Ringroad Barat No.118, Mlangi, Nogotirto, Gamping, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55294",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.762626,
+        "longitude": 110.33703
+      },
+      {
+        "source_code": "osm-3404-w613598097",
+        "name": "Rumah Sakit Universitas Ahmad Dahlan",
+        "address": "Karangsari, Wedomartani, Ngemplak, Sleman",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.747126,
+        "longitude": 110.424862
       }
     ]
   },
   "3471": {
     "province_id": "34",
-    "province_name": "DI Yogyakarta",
-    "regency_name": "Kota Yogyakarta",
+    "province_name": "Daerah Istimewa Yogyakarta",
+    "regency_name": "Yogyakarta",
     "hospitals": [
       {
-        "source_code": "stub-3471-rsud-kota",
-        "name": "RSUD Kota Yogyakarta",
-        "address": "Jl. Ki Ageng Pemanahan No.1, Yogyakarta",
-        "phone": "0274371333",
-        "class": "B",
+        "source_code": "osm-3471-w616082200",
+        "name": "RS Happy Land",
+        "address": "Jalan Ipda Tut harsono No 53 jl Melati wetan",
+        "phone": "",
+        "class": "",
         "ownership": "Pemerintah",
-        "latitude": -7.8334,
-        "longitude": 110.3832
+        "latitude": -7.793964,
+        "longitude": 110.392187
       },
       {
-        "source_code": "stub-3471-rs-bethesda",
-        "name": "RS Bethesda Yogyakarta",
-        "address": "Jl. Jend. Sudirman No.70, Yogyakarta",
-        "phone": "0274586868",
-        "class": "B",
-        "ownership": "Swasta",
-        "latitude": -7.7829,
-        "longitude": 110.3698
-      }
-    ]
-  },
-  "3173": {
-    "province_id": "31",
-    "province_name": "DKI Jakarta",
-    "regency_name": "Jakarta Pusat",
-    "hospitals": [
-      {
-        "source_code": "stub-3173-rs-cipto",
-        "name": "RSUPN Dr. Cipto Mangunkusumo",
-        "address": "Jl. Diponegoro No.71, Jakarta Pusat",
-        "phone": "0211500135",
-        "class": "A",
+        "source_code": "osm-3471-w120774929",
+        "name": "RS Jogja",
+        "address": "Jalan Wirosaban No.1",
+        "phone": "",
+        "class": "",
         "ownership": "Pemerintah",
-        "latitude": -6.1962,
-        "longitude": 106.8477
+        "latitude": -7.825856,
+        "longitude": 110.378284
       },
       {
-        "source_code": "stub-3173-rs-abdi",
-        "name": "RS Abdi Waluyo",
-        "address": "Jl. HOS Cokroaminoto No.31-33, Jakarta Pusat",
-        "phone": "02131904108",
-        "class": "B",
+        "source_code": "osm-3471-w778464130",
+        "name": "RS Mata Dr. Yap",
+        "address": "Jalan Cik Di Tiro, Yogyakarta",
+        "phone": "",
+        "class": "ophthalmology",
+        "ownership": "",
+        "latitude": -7.780576,
+        "longitude": 110.374437
+      },
+      {
+        "source_code": "osm-3471-w121642948",
+        "name": "RS PKU Muhammadiyah",
+        "address": "Jalan K.H. Ahmad Dahlan No. 20",
+        "phone": "",
+        "class": "general",
+        "ownership": "",
+        "latitude": -7.800693,
+        "longitude": 110.362454
+      },
+      {
+        "source_code": "osm-3471-w188171414",
+        "name": "RS THT Dr. Pomo",
+        "address": "Kota Yogyakarta",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.808218,
+        "longitude": 110.368571
+      },
+      {
+        "source_code": "osm-3471-w610666540",
+        "name": "RSKIA 45",
+        "address": "jl patangpuluhan no.35",
+        "phone": "",
+        "class": "",
         "ownership": "Swasta",
-        "latitude": -6.1969,
-        "longitude": 106.8305
+        "latitude": -7.807521,
+        "longitude": 110.346073
+      },
+      {
+        "source_code": "osm-3471-w511889439",
+        "name": "RSKIA Permata Bunda",
+        "address": "Kota Yogyakarta",
+        "phone": "",
+        "class": "paediatrics",
+        "ownership": "",
+        "latitude": -7.820672,
+        "longitude": 110.399725
+      },
+      {
+        "source_code": "osm-3471-w511889458",
+        "name": "RSKIA PKU Muhammadiyah Kotagede",
+        "address": "Jl. Kemasan No.30, Purbayan, Kotagede, Kota Yogyakarta, Daerah Istimewa Yogyakarta 55173",
+        "phone": "",
+        "class": "paediatrics",
+        "ownership": "",
+        "latitude": -7.822923,
+        "longitude": 110.400752
+      },
+      {
+        "source_code": "osm-3471-w613425525",
+        "name": "RSKIA Rachmi",
+        "address": "Kota Yogyakarta",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.80362,
+        "longitude": 110.356518
+      },
+      {
+        "source_code": "osm-3471-w377998703",
+        "name": "Rumah Sakit Bethesda",
+        "address": "Jalan Jendral Sudirman No 70 Kotabaru",
+        "phone": "+62274586688",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.783956,
+        "longitude": 110.377392
+      },
+      {
+        "source_code": "osm-3471-w253273884",
+        "name": "Rumah Sakit Bethesda Lempuyangwangi",
+        "address": "Jalan Hayam Wuruk No. 6 Yogyakarta",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.796421,
+        "longitude": 110.373041
+      },
+      {
+        "source_code": "osm-3471-w594852413",
+        "name": "Rumah Sakit Bhakti Ibu",
+        "address": "jalan golo no 33",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.81485,
+        "longitude": 110.381639
+      },
+      {
+        "source_code": "osm-3471-w591475169",
+        "name": "Rumah Sakit Dr Soetarto",
+        "address": "Jalan Juadi No 19",
+        "phone": "",
+        "class": "",
+        "ownership": "Pemerintah",
+        "latitude": -7.785631,
+        "longitude": 110.376994
+      },
+      {
+        "source_code": "osm-3471-w610993613",
+        "name": "Rumah Sakit Ibu dan Anak Fajar",
+        "address": "Kota Yogyakarta",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.808598,
+        "longitude": 110.34991
+      },
+      {
+        "source_code": "osm-3471-w594852354",
+        "name": "Rumah Sakit Khusus Bedah Soedirman",
+        "address": "Jl. Sidobali Muja Muju UH II/402 Telp. 0274-589090 Yogyakarta 55165",
+        "phone": "",
+        "class": "",
+        "ownership": "",
+        "latitude": -7.800644,
+        "longitude": 110.397532
+      },
+      {
+        "source_code": "osm-3471-w120718008",
+        "name": "Rumah Sakit Khusus Puri Nirmala",
+        "address": "Jalan Jayaningprangan",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.800888,
+        "longitude": 110.376911
+      },
+      {
+        "source_code": "osm-3471-w591938608",
+        "name": "Rumah Sakit Ludira Husada Tama",
+        "address": "Jalan Wiratama No. 4",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.792381,
+        "longitude": 110.352903
+      },
+      {
+        "source_code": "osm-3471-w270040187",
+        "name": "Rumah Sakit Panti Rapih",
+        "address": "Jalan Cik Di Tiro No 30",
+        "phone": "+62274514014",
+        "class": "general",
+        "ownership": "Swasta",
+        "latitude": -7.777183,
+        "longitude": 110.377625
+      },
+      {
+        "source_code": "osm-3471-w396468395",
+        "name": "Rumah Sakit Pratama",
+        "address": "Jalan Kolonel Sugiono No 98 Yogyakarta",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.81585,
+        "longitude": 110.373714
+      },
+      {
+        "source_code": "osm-3471-n7331641864",
+        "name": "Rumah Sakit Siloam Yogyakarta",
+        "address": "Jalan Laksda Adisucipto No.32-34, Demangan, Kec. Gondokusuman, Kota Yogyakarta, Daerah Istimewa Yogyakarta 55221",
+        "phone": "",
+        "class": "",
+        "ownership": "Swasta",
+        "latitude": -7.783399,
+        "longitude": 110.390884
       }
     ]
   }

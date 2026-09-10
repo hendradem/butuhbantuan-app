@@ -62,7 +62,7 @@ watch(
 </script>
 
 <template>
-  <div class="flex items-center justify-end gap-2 w-full">
+  <div class="flex items-center justify-end gap-2 pointer-events-auto">
     <Transition name="dock">
       <div
         v-if="open"
