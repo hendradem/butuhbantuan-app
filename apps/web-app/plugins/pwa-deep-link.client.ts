@@ -39,5 +39,9 @@ export default defineNuxtPlugin(async () => {
   if (Date.now() - pending.ts > MAX_AGE_MS) return;
   if (pending.url === "/" || !pending.url.startsWith("/")) return;
 
+  // Dispatch pages are field-officer / community-volunteer flows — must not
+  // run inside the citizen PWA. See BrowserOnlyGate.
+  if (pending.url.startsWith("/dispatch/")) return;
+
   await navigateTo(pending.url, { replace: true });
 });

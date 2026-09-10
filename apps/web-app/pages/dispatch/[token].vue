@@ -15,6 +15,17 @@ const config = useRuntimeConfig();
 const apiBase = config.public.apiBaseUrl as string;
 const token = computed(() => String(route.params.token || "").trim());
 
+// Dispatch pages are used by field officers + community volunteers, not the
+// citizen PWA. If the page loads inside a standalone PWA display, we render
+// BrowserOnlyGate instead of the normal UI (see template).
+const inStandalonePwa = ref(false);
+onMounted(() => {
+  if (typeof window === "undefined") return;
+  inStandalonePwa.value =
+    window.matchMedia?.("(display-mode: standalone)").matches ||
+    (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+});
+
 type OfferSession = {
   ticket_number: string;
   unit_name: string;
@@ -510,8 +521,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="ui-page min-h-screen">
-    <OpenInAppBanner />
+  <BrowserOnlyGate v-if="inStandalonePwa" />
+  <div v-else class="ui-page min-h-screen">
     <div class="ui-topbar">
       <div class="min-w-0 flex-1">
         <p class="text-base font-semibold ui-text-primary leading-tight">ButuhBantuan</p>
