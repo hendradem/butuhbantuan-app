@@ -421,22 +421,24 @@ onUnmounted(() => {
   <div class="ui-page min-h-screen">
     <OpenInAppBanner />
     <div class="ui-topbar">
-      <div class="w-9 h-9 shrink-0 ui-icon-well--danger flex items-center justify-center" style="border-radius: var(--bb-radius-pill)">
-        <Icon
-          :icon="isCompleted ? 'lucide:check' : hasArrived ? 'lucide:activity' : 'lucide:navigation'"
-          class="text-base"
-        />
-      </div>
-      <div class="min-w-0">
-        <p class="text-base font-semibold ui-text-primary leading-tight">
-          {{ isCompleted ? "Tiket selesai" : hasArrived ? "Penanganan" : "Bagikan lokasi" }}
-        </p>
-        <p class="text-sm ui-text-secondary">ButuhBantuan · Petugas lapangan</p>
+      <div class="w-full max-w-sm md:max-w-xl lg:max-w-3xl mx-auto flex items-center gap-3">
+        <div class="w-9 h-9 shrink-0 ui-icon-well--danger flex items-center justify-center" style="border-radius: var(--bb-radius-pill)">
+          <Icon
+            :icon="isCompleted ? 'lucide:check' : hasArrived ? 'lucide:activity' : 'lucide:navigation'"
+            class="text-base"
+          />
+        </div>
+        <div class="min-w-0">
+          <p class="text-base font-semibold ui-text-primary leading-tight">
+            {{ isCompleted ? "Tiket selesai" : hasArrived ? "Penanganan" : "Bagikan lokasi" }}
+          </p>
+          <p class="text-sm ui-text-secondary">ButuhBantuan · Petugas lapangan</p>
+        </div>
       </div>
     </div>
 
-    <div class="flex flex-col items-center py-4 px-4">
-      <div class="w-full max-w-sm space-y-3">
+    <div class="flex flex-col items-center py-4 px-4 md:py-6 md:px-6">
+      <div class="w-full max-w-sm md:max-w-xl lg:max-w-3xl space-y-3">
         <!-- Soft skeleton — mirrors card anatomy -->
         <div v-if="showSkeleton" class="space-y-3">
           <div class="ui-card overflow-hidden">
