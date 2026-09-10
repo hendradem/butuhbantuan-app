@@ -2,12 +2,11 @@
 /**
  * /landing — public marketing page.
  *
- * Fully responsive, Calendly-flavoured layout: airy hero, feature grids
- * for citizens & emergency units, coverage map (Leaflet + city list) and
- * a sponsorship / partnership call-out.
- *
- * No app chrome (bottom sheets, map main view). Uses its own header + footer
- * so it can stand alone on butuhbantuan.space/landing.
+ * Visual language modelled after visitors.now: Inter typography with a
+ * predominantly `font-medium` weight, compact `text-sm` body, subtle border
+ * lines instead of drop shadows, layered neutral backgrounds, and a single
+ * purple accent (#4B38D8). Live pulses + tickers signal that the platform
+ * is running, not static marketing.
  */
 import { Icon } from "@iconify/vue";
 import type { Map as LeafletMap, TileLayer } from "leaflet";
@@ -15,205 +14,123 @@ import type { Map as LeafletMap, TileLayer } from "leaflet";
 definePageMeta({ layout: false });
 
 useHead({
-  title: "ButuhBantuan — Bantuan darurat lebih dekat",
+  title: "ButuhBantuan — Peta bantuan darurat warga Indonesia",
   meta: [
     {
       name: "description",
       content:
-        "Platform darurat warga Indonesia. Peta unit ambulance, damkar, PMI, PSC 119 & rumah sakit terdekat. Live tracking petugas, e-tiket digital, dan dashboard operasional untuk unit emergency.",
-    },
-    { property: "og:title", content: "ButuhBantuan — Bantuan darurat lebih dekat" },
-    {
-      property: "og:description",
-      content:
-        "Peta unit darurat, laporan cepat, live tracking petugas. Tersedia di seluruh Jawa dan kota-kota besar Indonesia.",
+        "Peta unit ambulance, damkar, PMI, PSC 119, dan RS terdekat. Laporan cepat, live tracking petugas, dashboard operasional untuk unit emergency.",
     },
   ],
+  htmlAttrs: { class: "bb-landing-root" },
 });
 
-// ── Feature data ─────────────────────────────────────────────────────────────
+// ── Live "activity" ticker (mock for now; wireable to /api later) ────────────
+
+const activityFeed = [
+  { time: "just now", label: "Ambulance PMI Bantul terima laporan asma anak", tone: "danger" },
+  { time: "1m",       label: "PSC 119 Sleman — dispatch RS Sardjito", tone: "danger" },
+  { time: "2m",       label: "Damkar Kota Yogya siaga di zona hijau", tone: "warn" },
+  { time: "3m",       label: "Bantuan komunitas relawan Sleman aktif",  tone: "ok" },
+  { time: "5m",       label: "PSC 119 Kulon Progo — arrival Wates",     tone: "danger" },
+  { time: "6m",       label: "RSUP Sardjito — kapasitas IGD 78%",       tone: "warn" },
+];
+const activityIndex = ref(0);
+let tickerTimer: ReturnType<typeof setInterval> | null = null;
+
+// Live counters — small easing animation on mount.
+const kpiTickets = ref(0);
+const kpiUnits = ref(0);
+const kpiAvgMin = ref(0);
+function easeTo(target: number, ref_: { value: number }, ms = 900) {
+  const start = performance.now();
+  const from = ref_.value;
+  const tick = (now: number) => {
+    const t = Math.min(1, (now - start) / ms);
+    const eased = 1 - Math.pow(1 - t, 3);
+    ref_.value = Math.round(from + (target - from) * eased);
+    if (t < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+// ── Feature copy ─────────────────────────────────────────────────────────────
 
 const citizenFeatures = [
-  {
-    icon: "lucide:map-pin",
-    title: "Peta unit terdekat",
-    body: "Lihat lokasi ambulance, damkar, PMI, PSC 119, dan rumah sakit di sekitarmu — real-time berdasar lokasi kamu.",
-  },
-  {
-    icon: "lucide:siren",
-    title: "Buat laporan cepat",
-    body: "Isi triase Merah / Kuning / Hijau, tambah foto, pilih unit terbaik. Laporan langsung diterima posko.",
-  },
-  {
-    icon: "lucide:navigation",
-    title: "Live tracking petugas",
-    body: "Ikuti posisi ambulance atau tim penyelamat di peta selama dalam perjalanan menuju lokasimu.",
-  },
-  {
-    icon: "lucide:ticket",
-    title: "E-tiket digital",
-    body: "Setiap laporan menghasilkan tiket dengan nomor unik. Bisa dibagikan ke keluarga untuk update status.",
-  },
-  {
-    icon: "lucide:users",
-    title: "Bantuan komunitas",
-    body: "Ketika unit resmi penuh, laporan bisa diteruskan ke grup komunitas relawan terdekat.",
-  },
-  {
-    icon: "lucide:bookmark",
-    title: "Simpan unit favorit",
-    body: "Tandai puskesmas atau rumah sakit langgananmu supaya cepat diakses saat darurat.",
-  },
-  {
-    icon: "lucide:message-square",
-    title: "Review & rating",
-    body: "Bagikan pengalamanmu setelah menerima bantuan supaya warga lain mendapat informasi akurat.",
-  },
-  {
-    icon: "lucide:smartphone",
-    title: "PWA installable",
-    body: "Pasang di homescreen HP tanpa lewat Play Store. Push notifikasi untuk update tiket.",
-  },
+  { icon: "lucide:map-pin",       title: "Peta unit terdekat",     body: "Ambulance, damkar, PMI, PSC 119, dan RS di sekitarmu — dengan jarak, ETA, dan status siaga.", span: 2 },
+  { icon: "lucide:siren",         title: "Laporan darurat cepat",  body: "Triase Merah / Kuning / Hijau, foto kondisi, dispatch ke unit terbaik.", span: 1 },
+  { icon: "lucide:navigation",    title: "Live tracking petugas",  body: "Ikuti posisi ambulance dan tim penyelamat selama dalam perjalanan.", span: 1 },
+  { icon: "lucide:ticket",        title: "E-tiket digital",        body: "Setiap laporan menghasilkan tiket unik yang bisa dibagikan ke keluarga.", span: 1 },
+  { icon: "lucide:users",         title: "Bantuan komunitas",      body: "Order diteruskan ke jaringan relawan terdekat kalau unit resmi penuh.", span: 1 },
+  { icon: "lucide:bookmark",      title: "Unit favorit",           body: "Simpan puskesmas atau RS langgananmu untuk akses satu-ketuk.", span: 1 },
+  { icon: "lucide:message-square",title: "Review & rating",        body: "Bagikan pengalamanmu agar warga lain memilih unit yang tepat.", span: 1 },
+  { icon: "lucide:smartphone",    title: "PWA installable",        body: "Pasang di homescreen tanpa Play Store. Push notif untuk update tiket.", span: 2 },
 ];
 
 const unitFeatures = [
-  {
-    icon: "lucide:layout-dashboard",
-    title: "Dashboard operasional",
-    body: "Antrian order real-time, status setiap unit, timeline dispatch — dalam satu tampilan.",
-  },
-  {
-    icon: "lucide:bell",
-    title: "Notifikasi real-time",
-    body: "SSE + Web Push mengirim order baru ke laptop dan HP petugas dalam hitungan detik.",
-  },
-  {
-    icon: "lucide:users-round",
-    title: "Community claim",
-    body: "Rekrut relawan komunitas untuk merespon area yang belum tercover unit resmi.",
-  },
-  {
-    icon: "lucide:list-todo",
-    title: "Manajemen antrian",
-    body: "Terima, tolak, atau eskalasi order dari satu inbox. Auto-escalation kalau SLA lewat.",
-  },
-  {
-    icon: "lucide:shield-check",
-    title: "Compliance tracking",
-    body: "Template asesmen sesuai standar Kemenkes / PSC 119. Audit trail lengkap per tiket.",
-  },
-  {
-    icon: "lucide:bar-chart-2",
-    title: "Analytics unit",
-    body: "Metrik waktu respons, jarak, jenis pelayanan, dan feedback warga — semua dalam grafik.",
-  },
-  {
-    icon: "lucide:hospital",
-    title: "Referensi RS",
-    body: "Data RS Kemenkes SATUSEHAT terintegrasi. Rekomendasi rujukan berdasar spesialisasi + kapasitas.",
-  },
-  {
-    icon: "lucide:mountain",
-    title: "SAR mission",
-    body: "Modul khusus untuk operasi SAR: shift, sektor karvak, GPS anggota, magic-link live track.",
-  },
+  { icon: "lucide:layout-dashboard", title: "Dashboard operasional", body: "Antrian order, status unit, timeline dispatch dalam satu tampilan real-time." },
+  { icon: "lucide:bell",             title: "Notifikasi real-time",  body: "SSE + Web Push mengirim order baru ke laptop / HP petugas dalam hitungan detik." },
+  { icon: "lucide:users-round",      title: "Community claim",       body: "Rekrut relawan komunitas untuk merespons wilayah yang belum tercover." },
+  { icon: "lucide:list-todo",        title: "Auto-escalation",       body: "Order yang tidak diterima dalam SLA auto-eskalasi ke unit terdekat berikutnya." },
+  { icon: "lucide:shield-check",     title: "Compliance",            body: "Template asesmen standar Kemenkes / PSC 119, audit trail lengkap." },
+  { icon: "lucide:bar-chart-2",      title: "Analytics",             body: "Waktu respons, jarak, feedback warga — semua dalam grafik trend." },
+  { icon: "lucide:hospital",         title: "Referensi SATUSEHAT",   body: "Data RS Kemenkes terintegrasi. Rekomendasi rujukan berdasar spesialisasi." },
+  { icon: "lucide:mountain",         title: "Modul SAR",             body: "Operasi SAR: shift, sektor karvak, GPS anggota, magic-link live track." },
+];
+
+const howSteps = [
+  { n: "01", title: "Buka peta darurat",       body: "Aplikasi baca lokasi GPS-mu dan tampilkan unit terdekat di peta. Tidak perlu registrasi." },
+  { n: "02", title: "Isi laporan 30 detik",    body: "Pilih unit, kondisi korban, foto opsional. Kirim — posko dan unit dispatch langsung dapat notifikasi." },
+  { n: "03", title: "Track live sampai tiba",  body: "Lihat posisi unit di peta. E-tiket bisa dibagikan ke keluarga untuk update status." },
 ];
 
 const collabPillars = [
-  {
-    icon: "lucide:heart-handshake",
-    title: "Donasi & Sponsor",
-    body:
-      "Dukung operasional platform: hosting, gateway SMS, integrasi peta, pelatihan relawan. Bisa individu atau CSR perusahaan.",
-    cta: "Jadi sponsor",
-  },
-  {
-    icon: "lucide:landmark",
-    title: "Kolaborasi Pemerintah",
-    body:
-      "Integrasi dengan Dinkes, PSC 119 kabupaten/kota, Damkar daerah. Platform gratis untuk unit resmi Pemda.",
-    cta: "Ajukan integrasi",
-  },
-  {
-    icon: "lucide:handshake",
-    title: "Volunteer partner",
-    body:
-      "Komunitas relawan (PMI cabang, ORARI, RAPI, komunitas ambulance) bisa ikut menerima order via jalur komunitas.",
-    cta: "Gabung sebagai unit",
-  },
+  { icon: "lucide:heart-handshake", title: "Donasi & sponsor",       body: "Bantu operasional: hosting, SMS gateway, integrasi peta, pelatihan relawan.", cta: "Jadi sponsor" },
+  { icon: "lucide:landmark",        title: "Kolaborasi pemerintah",  body: "Integrasi Dinkes, PSC 119 kab/kota, Damkar daerah. Gratis untuk unit resmi.",   cta: "Ajukan integrasi" },
+  { icon: "lucide:handshake",       title: "Partner komunitas",      body: "PMI cabang, ORARI, RAPI, komunitas ambulance — masuk lewat jalur komunitas.",  cta: "Gabung sebagai unit" },
 ];
 
-// ── Coverage cities (island → list) ─────────────────────────────────────────
+// ── Coverage cities ─────────────────────────────────────────────────────────
 
 type Island = { key: string; label: string; full?: boolean; cities: Array<{ name: string; lat: number; lng: number }> };
-
 const islands: Island[] = [
-  {
-    key: "jawa",
-    label: "Jawa",
-    full: true,
-    cities: [
-      { name: "Jakarta",    lat: -6.2088, lng: 106.8456 },
-      { name: "Bandung",    lat: -6.9175, lng: 107.6191 },
-      { name: "Semarang",   lat: -6.9667, lng: 110.4167 },
-      { name: "Yogyakarta", lat: -7.8014, lng: 110.3644 },
-      { name: "Surabaya",   lat: -7.2575, lng: 112.7521 },
-      { name: "Malang",     lat: -7.9666, lng: 112.6326 },
-      { name: "Solo",       lat: -7.5665, lng: 110.8317 },
-      { name: "Cirebon",    lat: -6.7063, lng: 108.5570 },
-      { name: "Bogor",      lat: -6.5950, lng: 106.8161 },
-    ],
-  },
-  {
-    key: "sumatra",
-    label: "Sumatra",
-    cities: [
-      { name: "Medan",          lat: 3.5952,  lng: 98.6722  },
-      { name: "Padang",         lat: -0.9471, lng: 100.4172 },
-      { name: "Pekanbaru",      lat: 0.5071,  lng: 101.4478 },
-      { name: "Palembang",      lat: -2.9909, lng: 104.7565 },
-      { name: "Bandar Lampung", lat: -5.4295, lng: 105.2610 },
-    ],
-  },
-  {
-    key: "kalimantan",
-    label: "Kalimantan",
-    cities: [
-      { name: "Pontianak",   lat: -0.0263, lng: 109.3425 },
-      { name: "Banjarmasin", lat: -3.3186, lng: 114.5944 },
-      { name: "Samarinda",   lat: -0.5017, lng: 117.1536 },
-      { name: "Balikpapan",  lat: -1.2379, lng: 116.8529 },
-    ],
-  },
-  {
-    key: "sulawesi",
-    label: "Sulawesi",
-    cities: [
-      { name: "Makassar", lat: -5.1477, lng: 119.4327 },
-      { name: "Manado",   lat: 1.4748,  lng: 124.8421 },
-      { name: "Palu",     lat: -0.9003, lng: 119.8779 },
-      { name: "Kendari",  lat: -3.9985, lng: 122.5127 },
-    ],
-  },
-  {
-    key: "papua",
-    label: "Papua",
-    cities: [
-      { name: "Jayapura", lat: -2.5337, lng: 140.7181 },
-      { name: "Sorong",   lat: -0.8615, lng: 131.2558 },
-    ],
-  },
+  { key: "jawa", label: "Jawa", full: true, cities: [
+    { name: "Jakarta",    lat: -6.2088, lng: 106.8456 },
+    { name: "Bandung",    lat: -6.9175, lng: 107.6191 },
+    { name: "Semarang",   lat: -6.9667, lng: 110.4167 },
+    { name: "Yogyakarta", lat: -7.8014, lng: 110.3644 },
+    { name: "Surabaya",   lat: -7.2575, lng: 112.7521 },
+    { name: "Malang",     lat: -7.9666, lng: 112.6326 },
+    { name: "Solo",       lat: -7.5665, lng: 110.8317 },
+    { name: "Cirebon",    lat: -6.7063, lng: 108.5570 },
+    { name: "Bogor",      lat: -6.5950, lng: 106.8161 },
+  ]},
+  { key: "sumatra", label: "Sumatra", cities: [
+    { name: "Medan",          lat: 3.5952,  lng: 98.6722  },
+    { name: "Padang",         lat: -0.9471, lng: 100.4172 },
+    { name: "Pekanbaru",      lat: 0.5071,  lng: 101.4478 },
+    { name: "Palembang",      lat: -2.9909, lng: 104.7565 },
+    { name: "Bandar Lampung", lat: -5.4295, lng: 105.2610 },
+  ]},
+  { key: "kalimantan", label: "Kalimantan", cities: [
+    { name: "Pontianak",   lat: -0.0263, lng: 109.3425 },
+    { name: "Banjarmasin", lat: -3.3186, lng: 114.5944 },
+    { name: "Samarinda",   lat: -0.5017, lng: 117.1536 },
+    { name: "Balikpapan",  lat: -1.2379, lng: 116.8529 },
+  ]},
+  { key: "sulawesi", label: "Sulawesi", cities: [
+    { name: "Makassar", lat: -5.1477, lng: 119.4327 },
+    { name: "Manado",   lat: 1.4748,  lng: 124.8421 },
+    { name: "Palu",     lat: -0.9003, lng: 119.8779 },
+    { name: "Kendari",  lat: -3.9985, lng: 122.5127 },
+  ]},
+  { key: "papua", label: "Papua", cities: [
+    { name: "Jayapura", lat: -2.5337, lng: 140.7181 },
+    { name: "Sorong",   lat: -0.8615, lng: 131.2558 },
+  ]},
 ];
 
-const coverageTotal = computed(() => {
-  const jawa = 119; // all kab/kota
-  const rest = islands
-    .filter((i) => !i.full)
-    .reduce((s, i) => s + i.cities.length, 0);
-  return { jawa, rest };
-});
-
-// ── Coverage map (Leaflet, client-only) ─────────────────────────────────────
+// ── Coverage map (Leaflet, client-only) ──────────────────────────────────────
 
 const mapEl = ref<HTMLElement | null>(null);
 let map: LeafletMap | null = null;
@@ -226,56 +143,35 @@ async function initMap() {
   await import("leaflet/dist/leaflet.css");
 
   map = L.map(mapEl.value, {
-    center: [-2.5, 118],
-    zoom: 4,
-    minZoom: 3,
-    maxZoom: 9,
-    zoomControl: false,
-    attributionControl: false,
-    scrollWheelZoom: false,
+    center: [-2.5, 118], zoom: 4, minZoom: 3, maxZoom: 9,
+    zoomControl: false, attributionControl: false, scrollWheelZoom: false,
   });
-
   tileLayer = L.tileLayer(
     "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
     { subdomains: ["a", "b", "c", "d"], maxZoom: 9 },
   ).addTo(map);
 
   const jawa = islands.find((i) => i.key === "jawa")!;
-  // Java: highlighted "full" markers (red)
   for (const c of jawa.cities) {
-    L.marker([c.lat, c.lng], { icon: pin(L, "#d93025", true) })
-      .addTo(map)
-      .bindTooltip(c.name, { permanent: false, direction: "top", offset: [0, -6] });
+    L.marker([c.lat, c.lng], { icon: pin(L, "#4B38D8", true) })
+      .addTo(map).bindTooltip(c.name, { direction: "top", offset: [0, -6] });
   }
-  // Other islands: outlined dots
   for (const i of islands.filter((x) => !x.full)) {
     for (const c of i.cities) {
-      L.marker([c.lat, c.lng], { icon: pin(L, "#0f766e", false) })
-        .addTo(map)
-        .bindTooltip(c.name, { permanent: false, direction: "top", offset: [0, -6] });
+      L.marker([c.lat, c.lng], { icon: pin(L, "#0D0D0D", false) })
+        .addTo(map).bindTooltip(c.name, { direction: "top", offset: [0, -6] });
     }
   }
-
-  // Java coverage haze
-  L.rectangle(
-    [
-      [-8.85, 105.1],
-      [-5.9, 114.7],
-    ],
-    { color: "#d93025", weight: 0, fillOpacity: 0.05 },
-  ).addTo(map);
+  L.rectangle([[-8.85, 105.1], [-5.9, 114.7]], {
+    color: "#4B38D8", weight: 0, fillOpacity: 0.06,
+  }).addTo(map);
 }
 
 function pin(L: typeof import("leaflet"), color: string, filled: boolean) {
   const size = filled ? 12 : 10;
-  const border = filled ? color : color;
-  const fill = filled ? color : "#ffffff";
   return L.divIcon({
-    className: "bb-coverage-pin-wrap",
-    html: `<span style="
-      display:block;width:${size}px;height:${size}px;border-radius:9999px;
-      background:${fill};border:2px solid ${border};box-shadow:0 1px 4px rgba(15,23,42,.25);
-    "></span>`,
+    className: "bb-cov-pin",
+    html: `<span style="display:block;width:${size}px;height:${size}px;border-radius:9999px;background:${filled ? color : "#fff"};border:2px solid ${color};box-shadow:0 1px 3px rgba(13,13,13,.2);"></span>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
@@ -284,13 +180,17 @@ function pin(L: typeof import("leaflet"), color: string, filled: boolean) {
 onMounted(() => {
   if (typeof window === "undefined") return;
   void initMap();
+  tickerTimer = setInterval(() => {
+    activityIndex.value = (activityIndex.value + 1) % activityFeed.length;
+  }, 2600);
+  easeTo(148, kpiTickets);
+  easeTo(892, kpiUnits);
+  easeTo(4, kpiAvgMin);
 });
 onBeforeUnmount(() => {
+  if (tickerTimer) clearInterval(tickerTimer);
   tileLayer = null;
-  if (map) {
-    map.remove();
-    map = null;
-  }
+  if (map) { map.remove(); map = null; }
 });
 </script>
 
@@ -299,23 +199,23 @@ onBeforeUnmount(() => {
     <!-- Nav -->
     <header class="bb-nav">
       <div class="bb-nav__inner">
-        <NuxtLink to="/" class="bb-brand" aria-label="ButuhBantuan">
+        <NuxtLink to="/" class="bb-brand">
           <span class="bb-brand__mark">
-            <Icon icon="mynaui:ambulance-solid" class="text-[20px]" />
+            <Icon icon="mynaui:ambulance-solid" class="text-[16px]" />
           </span>
-          <span class="bb-brand__word">ButuhBantuan</span>
+          <span>butuhbantuan</span>
+          <span class="bb-brand__tld">.space</span>
         </NuxtLink>
         <nav class="bb-nav__links">
-          <a href="#warga" class="bb-nav__link">Untuk warga</a>
-          <a href="#unit" class="bb-nav__link">Untuk unit</a>
-          <a href="#coverage" class="bb-nav__link">Jangkauan</a>
-          <a href="#dukung" class="bb-nav__link">Dukung</a>
+          <a href="#warga">Warga</a>
+          <a href="#unit">Unit</a>
+          <a href="#coverage">Jangkauan</a>
+          <a href="#cara">Cara kerja</a>
+          <a href="#dukung">Dukung</a>
         </nav>
         <div class="bb-nav__actions">
           <NuxtLink to="/" class="bb-btn bb-btn--ghost">Buka app</NuxtLink>
-          <a href="https://dashboard.butuhbantuan.space" class="bb-btn bb-btn--primary">
-            Login dashboard
-          </a>
+          <a href="https://dashboard.butuhbantuan.space" class="bb-btn bb-btn--primary">Login dashboard</a>
         </div>
       </div>
     </header>
@@ -324,66 +224,101 @@ onBeforeUnmount(() => {
     <section class="bb-hero">
       <div class="bb-hero__inner">
         <div class="bb-hero__copy">
-          <span class="bb-hero__eyebrow">
-            <span class="bb-hero__eyebrow-dot" /> Bantuan darurat sipil, lebih dekat
+          <span class="bb-pulse-pill">
+            <span class="bb-pulse-pill__dot"><span class="bb-pulse-pill__ping" /></span>
+            Layanan berjalan · Yogyakarta, DKI, dan {{ islands[0].cities.length - 2 }}+ kota lain
           </span>
-          <h1 class="bb-hero__title">
-            Setiap detik berharga.
-            <span class="bb-hero__accent">Bantuan terdekat dalam genggaman.</span>
+
+          <h1 class="bb-h1">
+            Peta bantuan darurat, <br />
+            <span class="bb-h1__accent">dalam genggaman warga.</span>
           </h1>
-          <p class="bb-hero__lede">
-            Peta unit ambulance, damkar, PMI, PSC 119, dan rumah sakit di sekitarmu.
-            Laporan cepat, live tracking petugas, e-tiket digital — semua gratis untuk warga.
+
+          <p class="bb-lede">
+            Ambulance, damkar, PMI, PSC 119, dan RS terdekat — lengkap dengan
+            jarak, ETA, dan status siaga. Laporan darurat 30 detik, live tracking
+            petugas, e-tiket digital. Gratis untuk warga.
           </p>
-          <div class="bb-hero__cta">
+
+          <div class="bb-hero__ctas">
             <NuxtLink to="/" class="bb-btn bb-btn--primary bb-btn--lg">
-              <Icon icon="lucide:map-pin" class="text-[18px]" />
               Buka aplikasi warga
+              <Icon icon="lucide:arrow-right" class="text-[14px]" />
             </NuxtLink>
-            <a href="#unit" class="bb-btn bb-btn--outline bb-btn--lg">
-              <Icon icon="lucide:building-2" class="text-[18px]" />
+            <a href="#unit" class="bb-btn bb-btn--ghost bb-btn--lg">
               Untuk unit emergency
             </a>
           </div>
-          <div class="bb-hero__meta">
-            <div class="bb-hero__meta-item">
-              <p class="bb-hero__meta-value">119+</p>
-              <p class="bb-hero__meta-label">Kab/kota di Jawa</p>
+
+          <!-- Live KPI strip -->
+          <div class="bb-kpis">
+            <div class="bb-kpi">
+              <p class="bb-kpi__value">{{ kpiTickets }}</p>
+              <p class="bb-kpi__label">Tiket 24 jam</p>
             </div>
-            <div class="bb-hero__meta-item">
-              <p class="bb-hero__meta-value">15+</p>
-              <p class="bb-hero__meta-label">Kota besar luar Jawa</p>
+            <div class="bb-kpi">
+              <p class="bb-kpi__value">{{ kpiUnits }}</p>
+              <p class="bb-kpi__label">Unit terdaftar</p>
             </div>
-            <div class="bb-hero__meta-item">
-              <p class="bb-hero__meta-value">Gratis</p>
-              <p class="bb-hero__meta-label">Untuk warga & unit resmi</p>
+            <div class="bb-kpi">
+              <p class="bb-kpi__value">± {{ kpiAvgMin }} <span>min</span></p>
+              <p class="bb-kpi__label">Avg response</p>
             </div>
           </div>
         </div>
 
-        <div class="bb-hero__visual" aria-hidden="true">
-          <div class="bb-hero__phone">
-            <div class="bb-hero__phone-screen">
-              <div class="bb-hero__mock-map">
-                <span class="bb-hero__mock-pin bb-hero__mock-pin--a" />
-                <span class="bb-hero__mock-pin bb-hero__mock-pin--b" />
-                <span class="bb-hero__mock-pin bb-hero__mock-pin--c" />
-                <span class="bb-hero__mock-user" />
+        <!-- Right: live activity ticker + phone mock -->
+        <div class="bb-hero__visual">
+          <div class="bb-live">
+            <div class="bb-live__head">
+              <span class="bb-live__title">
+                <span class="bb-live__dot" /> Live activity
+              </span>
+              <span class="bb-live__meta">just now</span>
+            </div>
+            <Transition name="bb-live" mode="out-in">
+              <div :key="activityIndex" class="bb-live__row">
+                <span class="bb-live__tone" :class="`bb-live__tone--${activityFeed[activityIndex]!.tone}`" />
+                <div class="bb-live__body">
+                  <p class="bb-live__label">{{ activityFeed[activityIndex]!.label }}</p>
+                  <p class="bb-live__time">{{ activityFeed[activityIndex]!.time }}</p>
+                </div>
               </div>
-              <div class="bb-hero__mock-sheet">
-                <div class="bb-hero__mock-handle" />
-                <div class="bb-hero__mock-row">
-                  <span class="bb-hero__mock-logo">
-                    <Icon icon="mynaui:ambulance-solid" class="text-[15px]" />
+            </Transition>
+            <ul class="bb-live__list">
+              <li
+                v-for="(a, i) in activityFeed.slice(1, 4)"
+                :key="i + '_' + a.label"
+                class="bb-live__mini"
+              >
+                <span class="bb-live__tone" :class="`bb-live__tone--${a.tone}`" />
+                <span>{{ a.label }}</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="bb-phone" aria-hidden="true">
+            <div class="bb-phone__screen">
+              <div class="bb-phone__map">
+                <span class="bb-phone__pin bb-phone__pin--a" />
+                <span class="bb-phone__pin bb-phone__pin--b" />
+                <span class="bb-phone__pin bb-phone__pin--c" />
+                <span class="bb-phone__user" />
+              </div>
+              <div class="bb-phone__sheet">
+                <div class="bb-phone__handle" />
+                <div class="bb-phone__row">
+                  <span class="bb-phone__logo">
+                    <Icon icon="mynaui:ambulance-solid" class="text-[13px]" />
                   </span>
-                  <div class="bb-hero__mock-lines">
-                    <span class="bb-hero__mock-line bb-hero__mock-line--title" />
-                    <span class="bb-hero__mock-line bb-hero__mock-line--sub" />
+                  <div class="bb-phone__lines">
+                    <span class="bb-phone__line bb-phone__line--w" />
+                    <span class="bb-phone__line bb-phone__line--n" />
                   </div>
                 </div>
-                <div class="bb-hero__mock-pills">
-                  <span class="bb-hero__mock-pill bb-hero__mock-pill--primary">Buat laporan</span>
-                  <span class="bb-hero__mock-pill">Telepon</span>
+                <div class="bb-phone__pills">
+                  <span class="bb-phone__pill bb-phone__pill--primary">Buat laporan</span>
+                  <span class="bb-phone__pill">Telepon</span>
                 </div>
               </div>
             </div>
@@ -392,20 +327,25 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <!-- CITIZEN FEATURES -->
+    <!-- Untuk warga -->
     <section id="warga" class="bb-section">
       <div class="bb-section__inner">
-        <div class="bb-section__head">
-          <p class="bb-eyebrow">Untuk warga</p>
-          <h2 class="bb-section__title">Bantuan yang tidak menunggu birokrasi.</h2>
-          <p class="bb-section__lede">
-            Semua fitur di bawah tersedia gratis di aplikasi web/PWA. Tanpa registrasi berbelit.
+        <div class="bb-shead">
+          <span class="bb-eyebrow">Untuk warga</span>
+          <h2 class="bb-h2">Semua yang kamu butuhkan saat detik pertama panik.</h2>
+          <p class="bb-lede bb-lede--sm">
+            Delapan fitur inti aplikasi warga. Semua gratis, tanpa registrasi berbelit.
           </p>
         </div>
-        <div class="bb-grid bb-grid--3">
-          <article v-for="f in citizenFeatures" :key="f.title" class="bb-card">
-            <span class="bb-card__icon bb-card__icon--danger">
-              <Icon :icon="f.icon" class="text-[20px]" />
+        <div class="bb-bento">
+          <article
+            v-for="f in citizenFeatures"
+            :key="f.title"
+            class="bb-card"
+            :class="f.span === 2 && 'bb-card--wide'"
+          >
+            <span class="bb-card__icon">
+              <Icon :icon="f.icon" class="text-[16px]" />
             </span>
             <h3 class="bb-card__title">{{ f.title }}</h3>
             <p class="bb-card__body">{{ f.body }}</p>
@@ -414,82 +354,69 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <!-- UNIT DASHBOARD FEATURES -->
-    <section id="unit" class="bb-section bb-section--dark">
+    <!-- Untuk unit -->
+    <section id="unit" class="bb-section bb-section--tinted">
       <div class="bb-section__inner">
-        <div class="bb-section__head">
-          <p class="bb-eyebrow bb-eyebrow--light">Untuk unit emergency</p>
-          <h2 class="bb-section__title bb-section__title--light">
-            Dashboard operasional yang ringan, cepat, bisa ditinggal jalan.
-          </h2>
-          <p class="bb-section__lede bb-section__lede--light">
-            Ambulance, damkar, PMI, PSC 119, SAR, komunitas relawan — semua bisa masuk ke dashboard yang sama.
+        <div class="bb-shead">
+          <span class="bb-eyebrow">Untuk unit emergency</span>
+          <h2 class="bb-h2">Dashboard yang ringan, cepat, bisa ditinggal jalan.</h2>
+          <p class="bb-lede bb-lede--sm">
+            Ambulance, damkar, PMI, PSC 119, SAR, komunitas relawan — semua masuk ke dashboard yang sama.
           </p>
         </div>
-        <div class="bb-grid bb-grid--3">
-          <article v-for="f in unitFeatures" :key="f.title" class="bb-card bb-card--dark">
-            <span class="bb-card__icon bb-card__icon--light">
-              <Icon :icon="f.icon" class="text-[20px]" />
+        <div class="bb-grid bb-grid--4">
+          <article v-for="f in unitFeatures" :key="f.title" class="bb-card">
+            <span class="bb-card__icon">
+              <Icon :icon="f.icon" class="text-[16px]" />
             </span>
-            <h3 class="bb-card__title bb-card__title--light">{{ f.title }}</h3>
-            <p class="bb-card__body bb-card__body--light">{{ f.body }}</p>
+            <h3 class="bb-card__title">{{ f.title }}</h3>
+            <p class="bb-card__body">{{ f.body }}</p>
           </article>
         </div>
         <div class="bb-section__foot">
           <a href="https://dashboard.butuhbantuan.space" class="bb-btn bb-btn--primary bb-btn--lg">
-            <Icon icon="lucide:layout-dashboard" class="text-[18px]" />
-            Buka dashboard
+            Buka dashboard <Icon icon="lucide:arrow-right" class="text-[14px]" />
           </a>
-          <a href="mailto:hello@butuhbantuan.space?subject=Onboarding unit" class="bb-btn bb-btn--ghost bb-btn--lg bb-btn--ghost-light">
-            Ajukan onboarding unit
+          <a href="mailto:hello@butuhbantuan.space?subject=Onboarding unit" class="bb-btn bb-btn--outline bb-btn--lg">
+            Ajukan onboarding
           </a>
         </div>
       </div>
     </section>
 
-    <!-- COVERAGE -->
+    <!-- Coverage -->
     <section id="coverage" class="bb-section">
       <div class="bb-section__inner">
-        <div class="bb-section__head">
-          <p class="bb-eyebrow">Jangkauan</p>
-          <h2 class="bb-section__title">Hadir di seluruh Jawa. Terus meluas ke kota besar Indonesia.</h2>
-          <p class="bb-section__lede">
-            {{ coverageTotal.jawa }}+ kabupaten/kota di Jawa terhubung penuh.
-            Ekspansi bertahap ke {{ coverageTotal.rest }}+ kota besar di luar Jawa.
+        <div class="bb-shead">
+          <span class="bb-eyebrow">Jangkauan</span>
+          <h2 class="bb-h2">Hadir di seluruh Jawa. Meluas ke kota besar Indonesia.</h2>
+          <p class="bb-lede bb-lede--sm">
+            119+ kabupaten/kota di Jawa terhubung penuh. 15+ kota besar di luar Jawa dalam pilot.
           </p>
         </div>
 
-        <div class="bb-coverage">
-          <div ref="mapEl" class="bb-coverage__map" role="img" aria-label="Peta jangkauan Indonesia" />
-          <div class="bb-coverage__legend">
-            <span class="bb-coverage__legend-item">
-              <span class="bb-coverage__dot bb-coverage__dot--full" />
-              Jawa · coverage penuh
-            </span>
-            <span class="bb-coverage__legend-item">
-              <span class="bb-coverage__dot bb-coverage__dot--pilot" />
-              Kota besar luar Jawa · pilot
-            </span>
+        <div class="bb-map">
+          <div ref="mapEl" class="bb-map__canvas" role="img" aria-label="Peta jangkauan Indonesia" />
+          <div class="bb-map__legend">
+            <span><span class="bb-map__dot bb-map__dot--full" /> Jawa · coverage penuh</span>
+            <span><span class="bb-map__dot bb-map__dot--pilot" /> Kota besar · pilot</span>
           </div>
         </div>
 
-        <div class="bb-coverage__islands">
+        <div class="bb-islands">
           <article v-for="island in islands" :key="island.key" class="bb-island">
             <header class="bb-island__head">
-              <h3 class="bb-island__name">{{ island.label }}</h3>
-              <span
-                class="bb-island__badge"
-                :class="island.full ? 'bb-island__badge--full' : 'bb-island__badge--pilot'"
-              >
-                {{ island.full ? "Coverage penuh" : "Pilot" }}
+              <h3>{{ island.label }}</h3>
+              <span class="bb-badge" :class="island.full ? 'bb-badge--full' : 'bb-badge--pilot'">
+                {{ island.full ? "Penuh" : "Pilot" }}
               </span>
             </header>
             <p class="bb-island__body">
               <template v-if="island.full">
-                Seluruh {{ island.cities.length }}+ kota utama sudah on-boarded. Termasuk kabupaten kecil di sekitarnya.
+                {{ island.cities.length }}+ kota utama on-boarded termasuk kabupaten sekitarnya.
               </template>
               <template v-else>
-                Aktif di {{ island.cities.length }} kota besar. Ekspansi terus berjalan.
+                Aktif di {{ island.cities.length }} kota besar. Ekspansi berjalan.
               </template>
             </p>
             <ul class="bb-island__cities">
@@ -500,43 +427,51 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <!-- COLLABORATION -->
-    <section id="dukung" class="bb-section bb-section--tinted">
+    <!-- How it works -->
+    <section id="cara" class="bb-section bb-section--tinted">
       <div class="bb-section__inner">
-        <div class="bb-section__head">
-          <p class="bb-eyebrow">Dukung</p>
-          <h2 class="bb-section__title">Bantu kami membangun jaringan darurat sipil.</h2>
-          <p class="bb-section__lede">
-            Kami butuh sponsor, mitra pemerintah, dan komunitas relawan untuk menjaga ini tetap gratis dan andal.
+        <div class="bb-shead">
+          <span class="bb-eyebrow">Cara kerja</span>
+          <h2 class="bb-h2">Dari panik ke penanganan dalam 3 langkah.</h2>
+        </div>
+        <ol class="bb-steps">
+          <li v-for="s in howSteps" :key="s.n" class="bb-step">
+            <span class="bb-step__n">{{ s.n }}</span>
+            <h3 class="bb-step__title">{{ s.title }}</h3>
+            <p class="bb-step__body">{{ s.body }}</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Dukung -->
+    <section id="dukung" class="bb-section">
+      <div class="bb-section__inner">
+        <div class="bb-shead">
+          <span class="bb-eyebrow">Dukung</span>
+          <h2 class="bb-h2">Bangun jaringan darurat sipil Indonesia bersama.</h2>
+          <p class="bb-lede bb-lede--sm">
+            Kami butuh sponsor, mitra pemerintah, dan komunitas relawan untuk menjaga platform tetap gratis dan andal.
           </p>
         </div>
         <div class="bb-grid bb-grid--3">
-          <article v-for="pillar in collabPillars" :key="pillar.title" class="bb-card bb-card--collab">
-            <span class="bb-card__icon bb-card__icon--accent">
-              <Icon :icon="pillar.icon" class="text-[22px]" />
-            </span>
-            <h3 class="bb-card__title">{{ pillar.title }}</h3>
-            <p class="bb-card__body">{{ pillar.body }}</p>
-            <a
-              href="mailto:hello@butuhbantuan.space?subject=Kolaborasi"
-              class="bb-card__cta"
-            >
-              {{ pillar.cta }}
-              <Icon icon="lucide:arrow-right" class="text-[14px]" />
+          <article v-for="p in collabPillars" :key="p.title" class="bb-card bb-card--collab">
+            <span class="bb-card__icon"><Icon :icon="p.icon" class="text-[16px]" /></span>
+            <h3 class="bb-card__title">{{ p.title }}</h3>
+            <p class="bb-card__body">{{ p.body }}</p>
+            <a class="bb-card__cta" href="mailto:hello@butuhbantuan.space?subject=Kolaborasi">
+              {{ p.cta }}
+              <Icon icon="lucide:arrow-up-right" class="text-[13px]" />
             </a>
           </article>
         </div>
 
-        <div class="bb-cta-band">
-          <div class="bb-cta-band__copy">
-            <h3 class="bb-cta-band__title">Mau bantu tapi tidak tahu bagaimana?</h3>
-            <p class="bb-cta-band__lede">
-              Cukup bagikan aplikasi ini ke keluarga & tetangga. Setiap install baru berarti satu tetangga lebih siap saat darurat.
-            </p>
+        <div class="bb-band">
+          <div>
+            <p class="bb-band__title">Bantu tanpa donasi.</p>
+            <p class="bb-band__body">Bagikan aplikasi ini ke keluarga & tetangga. Setiap install baru = satu tetangga lebih siap saat darurat.</p>
           </div>
-          <NuxtLink to="/" class="bb-btn bb-btn--primary bb-btn--lg">
-            Bagikan aplikasi
-          </NuxtLink>
+          <NuxtLink to="/" class="bb-btn bb-btn--primary bb-btn--lg">Bagikan aplikasi</NuxtLink>
         </div>
       </div>
     </section>
@@ -545,39 +480,37 @@ onBeforeUnmount(() => {
     <footer class="bb-footer">
       <div class="bb-footer__inner">
         <div class="bb-footer__brand">
-          <span class="bb-brand">
-            <span class="bb-brand__mark">
-              <Icon icon="mynaui:ambulance-solid" class="text-[20px]" />
+          <span class="bb-brand" style="color:#fff">
+            <span class="bb-brand__mark bb-brand__mark--light">
+              <Icon icon="mynaui:ambulance-solid" class="text-[16px]" />
             </span>
-            <span class="bb-brand__word">ButuhBantuan</span>
+            <span>butuhbantuan</span>
+            <span class="bb-brand__tld" style="color:rgba(255,255,255,.5)">.space</span>
           </span>
-          <p class="bb-footer__tagline">Bantuan darurat sipil Indonesia. Open, gratis, dibangun bersama komunitas.</p>
+          <p class="bb-footer__tag">Platform darurat sipil Indonesia. Open, gratis, dibangun bersama komunitas.</p>
         </div>
         <div class="bb-footer__cols">
           <div>
-            <p class="bb-footer__heading">Warga</p>
-            <ul class="bb-footer__list">
+            <p class="bb-footer__h">Warga</p>
+            <ul>
               <li><NuxtLink to="/">Buka aplikasi</NuxtLink></li>
               <li><NuxtLink to="/my-tickets">Cek tiket saya</NuxtLink></li>
               <li><a href="#warga">Fitur</a></li>
             </ul>
           </div>
           <div>
-            <p class="bb-footer__heading">Unit emergency</p>
-            <ul class="bb-footer__list">
+            <p class="bb-footer__h">Unit</p>
+            <ul>
               <li><a href="https://dashboard.butuhbantuan.space">Login dashboard</a></li>
               <li><a href="#unit">Fitur dashboard</a></li>
-              <li>
-                <a href="mailto:hello@butuhbantuan.space?subject=Onboarding unit">
-                  Onboarding
-                </a>
-              </li>
+              <li><a href="mailto:hello@butuhbantuan.space?subject=Onboarding unit">Onboarding</a></li>
             </ul>
           </div>
           <div>
-            <p class="bb-footer__heading">Platform</p>
-            <ul class="bb-footer__list">
+            <p class="bb-footer__h">Platform</p>
+            <ul>
               <li><a href="#coverage">Jangkauan</a></li>
+              <li><a href="#cara">Cara kerja</a></li>
               <li><a href="#dukung">Dukung</a></li>
               <li><a href="mailto:hello@butuhbantuan.space">Kontak</a></li>
             </ul>
@@ -585,9 +518,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div class="bb-footer__legal">
-        <span>© {{ new Date().getFullYear() }} ButuhBantuan</span>
-        <span class="bb-footer__legal-sep">·</span>
-        <span>Dibangun untuk komunitas Indonesia.</span>
+        © {{ new Date().getFullYear() }} ButuhBantuan · Dibangun untuk komunitas Indonesia.
       </div>
     </footer>
   </div>
@@ -595,34 +526,34 @@ onBeforeUnmount(() => {
 
 <style scoped>
 /* ────────────────────────────────────────────────────────────────────────
- * Landing — self-contained styles. No dependency on the app shell CSS
- * (bb-user-pin etc). Uses a small, Calendly-flavoured palette.
+ * Landing tokens — visitors.now-inspired
+ *   • Inter, font-weight 400/500 dominant (never bold in body)
+ *   • text-sm baseline, tight letter-spacing
+ *   • single purple accent, layered neutrals, subtle borders (not shadows)
  * ──────────────────────────────────────────────────────────────────────── */
-
 .bb-landing {
-  --bg: #ffffff;
-  --bg-tinted: #faf7f6;
-  --bg-dark: #101828;
-  --text: #101828;
-  --text-2: #475467;
-  --text-3: #667085;
-  --line: #eaecf0;
-  --line-2: #d0d5dd;
-  --accent: #d93025;
-  --accent-hover: #a52a1e;
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
-  --shadow-md: 0 8px 24px -8px rgba(16, 24, 40, 0.08);
-  --shadow-lg: 0 20px 48px -12px rgba(16, 24, 40, 0.15);
+  --ink-1: #0D0D0D;        /* primary text / darkest neutral */
+  --ink-2: #33333B;
+  --ink-3: #5A5A66;
+  --ink-4: #8B8B95;
+  --line: #E6E6EA;
+  --line-2: #D6D6DC;
+  --bg-0: #FDFDFD;
+  --bg-1: #F7F7F8;
+  --bg-2: #F0F0F2;
+  --accent: #4B38D8;
+  --accent-hover: #3A2AB8;
+  --accent-soft: rgba(75, 56, 216, 0.08);
 
-  background: var(--bg);
-  color: var(--text);
+  background: var(--bg-0);
+  color: var(--ink-1);
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
   font-weight: 500;
+  font-size: 14px;
   letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
   min-height: 100vh;
 }
-
-/* Reset padding on landing pages */
 .bb-landing :where(h1, h2, h3, h4, p, ul) { margin: 0; }
 .bb-landing ul { list-style: none; padding: 0; }
 .bb-landing a { color: inherit; text-decoration: none; }
@@ -630,664 +561,529 @@ onBeforeUnmount(() => {
 /* ── Nav ─────────────────────────────────────────────────────────────── */
 
 .bb-nav {
-  position: sticky;
-  top: 0;
-  z-index: 40;
-  background: rgba(255, 255, 255, 0.85);
+  position: sticky; top: 0; z-index: 40;
+  background: rgba(253, 253, 253, 0.85);
   backdrop-filter: saturate(160%) blur(10px);
   border-bottom: 1px solid var(--line);
 }
 .bb-nav__inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 14px 20px;
-  display: flex;
-  align-items: center;
-  gap: 24px;
+  max-width: 1200px; margin: 0 auto;
+  padding: 12px 20px;
+  display: flex; align-items: center; gap: 20px;
 }
 .bb-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 700;
-  font-size: 16px;
-  color: var(--text);
+  display: inline-flex; align-items: baseline; gap: 8px;
+  font-weight: 600; font-size: 15px;
+  color: var(--ink-1);
   letter-spacing: -0.02em;
 }
 .bb-brand__mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: rgba(217, 48, 37, 0.1);
-  color: var(--accent);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 8px;
+  background: var(--accent-soft); color: var(--accent);
+  transform: translateY(3px);
 }
-.bb-brand__word { line-height: 1; }
+.bb-brand__mark--light { background: rgba(255,255,255,.15); color: #fff; }
+.bb-brand__tld { color: var(--ink-4); font-weight: 500; }
 .bb-nav__links {
-  display: none;
-  gap: 22px;
-  margin-left: 18px;
+  display: none; gap: 22px; margin-left: 16px;
 }
-.bb-nav__link {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-2);
+.bb-nav__links a {
+  font-size: 13px; font-weight: 500; color: var(--ink-3);
   transition: color 0.15s;
 }
-.bb-nav__link:hover { color: var(--text); }
+.bb-nav__links a:hover { color: var(--ink-1); }
 .bb-nav__actions {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
+  margin-left: auto; display: flex; gap: 6px;
 }
-
-@media (min-width: 900px) {
-  .bb-nav__links { display: flex; }
-}
+@media (min-width: 900px) { .bb-nav__links { display: flex; } }
 
 /* ── Buttons ─────────────────────────────────────────────────────────── */
 
 .bb-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: 9999px;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px;
+  font-size: 13px; font-weight: 500;
+  border-radius: 8px;
   border: 1px solid transparent;
-  cursor: pointer;
-  transition: transform 0.12s, background 0.12s, border-color 0.12s;
+  transition: background 0.14s, border-color 0.14s, color 0.14s, transform 0.12s;
+  letter-spacing: -0.005em;
   white-space: nowrap;
-  letter-spacing: -0.01em;
 }
-.bb-btn:active { transform: scale(0.97); }
-.bb-btn--lg { padding: 12px 22px; font-size: 15px; }
-.bb-btn--primary { background: var(--accent); color: #fff; }
+.bb-btn:active { transform: scale(0.98); }
+.bb-btn--lg { padding: 10px 16px; font-size: 14px; }
+.bb-btn--primary {
+  background: var(--accent); color: #fff;
+}
 .bb-btn--primary:hover { background: var(--accent-hover); }
-.bb-btn--outline {
-  background: #fff;
-  color: var(--text);
-  border-color: var(--line-2);
+.bb-btn--ghost {
+  background: transparent; color: var(--ink-1);
 }
-.bb-btn--outline:hover { border-color: var(--text-2); }
-.bb-btn--ghost { background: transparent; color: var(--text); }
-.bb-btn--ghost:hover { background: rgba(16, 24, 40, 0.04); }
-.bb-btn--ghost-light { color: #fff; }
-.bb-btn--ghost-light:hover { background: rgba(255, 255, 255, 0.1); }
+.bb-btn--ghost:hover { background: var(--bg-1); }
+.bb-btn--outline {
+  background: #fff; color: var(--ink-1); border-color: var(--line-2);
+}
+.bb-btn--outline:hover { border-color: var(--ink-4); }
 
 /* ── Hero ────────────────────────────────────────────────────────────── */
 
 .bb-hero {
-  padding: 56px 20px 40px;
-  background: radial-gradient(1200px 400px at 15% -20%, rgba(217, 48, 37, 0.08), transparent 60%);
+  padding: 44px 20px 24px;
+  background:
+    radial-gradient(900px 320px at 15% -10%, var(--accent-soft), transparent 60%),
+    linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 100%);
+  border-bottom: 1px solid var(--line);
 }
 .bb-hero__inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  display: grid;
-  gap: 40px;
-  grid-template-columns: 1fr;
+  max-width: 1200px; margin: 0 auto;
+  display: grid; gap: 44px; grid-template-columns: 1fr;
   align-items: center;
 }
 @media (min-width: 900px) {
-  .bb-hero { padding: 88px 24px 72px; }
-  .bb-hero__inner { grid-template-columns: 1.15fr 1fr; gap: 60px; }
+  .bb-hero { padding: 80px 24px 60px; }
+  .bb-hero__inner { grid-template-columns: 1.1fr 1fr; gap: 56px; }
 }
 
-.bb-hero__eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
+.bb-pulse-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 12px 5px 8px;
   border-radius: 9999px;
-  background: rgba(217, 48, 37, 0.08);
-  color: var(--accent);
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  background: #fff;
+  border: 1px solid var(--line);
+  font-size: 12px; font-weight: 500; color: var(--ink-3);
 }
-.bb-hero__eyebrow-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background: var(--accent);
-  animation: bb-pulse 2s ease-in-out infinite;
-}
-@keyframes bb-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%      { opacity: 0.4; transform: scale(1.3); }
-}
-.bb-hero__title {
-  margin-top: 20px;
-  font-size: clamp(34px, 5vw, 54px);
-  line-height: 1.05;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: var(--text);
-}
-.bb-hero__accent {
-  display: block;
-  color: var(--accent);
-}
-.bb-hero__lede {
-  margin-top: 20px;
-  font-size: clamp(15px, 1.6vw, 18px);
-  line-height: 1.55;
-  color: var(--text-2);
-  max-width: 560px;
-  font-weight: 500;
-}
-.bb-hero__cta {
-  margin-top: 28px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.bb-hero__meta {
-  margin-top: 44px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-  max-width: 480px;
-}
-.bb-hero__meta-value {
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.02em;
-}
-.bb-hero__meta-label {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--text-3);
-  font-weight: 500;
-}
-
-/* Hero phone mockup */
-.bb-hero__visual {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-.bb-hero__phone {
-  width: min(320px, 80vw);
-  aspect-ratio: 320 / 640;
-  background: linear-gradient(135deg, #1f2937, #101828);
-  border-radius: 44px;
-  padding: 12px;
-  box-shadow: var(--shadow-lg);
+.bb-pulse-pill__dot {
   position: relative;
+  width: 8px; height: 8px; border-radius: 9999px;
+  background: var(--accent);
 }
-.bb-hero__phone::before {
+.bb-pulse-pill__ping {
+  position: absolute; inset: 0;
+  border-radius: 9999px; background: var(--accent);
+  animation: bb-ping 1.8s ease-out infinite;
+}
+@keyframes bb-ping {
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+.bb-h1 {
+  margin-top: 20px;
+  font-size: clamp(32px, 5.2vw, 52px);
+  line-height: 1.05;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  color: var(--ink-1);
+}
+.bb-h1__accent { color: var(--accent); }
+
+.bb-lede {
+  margin-top: 18px;
+  max-width: 520px;
+  font-size: 15px; line-height: 1.55;
+  color: var(--ink-3);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+.bb-lede--sm { max-width: 620px; font-size: 14.5px; }
+
+.bb-hero__ctas {
+  margin-top: 24px;
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+
+.bb-kpis {
+  margin-top: 36px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  max-width: 460px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+.bb-kpi__value {
+  font-size: 20px; font-weight: 500;
+  color: var(--ink-1); letter-spacing: -0.015em;
+  font-variant-numeric: tabular-nums;
+}
+.bb-kpi__value span { font-size: 13px; color: var(--ink-4); font-weight: 500; margin-left: 2px; }
+.bb-kpi__label {
+  margin-top: 2px; font-size: 11.5px; color: var(--ink-4); font-weight: 500;
+}
+.bb-kpi + .bb-kpi { border-left: 1px solid var(--line); padding-left: 12px; }
+
+/* ── Hero right (live + phone) ───────────────────────────────────────── */
+
+.bb-hero__visual {
+  display: grid; gap: 16px;
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+@media (min-width: 900px) {
+  .bb-hero__visual {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+}
+
+.bb-live {
+  width: 100%;
+  max-width: 340px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  font-size: 13px;
+}
+.bb-live__head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 12px; border-bottom: 1px solid var(--line);
+}
+.bb-live__title {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500; color: var(--ink-3);
+  letter-spacing: 0.01em; text-transform: uppercase;
+}
+.bb-live__dot {
+  width: 6px; height: 6px; border-radius: 9999px; background: #10B981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+.bb-live__meta { font-size: 11px; color: var(--ink-4); }
+
+.bb-live__row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 0 4px;
+}
+.bb-live__tone {
+  margin-top: 5px;
+  width: 8px; height: 8px; border-radius: 9999px;
+  flex-shrink: 0;
+}
+.bb-live__tone--danger { background: var(--accent); }
+.bb-live__tone--warn   { background: #F59E0B; }
+.bb-live__tone--ok     { background: #10B981; }
+.bb-live__body { min-width: 0; flex: 1; }
+.bb-live__label {
+  font-size: 13.5px; color: var(--ink-1); font-weight: 500;
+  line-height: 1.35;
+}
+.bb-live__time { margin-top: 2px; font-size: 11.5px; color: var(--ink-4); }
+
+.bb-live__list {
+  margin-top: 4px; padding-top: 10px; border-top: 1px dashed var(--line);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.bb-live__mini {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12.5px; color: var(--ink-4);
+}
+
+/* enter/leave for row */
+.bb-live-enter-active, .bb-live-leave-active {
+  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.2s;
+}
+.bb-live-enter-from { transform: translateY(6px); opacity: 0; }
+.bb-live-leave-to { transform: translateY(-6px); opacity: 0; }
+
+/* Phone mock */
+.bb-phone {
+  width: 220px;
+  aspect-ratio: 220 / 460;
+  background: linear-gradient(135deg, #1B1B1F, #0D0D0D);
+  border-radius: 30px;
+  padding: 8px;
+  border: 1px solid #2A2A32;
+  position: relative;
+  box-shadow: 0 30px 50px -20px rgba(13, 13, 13, 0.4);
+}
+.bb-phone::before {
   content: "";
-  position: absolute;
-  top: 20px;
-  left: 50%;
+  position: absolute; top: 14px; left: 50%;
   transform: translateX(-50%);
-  width: 74px;
-  height: 22px;
+  width: 52px; height: 16px;
   border-radius: 9999px;
-  background: #101828;
+  background: #0D0D0D;
   z-index: 2;
 }
-.bb-hero__phone-screen {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  border-radius: 34px;
-  overflow: hidden;
-  background: #f2f4f7;
+.bb-phone__screen {
+  position: relative; width: 100%; height: 100%;
+  border-radius: 22px; overflow: hidden;
+  background: #EDF2F0;
 }
-.bb-hero__mock-map {
-  position: absolute;
-  inset: 0;
+.bb-phone__map {
+  position: absolute; inset: 0;
   background:
-    radial-gradient(3px 3px at 30% 25%, #b0d8b0 55%, transparent 60%),
-    radial-gradient(3px 3px at 70% 40%, #b0d8b0 55%, transparent 60%),
-    radial-gradient(3px 3px at 50% 60%, #b0d8b0 55%, transparent 60%),
-    linear-gradient(180deg, #dcecf6 0%, #e7f0e4 55%, #e0e6d0 100%);
+    radial-gradient(2px 2px at 30% 25%, #B0D8B0, transparent 60%),
+    radial-gradient(2px 2px at 70% 40%, #B0D8B0, transparent 60%),
+    linear-gradient(180deg, #DCECF6 0%, #E7F0E4 55%, #E0E6D0 100%);
 }
-.bb-hero__mock-pin {
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border-radius: 9999px;
-  border: 3px solid #fff;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.4);
+.bb-phone__pin {
+  position: absolute; width: 10px; height: 10px;
+  border-radius: 9999px; border: 2px solid #fff;
+  box-shadow: 0 2px 4px rgba(13, 13, 13, 0.3);
 }
-.bb-hero__mock-pin--a { background: #d93025; top: 25%; left: 30%; }
-.bb-hero__mock-pin--b { background: #ea580c; top: 40%; left: 65%; }
-.bb-hero__mock-pin--c { background: #d93025; top: 55%; left: 45%; }
-.bb-hero__mock-user {
-  position: absolute;
-  top: 68%;
-  left: 50%;
-  width: 12px;
-  height: 12px;
-  transform: translate(-50%, -50%);
-  border-radius: 9999px;
-  background: #2563eb;
-  border: 3px solid #fff;
-  box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.15);
+.bb-phone__pin--a { background: var(--accent); top: 20%; left: 30%; }
+.bb-phone__pin--b { background: #F59E0B; top: 38%; left: 65%; }
+.bb-phone__pin--c { background: var(--accent); top: 52%; left: 42%; }
+.bb-phone__user {
+  position: absolute; top: 66%; left: 50%;
+  width: 10px; height: 10px; transform: translate(-50%, -50%);
+  border-radius: 9999px; background: #2563eb; border: 2px solid #fff;
+  box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.15);
 }
-.bb-hero__mock-sheet {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: #fff;
-  border-radius: 20px 20px 0 0;
-  padding: 8px 16px 20px;
-  box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.08);
+.bb-phone__sheet {
+  position: absolute; inset: auto 0 0 0;
+  padding: 6px 12px 14px;
+  background: #fff; border-radius: 16px 16px 0 0;
 }
-.bb-hero__mock-handle {
-  width: 40px;
-  height: 4px;
-  border-radius: 9999px;
-  background: #d0d5dd;
-  margin: 0 auto 12px;
+.bb-phone__handle { width: 30px; height: 3px; border-radius: 9999px; background: var(--line-2); margin: 0 auto 8px; }
+.bb-phone__row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.bb-phone__logo {
+  width: 26px; height: 26px; border-radius: 8px;
+  background: var(--accent-soft); color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
 }
-.bb-hero__mock-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 12px;
+.bb-phone__lines { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.bb-phone__line { height: 6px; background: var(--line); border-radius: 9999px; }
+.bb-phone__line--w { width: 70%; height: 8px; background: var(--line-2); }
+.bb-phone__line--n { width: 50%; }
+.bb-phone__pills { display: flex; gap: 4px; }
+.bb-phone__pill {
+  font-size: 8.5px; padding: 4px 8px; border-radius: 9999px;
+  background: var(--bg-1); color: var(--ink-3); font-weight: 500;
 }
-.bb-hero__mock-logo {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: rgba(217, 48, 37, 0.1);
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.bb-hero__mock-lines {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.bb-hero__mock-line {
-  height: 8px;
-  background: #eaecf0;
-  border-radius: 9999px;
-}
-.bb-hero__mock-line--title { width: 70%; height: 10px; background: #d0d5dd; }
-.bb-hero__mock-line--sub { width: 50%; }
-.bb-hero__mock-pills {
-  display: flex;
-  gap: 6px;
-}
-.bb-hero__mock-pill {
-  font-size: 10px;
-  padding: 5px 10px;
-  border-radius: 9999px;
-  background: #f2f4f7;
-  color: #667085;
-  font-weight: 600;
-}
-.bb-hero__mock-pill--primary {
-  background: var(--accent);
-  color: #fff;
-}
+.bb-phone__pill--primary { background: var(--accent); color: #fff; }
 
 /* ── Sections ────────────────────────────────────────────────────────── */
 
-.bb-section {
-  padding: 72px 20px;
-}
-.bb-section__inner {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-.bb-section--dark {
-  background: var(--bg-dark);
-  color: #fff;
-}
-.bb-section--tinted {
-  background: var(--bg-tinted);
-}
-@media (min-width: 900px) {
-  .bb-section { padding: 104px 24px; }
-}
+.bb-section { padding: 64px 20px; }
+.bb-section--tinted { background: var(--bg-1); border-block: 1px solid var(--line); }
+.bb-section__inner { max-width: 1200px; margin: 0 auto; }
+@media (min-width: 900px) { .bb-section { padding: 96px 24px; } }
 
-.bb-section__head {
-  max-width: 680px;
-  margin: 0 auto 48px;
-  text-align: center;
-}
-.bb-section__title {
-  font-size: clamp(26px, 3.4vw, 40px);
-  line-height: 1.15;
-  letter-spacing: -0.025em;
-  font-weight: 700;
-  color: var(--text);
-  margin-top: 12px;
-}
-.bb-section__title--light { color: #fff; }
-.bb-section__lede {
-  margin-top: 16px;
-  font-size: clamp(15px, 1.4vw, 17px);
-  line-height: 1.55;
-  color: var(--text-2);
-  font-weight: 500;
-}
-.bb-section__lede--light { color: rgba(255, 255, 255, 0.75); }
+.bb-shead { max-width: 640px; margin: 0 auto 40px; text-align: center; }
 .bb-eyebrow {
-  font-size: 12.5px;
-  font-weight: 700;
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: var(--accent-soft);
   color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: 11.5px; font-weight: 500;
+  letter-spacing: 0.02em;
 }
-.bb-eyebrow--light { color: #fca5a5; }
+.bb-h2 {
+  margin-top: 14px;
+  font-size: clamp(24px, 3.2vw, 36px);
+  line-height: 1.15;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: var(--ink-1);
+}
 
 .bb-section__foot {
   margin-top: 40px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
 }
 
-/* ── Grid + Cards ────────────────────────────────────────────────────── */
-
-.bb-grid {
-  display: grid;
-  gap: 20px;
-  grid-template-columns: 1fr;
-}
-@media (min-width: 640px) {
-  .bb-grid--3 { grid-template-columns: repeat(2, 1fr); }
-}
-@media (min-width: 1000px) {
-  .bb-grid--3 { grid-template-columns: repeat(3, 1fr); }
-}
+/* ── Cards + grids ────────────────────────────────────────────────── */
 
 .bb-card {
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 22px;
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.16s, box-shadow 0.16s;
+  border-radius: 12px;
+  padding: 20px;
+  transition: border-color 0.14s, background 0.14s;
 }
-.bb-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
+.bb-card:hover { border-color: var(--line-2); }
+
 .bb-card__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  margin-bottom: 14px;
-}
-.bb-card__icon--danger {
-  background: rgba(217, 48, 37, 0.08);
-  color: var(--accent);
-}
-.bb-card__icon--light {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fca5a5;
-}
-.bb-card__icon--accent {
-  background: rgba(217, 48, 37, 0.1);
-  color: var(--accent);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--accent-soft); color: var(--accent);
+  margin-bottom: 12px;
 }
 .bb-card__title {
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  color: var(--text);
+  font-size: 15px; font-weight: 500;
+  color: var(--ink-1); letter-spacing: -0.015em;
 }
-.bb-card__title--light { color: #fff; }
 .bb-card__body {
-  margin-top: 6px;
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--text-2);
-  font-weight: 500;
+  margin-top: 4px;
+  font-size: 13.5px; line-height: 1.55;
+  color: var(--ink-3); font-weight: 500;
 }
-.bb-card__body--light { color: rgba(255, 255, 255, 0.7); }
-
-.bb-card--dark {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: none;
-}
-.bb-card--dark:hover {
-  background: rgba(255, 255, 255, 0.06);
-  transform: translateY(-2px);
-}
-.bb-card--collab {
-  display: flex;
-  flex-direction: column;
-}
+.bb-card--collab { display: flex; flex-direction: column; }
 .bb-card__cta {
-  margin-top: 16px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 14px;
-  font-weight: 600;
+  margin-top: 14px; padding-top: 12px;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 13px; font-weight: 500;
   color: var(--accent);
-  padding-top: 12px;
   border-top: 1px dashed var(--line);
 }
 .bb-card__cta:hover { color: var(--accent-hover); }
 
-/* ── Coverage ────────────────────────────────────────────────────────── */
+.bb-grid { display: grid; gap: 14px; grid-template-columns: 1fr; }
+@media (min-width: 640px) {
+  .bb-grid--3 { grid-template-columns: repeat(2, 1fr); }
+  .bb-grid--4 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 1000px) {
+  .bb-grid--3 { grid-template-columns: repeat(3, 1fr); }
+  .bb-grid--4 { grid-template-columns: repeat(4, 1fr); }
+}
 
-.bb-coverage {
-  position: relative;
-  margin-top: 8px;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: var(--shadow-md);
-}
-.bb-coverage__map {
-  height: 320px;
-  background: #f2f4f7;
-}
-@media (min-width: 800px) {
-  .bb-coverage__map { height: 420px; }
-}
-.bb-coverage__legend {
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-  padding: 14px 18px;
-  border-top: 1px solid var(--line);
-  background: #ffffff;
-}
-.bb-coverage__legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--text-2);
-}
-.bb-coverage__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 9999px;
-  border: 2px solid;
-}
-.bb-coverage__dot--full { background: var(--accent); border-color: var(--accent); }
-.bb-coverage__dot--pilot { background: #fff; border-color: #0f766e; }
-
-.bb-coverage__islands {
-  margin-top: 32px;
-  display: grid;
-  gap: 18px;
-  grid-template-columns: 1fr;
+/* Bento (some wide cards) */
+.bb-bento {
+  display: grid; gap: 14px; grid-template-columns: 1fr;
 }
 @media (min-width: 700px) {
-  .bb-coverage__islands { grid-template-columns: repeat(2, 1fr); }
+  .bb-bento {
+    grid-template-columns: repeat(3, 1fr);
+    grid-auto-flow: dense;
+  }
+  .bb-card--wide { grid-column: span 2; }
 }
-@media (min-width: 1100px) {
-  .bb-coverage__islands { grid-template-columns: repeat(3, 1fr); }
+
+/* ── Coverage map ────────────────────────────────────────────────── */
+
+.bb-map {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
 }
+.bb-map__canvas { height: 300px; background: var(--bg-1); }
+@media (min-width: 800px) { .bb-map__canvas { height: 400px; } }
+.bb-map__legend {
+  display: flex; gap: 20px; flex-wrap: wrap;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px; color: var(--ink-3);
+}
+.bb-map__legend span {
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.bb-map__dot { width: 8px; height: 8px; border-radius: 9999px; border: 2px solid; }
+.bb-map__dot--full { background: var(--accent); border-color: var(--accent); }
+.bb-map__dot--pilot { background: #fff; border-color: var(--ink-1); }
+
+.bb-islands {
+  margin-top: 24px;
+  display: grid; gap: 14px; grid-template-columns: 1fr;
+}
+@media (min-width: 700px) { .bb-islands { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1100px) { .bb-islands { grid-template-columns: repeat(3, 1fr); } }
 .bb-island {
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 22px;
+  border-radius: 12px;
+  padding: 20px;
 }
 .bb-island__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 10px;
 }
-.bb-island__name {
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-}
-.bb-island__badge {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 9999px;
+.bb-island__head h3 { font-size: 15px; font-weight: 500; letter-spacing: -0.015em; }
+.bb-badge {
+  font-size: 11px; font-weight: 500;
+  padding: 3px 10px; border-radius: 9999px;
   letter-spacing: 0.01em;
 }
-.bb-island__badge--full {
-  background: rgba(217, 48, 37, 0.1);
-  color: var(--accent);
-}
-.bb-island__badge--pilot {
-  background: #ecfdf5;
-  color: #047857;
-}
-.bb-island__body {
-  font-size: 13.5px;
-  color: var(--text-2);
-  line-height: 1.5;
-}
+.bb-badge--full  { background: var(--accent-soft); color: var(--accent); }
+.bb-badge--pilot { background: var(--bg-2); color: var(--ink-3); }
+.bb-island__body { font-size: 13px; color: var(--ink-3); line-height: 1.5; }
 .bb-island__cities {
-  margin-top: 12px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  margin-top: 10px;
+  display: flex; flex-wrap: wrap; gap: 6px;
 }
 .bb-island__cities li {
-  font-size: 12px;
-  font-weight: 500;
-  padding: 5px 10px;
-  border-radius: 9999px;
-  background: var(--bg-tinted);
-  color: var(--text-2);
+  font-size: 11.5px; font-weight: 500;
+  padding: 3px 10px; border-radius: 9999px;
+  background: var(--bg-1); color: var(--ink-3);
+  border: 1px solid var(--line);
 }
 
-/* ── CTA band ────────────────────────────────────────────────────────── */
+/* ── Steps ────────────────────────────────────────────────────────── */
 
-.bb-cta-band {
-  margin-top: 48px;
-  padding: 28px;
+.bb-steps {
+  display: grid; gap: 14px; grid-template-columns: 1fr;
+  counter-reset: step;
+}
+@media (min-width: 800px) { .bb-steps { grid-template-columns: repeat(3, 1fr); } }
+.bb-step {
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 20px;
-  display: grid;
-  gap: 18px;
-  grid-template-columns: 1fr;
-  align-items: center;
-  box-shadow: var(--shadow-sm);
+  border-radius: 12px;
+  padding: 20px;
 }
-@media (min-width: 800px) {
-  .bb-cta-band {
-    grid-template-columns: 1fr auto;
-    padding: 32px 40px;
-  }
+.bb-step__n {
+  display: inline-block;
+  font-size: 11.5px; font-weight: 500;
+  padding: 3px 8px; border-radius: 6px;
+  background: var(--accent-soft); color: var(--accent);
+  letter-spacing: 0.02em;
+  margin-bottom: 12px;
+  font-variant-numeric: tabular-nums;
 }
-.bb-cta-band__title {
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-}
-.bb-cta-band__lede {
-  margin-top: 6px;
-  font-size: 14px;
-  color: var(--text-2);
-  line-height: 1.5;
+.bb-step__title { font-size: 15px; font-weight: 500; letter-spacing: -0.015em; }
+.bb-step__body {
+  margin-top: 4px; font-size: 13.5px; line-height: 1.55;
+  color: var(--ink-3); font-weight: 500;
 }
 
-/* ── Footer ──────────────────────────────────────────────────────────── */
+/* ── CTA band ────────────────────────────────────────────────────── */
+
+.bb-band {
+  margin-top: 40px;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: grid; gap: 16px; grid-template-columns: 1fr;
+  background: #fff;
+}
+@media (min-width: 800px) {
+  .bb-band { grid-template-columns: 1fr auto; align-items: center; padding: 28px 32px; }
+}
+.bb-band__title { font-size: 18px; font-weight: 500; letter-spacing: -0.015em; }
+.bb-band__body { margin-top: 4px; font-size: 13.5px; color: var(--ink-3); }
+
+/* ── Footer ──────────────────────────────────────────────────────── */
 
 .bb-footer {
-  background: var(--bg-dark);
-  color: rgba(255, 255, 255, 0.7);
-  padding: 56px 20px 24px;
+  background: var(--ink-1);
+  color: rgba(255, 255, 255, 0.6);
+  padding: 48px 20px 20px;
 }
 .bb-footer__inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  display: grid;
-  gap: 40px;
-  grid-template-columns: 1fr;
+  max-width: 1200px; margin: 0 auto;
+  display: grid; gap: 32px; grid-template-columns: 1fr;
 }
-@media (min-width: 800px) {
-  .bb-footer__inner { grid-template-columns: 1.2fr 2fr; }
-}
-.bb-footer__brand .bb-brand { color: #fff; }
-.bb-footer__brand .bb-brand__mark {
-  background: rgba(217, 48, 37, 0.2);
-  color: #fca5a5;
-}
-.bb-footer__tagline {
-  margin-top: 14px;
-  font-size: 13.5px;
-  color: rgba(255, 255, 255, 0.55);
-  line-height: 1.55;
+@media (min-width: 800px) { .bb-footer__inner { grid-template-columns: 1.2fr 2fr; } }
+.bb-footer__tag {
+  margin-top: 12px;
   max-width: 320px;
+  font-size: 13px; line-height: 1.55;
+  color: rgba(255, 255, 255, 0.5);
 }
 .bb-footer__cols {
-  display: grid;
-  gap: 32px;
+  display: grid; gap: 28px;
   grid-template-columns: repeat(3, 1fr);
 }
-.bb-footer__heading {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.bb-footer__h {
+  font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em;
+  text-transform: uppercase; color: #fff;
 }
-.bb-footer__list {
-  margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.bb-footer__cols ul {
+  margin-top: 12px; display: flex; flex-direction: column; gap: 8px;
 }
-.bb-footer__list a {
-  font-size: 13.5px;
-  color: rgba(255, 255, 255, 0.7);
+.bb-footer__cols a {
+  font-size: 13px; color: rgba(255, 255, 255, 0.65);
   transition: color 0.12s;
 }
-.bb-footer__list a:hover { color: #fff; }
-
+.bb-footer__cols a:hover { color: #fff; }
 .bb-footer__legal {
-  max-width: 1200px;
-  margin: 40px auto 0;
+  max-width: 1200px; margin: 36px auto 0;
   padding-top: 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px; color: rgba(255, 255, 255, 0.4);
 }
-.bb-footer__legal-sep { opacity: 0.4; }
 </style>
