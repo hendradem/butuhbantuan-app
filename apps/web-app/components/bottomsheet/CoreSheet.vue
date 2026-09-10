@@ -158,7 +158,11 @@ function onTouchEnd() {
 
   const smallest = Math.min(...snapPx.value);
   const closingFlick = velocity > CLOSE_FLICK_VELOCITY && currentHeight.value <= smallest + 40;
-  if (closingFlick) {
+  // Also close when the user has quietly dragged the sheet significantly below
+  // its lowest snap (~30% under the peek height). This lets the user swipe
+  // down slowly from peek to dismiss, matching Google Maps' behaviour.
+  const draggedBelowPeek = currentHeight.value < smallest * 0.7;
+  if (closingFlick || draggedBelowPeek) {
     currentHeight.value = 0;
     emit("close");
     coreSheet.onClose();

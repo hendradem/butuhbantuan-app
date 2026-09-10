@@ -150,12 +150,22 @@ function onBodyScroll(e: Event) {
 }
 
 // Map view follows sheet size regardless of trigger (auto-snap or manual swipe).
+// CoreSheet's height transition runs ~0.28s (cubic-bezier). We wait for the
+// sheet to reach its final height before re-framing, otherwise the padding
+// calc is based on an intermediate height and the pin ends up under the sheet.
+const SHEET_ANIM_MS = 320;
+
+function toggleMapSheetMax(on: boolean) {
+  const el = leaflet.mapInstance?.getContainer?.();
+  el?.classList.toggle("bb-map--sheet-max", on);
+}
+
 function onSnapChange(idx: number) {
   if (idx >= 2 && savedZoom == null) {
-    // Give the sheet animation a moment to reach its final height so we can
-    // measure it correctly, then re-frame the map.
-    setTimeout(applyMapViewForExpanded, 60);
+    toggleMapSheetMax(true);
+    setTimeout(applyMapViewForExpanded, SHEET_ANIM_MS);
   } else if (idx < 2 && savedZoom != null) {
+    toggleMapSheetMax(false);
     restoreMapView();
   }
 }
@@ -334,6 +344,7 @@ watch(
     } else {
       // Sheet closed — put the map back to whatever view the user had.
       restoreMapView();
+      toggleMapSheetMax(false);
       if (detailSheet.fromExploreList) {
         detailSheet.clearExploreReturn();
         exploreSheet.onOpen();
@@ -355,7 +366,7 @@ watch(activeTab, () => {
   <CoreSheet
     ref="sheetRef"
     :is-open="detailSheet.isOpen"
-    :snap-points="[200, 0.55, 0.75]"
+    :snap-points="[280, 0.55, 0.75]"
     :initial-snap="1"
     draggable
     @close="handleClose"

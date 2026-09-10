@@ -656,16 +656,39 @@ html[data-ui-theme="soft"] h4 {
   }
 }
 
-/* Zoomed-out state: hide route ETA badge and shrink service pins so the route line stays readable. */
-.bb-map--zoomed-out .bb-route-bubble-wrap {
-  opacity: 0 !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
-
+/* Zoomed-out state: shrink service pins, thin the route stroke, and scale
+ * the ETA badge to a compact version so the whole route stays readable
+ * without overpainting street labels or marker pins. */
 .bb-map--zoomed-out .bb-svc-pin {
   transform: scale(0.6) !important;
   transform-origin: 50% 100%;
+}
+
+/* Slim the route stroke on zoom-out — default 3.5 / 5.5 → 2 / 3.
+ * `!important` because Leaflet also writes stroke-width as an SVG attribute
+ * on every redraw. */
+.bb-map--zoomed-out .bb-route-line {
+  stroke-width: 2 !important;
+}
+.bb-map--zoomed-out .bb-route-casing {
+  stroke-width: 3 !important;
+  opacity: 0.85;
+}
+
+/* ETA badge stays visible on zoom-out but at ~72% scale so it doesn't cover
+ * the pins. Anchor pivot at the pointer tip so it stays glued to the route. */
+.bb-map--zoomed-out .bb-route-bubble {
+  transform: scale(0.72);
+  transform-origin: 50% 100%;
+}
+
+/* When the detail sheet is at its tallest snap, the map is only ~25 vh tall,
+ * so the ETA badge would cover the pins. The same info is already shown in
+ * the sheet header ("9 min · 6.9 km"), so hide the badge here. */
+.bb-map--sheet-max .bb-route-bubble-wrap {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 /* Scrollbar */
