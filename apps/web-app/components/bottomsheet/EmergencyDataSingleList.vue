@@ -41,7 +41,7 @@ function onTelepon() {
 </script>
 
 <template>
-  <div class="ui-list-stack pt-3">
+  <div class="ui-list-stack pt-3" style="background: var(--bb-bg-surface)">
     <EmergencyListCard
       :emergency="data"
       actions

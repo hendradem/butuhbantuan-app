@@ -294,9 +294,10 @@ html[data-ui-theme="legacy"] .ui-list-stack {
   transform: scale(0.992);
 }
 
-/* Detail sheet card is flush — no card chrome, uses sheet as its surface. */
+/* Detail sheet card — flush layout: white surface, no border / shadow / radius,
+ * with tightened vertical rhythm on facts and the "Detail lainnya" collapse. */
 .ui-list-card--detail {
-  background: transparent;
+  background: var(--bb-bg-surface);
   border: none;
   border-radius: 0;
   box-shadow: none;
@@ -305,6 +306,23 @@ html[data-ui-theme="legacy"] .ui-list-stack {
 }
 .ui-list-card--detail:active {
   transform: none;
+}
+.ui-list-card--detail .ui-list-card__facts-wrap {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+}
+.ui-list-card--detail .ui-list-card__facts {
+  row-gap: 0.55rem;
+}
+.ui-list-card--detail .ui-list-card__facts--extra {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+}
+.ui-list-card--detail .ui-list-card__collapse {
+  margin-top: 0.35rem;
+}
+.ui-list-card--detail .ui-list-card__collapse-trigger {
+  padding: 0.3rem 0.15rem;
 }
 
 html[data-ui-theme="legacy"] .ui-list-card {

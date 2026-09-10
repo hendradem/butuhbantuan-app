@@ -196,7 +196,7 @@ onBeforeUnmount(() => {
       </div>
     </template>
 
-    <div class="pb-6" style="background: #fafafa">
+    <div class="pb-6" style="background: var(--bb-bg-surface)">
       <EmergencyDataSingleList :data="data?.emergency" />
     </div>
   </CoreSheet>
