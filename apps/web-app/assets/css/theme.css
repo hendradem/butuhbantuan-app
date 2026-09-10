@@ -294,10 +294,17 @@ html[data-ui-theme="legacy"] .ui-list-stack {
   transform: scale(0.992);
 }
 
+/* Detail sheet card is flush — no card chrome, uses sheet as its surface. */
 .ui-list-card--detail {
-  padding: 0.85rem 0.9rem;
-  box-shadow: var(--bb-shadow-soft);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0.5rem 0.25rem 0.25rem;
   --compliance-flush-gutter: 1.4rem;
+}
+.ui-list-card--detail:active {
+  transform: none;
 }
 
 html[data-ui-theme="legacy"] .ui-list-card {
