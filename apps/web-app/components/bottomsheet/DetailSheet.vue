@@ -248,6 +248,18 @@ function onTelepon() {
   window.location.href = `tel:+${convertPhoneNumber(phone)}`;
 }
 
+function onWhatsAppChat() {
+  const wa =
+    emergencyData.value?.contact?.whatsapp ||
+    emergencyData.value?.contact?.phone;
+  if (!wa) {
+    toast.error("WhatsApp tidak tersedia");
+    return;
+  }
+  rememberFromEmergency(emergency.value, "whatsapp");
+  window.location.href = `https://wa.me/${convertPhoneNumber(wa)}`;
+}
+
 async function onShare() {
   const name = emergencyData.value?.name ?? "Bantuan darurat";
   const shareData = {
@@ -431,6 +443,15 @@ watch(activeTab, () => {
           <button type="button" class="bb-action-pill bb-action-pill--primary shrink-0" @click="onLaporan">
             <Icon :icon="isHospital ? 'lucide:phone' : 'ic:baseline-whatsapp'" class="text-[15px]" />
             {{ isHospital ? "Hubungi IGD" : "Buat laporan" }}
+          </button>
+          <button
+            v-if="!isHospital"
+            type="button"
+            class="bb-action-pill shrink-0"
+            @click="onWhatsAppChat"
+          >
+            <Icon icon="ic:baseline-whatsapp" class="text-[14px]" />
+            WhatsApp
           </button>
           <button type="button" class="bb-action-pill shrink-0" @click="onTelepon">
             <Icon icon="lucide:phone" class="text-[14px]" />

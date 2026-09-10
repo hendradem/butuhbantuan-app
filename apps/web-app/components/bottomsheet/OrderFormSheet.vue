@@ -195,8 +195,31 @@ async function toggle(section: Exclude<Section, null>) {
   }
 }
 
+const showCloseConfirm = ref(false);
+
+// User has started filling the form → confirm before discarding.
+const hasUserInput = computed(() => {
+  if (String(assessmentNotes.value || "").trim()) return true;
+  if (Object.keys(assessmentAnswers.value || {}).length > 0) return true;
+  if (hasPhoto.value || photoFile.value) return true;
+  if (String(jenisPelayanan.value || "").trim()) return true;
+  return false;
+});
+
 function cancel() {
+  if (hasUserInput.value) {
+    showCloseConfirm.value = true;
+    return;
+  }
   orderSheet.onClose();
+}
+
+function confirmDiscard() {
+  showCloseConfirm.value = false;
+  orderSheet.onClose();
+}
+function cancelDiscard() {
+  showCloseConfirm.value = false;
 }
 
 async function submit() {
@@ -318,7 +341,7 @@ async function submit() {
 </script>
 
 <template>
-  <CoreSheet :is-open="orderSheet.isOpen" :snap-points="[0.78, 0]" scrollable is-overlay @close="cancel">
+  <CoreSheet :is-open="orderSheet.isOpen" :snap-points="[0.95, 0]" scrollable is-overlay @close="cancel">
     <template #header>
       <div class="ui-sheet-header">
         <div class="flex gap-2 items-center min-w-0 flex-1">
@@ -588,6 +611,38 @@ async function submit() {
       </div>
     </div>
   </CoreSheet>
+
+  <!-- Confirm-discard modal: shown when the user tries to close the sheet
+       after entering data. Teleported so it stays above the sheet. -->
+  <Teleport to="body">
+    <Transition name="bb-cd-fade">
+      <div
+        v-if="showCloseConfirm"
+        class="bb-cd-backdrop"
+        role="dialog"
+        aria-modal="true"
+        @click.self="cancelDiscard"
+      >
+        <div class="bb-cd-card" @click.stop>
+          <div class="bb-cd-icon" aria-hidden="true">
+            <Icon icon="lucide:triangle-alert" class="text-[22px]" />
+          </div>
+          <h2 class="bb-cd-title">Batalkan laporan?</h2>
+          <p class="bb-cd-body">
+            Data yang sudah kamu isi akan hilang. Yakin mau batalkan?
+          </p>
+          <div class="bb-cd-actions">
+            <button type="button" class="bb-cd-btn bb-cd-btn--ghost" @click="cancelDiscard">
+              Lanjut isi
+            </button>
+            <button type="button" class="bb-cd-btn bb-cd-btn--danger" @click="confirmDiscard">
+              Batalkan
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -645,5 +700,104 @@ async function submit() {
 .bb-confirm-input::placeholder {
   font-weight: 500;
   color: var(--bb-text-tertiary);
+}
+
+/* Discard-confirm modal (sits above the report sheet) */
+.bb-cd-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(3px);
+}
+
+.bb-cd-card {
+  width: 100%;
+  max-width: 340px;
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 22px 22px 18px;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
+}
+
+.bb-cd-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  border-radius: 999px;
+  background: rgba(217, 48, 37, 0.1);
+  color: #d93025;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bb-cd-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: #202124;
+  letter-spacing: -0.01em;
+}
+
+.bb-cd-body {
+  margin: 6px 0 18px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: #5f6368;
+}
+
+.bb-cd-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bb-cd-btn {
+  flex: 1;
+  padding: 11px 12px;
+  border-radius: 9999px;
+  font-size: 13.5px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.bb-cd-btn:active {
+  transform: scale(0.97);
+}
+.bb-cd-btn--ghost {
+  background: #ffffff;
+  color: #202124;
+  border-color: #dadce0;
+}
+.bb-cd-btn--danger {
+  background: #d93025;
+  color: #ffffff;
+}
+.bb-cd-btn--danger:active {
+  background: #a52a1e;
+}
+
+/* Modal enter/leave */
+.bb-cd-fade-enter-active,
+.bb-cd-fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+.bb-cd-fade-enter-active .bb-cd-card,
+.bb-cd-fade-leave-active .bb-cd-card {
+  transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.bb-cd-fade-enter-from,
+.bb-cd-fade-leave-to {
+  opacity: 0;
+}
+.bb-cd-fade-enter-from .bb-cd-card,
+.bb-cd-fade-leave-to .bb-cd-card {
+  transform: translateY(12px) scale(0.96);
 }
 </style>
