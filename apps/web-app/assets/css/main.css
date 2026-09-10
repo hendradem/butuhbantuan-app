@@ -78,13 +78,13 @@ html[data-ui-theme="soft"] h4 {
  * on zoomstart/movestart in LeafletMap.vue).
  */
 
-/* Opt-in smooth movement — only the user-location pin (for GPS updates). */
+/* Current-location pin has no CSS transition on transform. Leaflet snaps
+ * markers to new pixel coords on every zoomend / GPS update; a lingering
+ * transition here would let the pin drift after the map settles ("jumpy"
+ * feel). We accept a slightly jittery GPS tick in exchange for a marker
+ * that stays glued to the map — same behavior as the service pins. */
 .bb-user-pin-wrap {
-  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: transform;
-}
-.bb-map-interacting .bb-user-pin-wrap {
-  transition: none !important;
 }
 /* Smooth tile fade-in */
 .leaflet-tile {

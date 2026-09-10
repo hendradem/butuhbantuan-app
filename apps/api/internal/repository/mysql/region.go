@@ -24,17 +24,35 @@ func (r *RegionRepo) FindAllAvailableRegions() ([]domain.AvailableRegion, error)
 }
 
 func (r *RegionRepo) FindAvailableRegionsByName(name string) ([]domain.AvailableRegion, error) {
-	var rows []AvailableServiceCityEntity
-	needle := "%" + strings.ToLower(name) + "%"
+	// Geocoders normalise regency names inconsistently — Nominatim returns
+	// "Kulonprogo" (one word) while our seed data stores "Kabupaten Kulon Progo".
+	// Load everything and match in-memory after collapsing to a canonical form
+	// (lowercase, no "Kabupaten "/"Kota " prefix, no spaces). The regions table
+	// is small so this is cheap and works across DB dialects.
+	var all []AvailableServiceCityEntity
 	if err := r.db.Preload("Regency").Preload("Regency.Province").
-		Where(
-			"LOWER(name) LIKE ? OR LOWER(REPLACE(REPLACE(name, 'Kabupaten ', ''), 'Kota ', '')) LIKE ?",
-			needle, needle,
-		).
-		Find(&rows).Error; err != nil {
+		Find(&all).Error; err != nil {
 		return nil, err
 	}
-	return mapManyRegions(rows), nil
+	needle := normalizeRegionName(name)
+	if needle == "" {
+		return nil, nil
+	}
+	matched := make([]AvailableServiceCityEntity, 0, len(all))
+	for _, row := range all {
+		if strings.Contains(normalizeRegionName(row.Name), needle) {
+			matched = append(matched, row)
+		}
+	}
+	return mapManyRegions(matched), nil
+}
+
+func normalizeRegionName(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.ReplaceAll(s, "kabupaten ", "")
+	s = strings.ReplaceAll(s, "kota ", "")
+	s = strings.ReplaceAll(s, " ", "")
+	return s
 }
 
 func (r *RegionRepo) CreateAvailableRegion(reg domain.AvailableRegion) (*domain.AvailableRegion, error) {
