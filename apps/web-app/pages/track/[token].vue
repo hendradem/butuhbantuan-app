@@ -182,6 +182,46 @@ async function ping(lat: number, lng: number) {
   }
 }
 
+// Screen wake lock — the web platform can't run geolocation in the
+// background, so the best we can do is keep the screen awake while sharing.
+// User can pocket their phone with the screen on; the GPS keeps ticking.
+let wakeLock: WakeLockSentinel | null = null;
+const wakeLockActive = ref(false);
+
+async function requestWakeLock() {
+  const nav = navigator as Navigator & {
+    wakeLock?: { request(type: "screen"): Promise<WakeLockSentinel> };
+  };
+  if (!nav.wakeLock) return;
+  try {
+    wakeLock = await nav.wakeLock.request("screen");
+    wakeLockActive.value = true;
+    wakeLock.addEventListener("release", () => {
+      wakeLockActive.value = false;
+    });
+  } catch {
+    // battery-saver mode, unsupported browser — silently continue
+    wakeLockActive.value = false;
+  }
+}
+
+async function releaseWakeLock() {
+  if (wakeLock) {
+    try { await wakeLock.release(); } catch { /* ignore */ }
+    wakeLock = null;
+  }
+  wakeLockActive.value = false;
+}
+
+async function reacquireWakeLockOnResume() {
+  // Wake lock is released automatically when the tab becomes hidden.
+  // Re-request when we're visible again and still sharing.
+  if (document.hidden) return;
+  if (!sharing.value) return;
+  if (wakeLockActive.value) return;
+  await requestWakeLock();
+}
+
 function startSharing() {
   if (!canShare.value) {
     pingError.value = "Pesanan sudah selesai — lokasi tidak perlu dibagikan lagi.";
@@ -195,6 +235,11 @@ function startSharing() {
   pingError.value = "";
   sharing.value = true;
   gpsGate.reset();
+
+  // Keep the screen on so watchPosition doesn't get suspended when the
+  // user pockets their phone. Chrome / Safari release the sentinel on
+  // visibilitychange → we reacquire in onVisibilityChange below.
+  void requestWakeLock();
 
   watchId = navigator.geolocation.watchPosition(
     (pos) => {
@@ -220,6 +265,7 @@ function stopSharing() {
   watchId = null;
   sharing.value = false;
   gpsGate.reset();
+  void releaseWakeLock();
 }
 
 async function markArrived() {
@@ -342,8 +388,10 @@ function stopPolling() {
 
 function onVisibilityChange() {
   if (document.hidden) return;
-  // Tab came back — refresh immediately so the map catches up.
+  // Tab came back — refresh immediately so the map catches up, and
+  // re-acquire the screen wake lock which browsers release on hide.
   void loadSession();
+  void reacquireWakeLockOnResume();
 }
 
 watch(
@@ -643,6 +691,27 @@ onUnmounted(() => {
                   Izin lokasi ditolak. Aktifkan di pengaturan browser.
                 </p>
                 <p v-if="pingError" class="text-xs text-red-600 mt-1">{{ pingError }}</p>
+              </div>
+            </div>
+
+            <!-- Browsers can't run GPS in the background. Wake lock keeps the
+                 screen on, but the user still needs to avoid the power button. -->
+            <div
+              v-if="sharing"
+              class="rounded-lg px-3 py-2 flex items-start gap-2"
+              style="background: #fef7e0; color: #7f5f00; border: 1px solid #f9e6a1"
+            >
+              <Icon icon="lucide:alert-circle" class="mt-0.5 shrink-0 text-[14px]" />
+              <div class="min-w-0">
+                <p class="text-[12px] font-semibold leading-tight">Jangan kunci layar HP</p>
+                <p class="text-[11.5px] leading-snug mt-0.5">
+                  <template v-if="wakeLockActive">
+                    Layar tetap menyala otomatis. HP boleh dimasukkan saku — asal tombol power tidak ditekan.
+                  </template>
+                  <template v-else>
+                    Browser di HP ini tidak support wake lock. Biarkan halaman terbuka dan layar menyala agar lokasi terkirim.
+                  </template>
+                </p>
               </div>
             </div>
 
