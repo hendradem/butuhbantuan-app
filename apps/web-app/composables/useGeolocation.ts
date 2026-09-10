@@ -399,53 +399,83 @@ export function useGeolocation() {
           return live;
         }
 
+        // Escape hatch — any known position beats "GPS belum dapat kunci".
+        // Used when the getCurrentPosition calls below time out or fail with
+        // POSITION_UNAVAILABLE (code 2) / TIMEOUT (code 3), which is common
+        // after the device has been idle for hours and the GPS chip is cold.
+        let lastDeniedCode: number | null = null;
+        const softFallback = (): GeoFix | null => {
+          const wb = watchFallback();
+          if (wb) return wb;
+          const cached = readLastGeo();
+          if (cached) {
+            return { ...cached, fromGps: false, errorCode: 0 };
+          }
+          return null;
+        };
+
         try {
           const pos = await readPosition({
             enableHighAccuracy: true,
             timeout: 8_000,
-            maximumAge: 0,
+            maximumAge: 30_000, // allow a lightly-cached fix so cold-start doesn't stall
           });
           const fix = toFix(pos);
           opts?.onSample?.(fix);
           return fix;
         } catch (e: any) {
-          if (e?.code === 1) {
-            // Permission denied — but the map watch may already have a position.
-            // Use it instead of showing a false-positive GPS error.
-            const wb = watchFallback();
-            if (wb) { opts?.onSample?.(wb); return wb; }
-            return { ...DIY_CENTER, fromGps: false, errorCode: 1 };
+          if (e?.code === 1) lastDeniedCode = 1;
+          const fb = softFallback();
+          if (fb) {
+            opts?.onSample?.(fb);
+            return fb;
           }
+          // No fallback available yet — try low-accuracy pass below.
         }
 
         try {
           const pos = await readPosition({
             enableHighAccuracy: false,
             timeout: 5_000,
-            maximumAge: 0,
+            maximumAge: 60_000,
           });
           const fix = toFix(pos);
           opts?.onSample?.(fix);
           return fix;
         } catch (e: any) {
-          if (e?.code === 1) {
-            const wb = watchFallback();
-            if (wb) { opts?.onSample?.(wb); return wb; }
-            return { ...DIY_CENTER, fromGps: false, errorCode: 1 };
+          if (e?.code === 1) lastDeniedCode = 1;
+          const fb = softFallback();
+          if (fb) {
+            opts?.onSample?.(fb);
+            return fb;
           }
         }
 
-        // Never treat localStorage cache as a successful locate
-        return { ...DIY_CENTER, fromGps: false, errorCode: 3 };
+        return {
+          ...DIY_CENTER,
+          fromGps: false,
+          errorCode: lastDeniedCode ?? 3,
+        };
       };
 
       return Promise.race([
         preferGps(),
         new Promise<GeoFix>((resolve) => {
-          setTimeout(
-            () => resolve({ ...DIY_CENTER, fromGps: false, errorCode: 3 }),
-            PREFER_GPS_DEADLINE_MS,
-          );
+          setTimeout(() => {
+            // Deadline hit — surface any known position instead of DIY_CENTER.
+            const wb = watchFallback();
+            if (wb) {
+              opts?.onSample?.(wb);
+              resolve(wb);
+              return;
+            }
+            const cached = readLastGeo();
+            if (cached) {
+              resolve({ ...cached, fromGps: false, errorCode: 0 });
+              return;
+            }
+            resolve({ ...DIY_CENTER, fromGps: false, errorCode: 3 });
+          }, PREFER_GPS_DEADLINE_MS);
         }),
       ]);
     }
