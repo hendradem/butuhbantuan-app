@@ -87,36 +87,63 @@ watch(points, () => recomputeSnaps(), { deep: true });
 
 const CLOSE_FLICK_VELOCITY = 0.65; // px/ms — flick-down past peek to close
 const DIRECTIONAL_VELOCITY = 0.35; // px/ms — bias snap towards drag direction
+const INTENT_THRESHOLD_PX = 10;    // px — first significant move classifies the gesture
 
+let dragStartX = 0;
 let dragStartY = 0;
 let dragStartHeight = 0;
 let lastY = 0;
 let lastTs = 0;
 let velocity = 0; // px/ms — positive = dragging down
+// A touch stays "pending" until we've seen enough movement to decide whether
+// the user is dragging the sheet vertically or scrolling a child element
+// (action pills, tab bar) horizontally. Once classified as horizontal, we
+// bail out and let the child scroll natively.
+let gesturePending = false;
+let gestureCancelled = false;
 
 function onTouchStart(e: TouchEvent) {
   if (!props.draggable) return;
   const t = e.touches[0];
   if (!t) return;
+  dragStartX = t.clientX;
   dragStartY = t.clientY;
   lastY = t.clientY;
   lastTs = performance.now();
   dragStartHeight = currentHeight.value;
   velocity = 0;
-  isDragging.value = true;
+  gesturePending = true;
+  gestureCancelled = false;
+  isDragging.value = false; // flipped to true once classified as vertical
 }
 
 function onTouchMove(e: TouchEvent) {
-  if (!isDragging.value || !props.draggable) return;
+  if (!props.draggable || gestureCancelled) return;
   const t = e.touches[0];
   if (!t) return;
+
+  // First-move classifier: bail out if the swipe is horizontally dominant
+  // (user is trying to scroll the action pills or tabs, not drag the sheet).
+  if (gesturePending) {
+    const dx = Math.abs(t.clientX - dragStartX);
+    const dy = Math.abs(t.clientY - dragStartY);
+    if (dx < INTENT_THRESHOLD_PX && dy < INTENT_THRESHOLD_PX) return;
+    if (dx > dy * 1.4) {
+      gestureCancelled = true;
+      gesturePending = false;
+      return;
+    }
+    gesturePending = false;
+    isDragging.value = true;
+  }
+  if (!isDragging.value) return;
+
   const now = performance.now();
   const dt = Math.max(1, now - lastTs);
   velocity = (t.clientY - lastY) / dt;
   lastY = t.clientY;
   lastTs = now;
 
-  // Down-drag shrinks height; clamp at 0 and allow slight overshoot upward.
   const delta = t.clientY - dragStartY;
   const maxH = Math.max(...snapPx.value);
   const overshoot = 40;
@@ -153,8 +180,11 @@ function nearestSnapIndex(h: number, vel: number): number {
 }
 
 function onTouchEnd() {
-  if (!isDragging.value) return;
+  // Clean up gesture bookkeeping regardless of state.
+  gesturePending = false;
+  const wasDragging = isDragging.value;
   isDragging.value = false;
+  if (!wasDragging || gestureCancelled) return;
 
   const smallest = Math.min(...snapPx.value);
   const closingFlick = velocity > CLOSE_FLICK_VELOCITY && currentHeight.value <= smallest + 40;
@@ -202,8 +232,11 @@ function handleOverlayClick() {
 const heightStyle = computed(() =>
   currentHeight.value === 0 ? "0px" : `${currentHeight.value}px`,
 );
+// Slightly longer, iOS-flavoured curve. `will-change: height` + `contain`
+// isolate the reflow to the sheet so the map + tiles below don't get
+// re-painted every frame — this was the main source of PWA snap jank.
 const transitionStyle = computed(() =>
-  isDragging.value ? "none" : "height 0.28s cubic-bezier(0.32, 0.72, 0, 1)",
+  isDragging.value ? "none" : "height 0.32s cubic-bezier(0.32, 0.72, 0, 1)",
 );
 </script>
 
@@ -221,7 +254,7 @@ const transitionStyle = computed(() =>
     <Transition name="sheet">
       <div
         v-if="isOpen"
-        class="fixed bottom-0 left-0 right-0 mx-auto max-w-md bg-transparent"
+        class="fixed bottom-0 left-0 right-0 mx-auto max-w-md bg-transparent bb-sheet-anim"
         :style="{ height: heightStyle, zIndex, transition: transitionStyle }"
       >
         <div
@@ -266,3 +299,14 @@ const transitionStyle = computed(() =>
     </Transition>
   </Teleport>
 </template>
+
+<style scoped>
+/* Isolate the sheet's reflow so animating `height` doesn't invalidate the
+ * map / tile layers beneath it — the main source of PWA snap jank. */
+.bb-sheet-anim {
+  will-change: height;
+  contain: layout style;
+  backface-visibility: hidden;
+  transform: translateZ(0); /* create compositor layer */
+}
+</style>

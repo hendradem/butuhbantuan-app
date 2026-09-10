@@ -441,7 +441,7 @@ watch(activeTab, () => {
         <!-- Action pills — always visible, above tabs -->
         <div class="mt-2.5 flex items-center gap-2 overflow-x-auto px-4 pb-1 scrollbar-none">
           <button type="button" class="bb-action-pill bb-action-pill--primary shrink-0" @click="onLaporan">
-            <Icon :icon="isHospital ? 'lucide:phone' : 'ic:baseline-whatsapp'" class="text-[15px]" />
+            <Icon :icon="isHospital ? 'lucide:phone' : 'lucide:siren'" class="text-[15px]" />
             {{ isHospital ? "Hubungi IGD" : "Buat laporan" }}
           </button>
           <button
