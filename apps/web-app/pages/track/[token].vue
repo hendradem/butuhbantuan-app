@@ -317,11 +317,55 @@ const lastPingLabel = computed(() => {
   });
 });
 
+// Poll the session so watchers (pelapor / posko) see the responder's live
+// coordinates in near-real-time. There's no SSE on the API for /track/:token
+// yet, so a low-cadence poll is the cheapest way to keep the map moving.
+// We skip when the tab is hidden and stop entirely once the ticket completes.
+const POLL_MS = 5_000;
+let sessionPollTimer: ReturnType<typeof setInterval> | null = null;
+
+function startPolling() {
+  stopPolling();
+  if (typeof window === "undefined") return;
+  sessionPollTimer = setInterval(() => {
+    if (typeof document !== "undefined" && document.hidden) return;
+    if (isCompleted.value) return;
+    void loadSession();
+  }, POLL_MS);
+}
+function stopPolling() {
+  if (sessionPollTimer != null) {
+    clearInterval(sessionPollTimer);
+    sessionPollTimer = null;
+  }
+}
+
+function onVisibilityChange() {
+  if (document.hidden) return;
+  // Tab came back — refresh immediately so the map catches up.
+  void loadSession();
+}
+
+watch(
+  () => session.value?.status,
+  (status) => {
+    if (status === "completed" || status === "cancelled") stopPolling();
+  },
+);
+
 onMounted(() => {
   void loadSession();
+  startPolling();
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisibilityChange);
+  }
 });
 onUnmounted(() => {
   stopSharing();
+  stopPolling();
+  if (typeof document !== "undefined") {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+  }
 });
 </script>
 

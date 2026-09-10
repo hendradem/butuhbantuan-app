@@ -232,11 +232,11 @@ function handleOverlayClick() {
 const heightStyle = computed(() =>
   currentHeight.value === 0 ? "0px" : `${currentHeight.value}px`,
 );
-// Slightly longer, iOS-flavoured curve. `will-change: height` + `contain`
-// isolate the reflow to the sheet so the map + tiles below don't get
-// re-painted every frame — this was the main source of PWA snap jank.
+// Smoother snap: slightly slower ease that peaks near the end (iOS material
+// sheet feel). `will-change` + `contain` on the wrapper offload the reflow
+// to the compositor and stop the map tiles below from re-painting each frame.
 const transitionStyle = computed(() =>
-  isDragging.value ? "none" : "height 0.32s cubic-bezier(0.32, 0.72, 0, 1)",
+  isDragging.value ? "none" : "height 0.36s cubic-bezier(0.22, 0.61, 0.36, 1)",
 );
 </script>
 
@@ -304,9 +304,14 @@ const transitionStyle = computed(() =>
 /* Isolate the sheet's reflow so animating `height` doesn't invalidate the
  * map / tile layers beneath it — the main source of PWA snap jank. */
 .bb-sheet-anim {
-  will-change: height;
-  contain: layout style;
+  will-change: height, transform;
+  contain: layout paint style;
   backface-visibility: hidden;
-  transform: translateZ(0); /* create compositor layer */
+  transform: translateZ(0); /* force compositor layer */
+  -webkit-transform: translateZ(0);
+}
+.bb-sheet-anim > .ui-sheet-panel {
+  /* Panel painting isolated too — content changes don't invalidate the map. */
+  contain: layout paint style;
 }
 </style>

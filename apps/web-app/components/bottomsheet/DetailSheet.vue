@@ -359,7 +359,10 @@ watch(
       toggleMapSheetMax(false);
       if (detailSheet.fromExploreList) {
         detailSheet.clearExploreReturn();
-        exploreSheet.onOpen();
+        // Wait for the sheet close animation (~360 ms) to finish before
+        // reopening the explore list. Reopening synchronously briefly stacks
+        // both sheets over the map — the overlap the user reported.
+        window.setTimeout(() => exploreSheet.onOpen(), 380);
       }
     }
   },
