@@ -187,28 +187,12 @@ function distanceBadgeClass(meters: number | null) {
   return softLabelTone.neutral;
 }
 
-const rankAccent = computed(() => {
-  switch (props.rankHint?.tone) {
-    case "good": return "#10b981"; // emerald-500
-    case "info": return "#3b82f6"; // blue-500
-    case "muted": return "#94a3b8"; // slate-400
-    default: return "transparent";
-  }
-});
 </script>
 
 <template>
-  <!--
-    Flat list row. `--ranked` adds a coloured left-border accent (tone-based)
-    to signal smart-rank position without breaking the flat rhythm.
-  -->
   <article
     class="ui-list-card"
-    :class="{
-      'ui-list-card--detail': actions,
-      'ui-list-card--ranked': !!rankHint && !actions && !isHospital,
-    }"
-    :style="rankHint && !actions && !isHospital ? { borderLeftColor: rankAccent } : undefined"
+    :class="{ 'ui-list-card--detail': actions }"
   >
     <div>
       <div class="ui-list-card__row">
@@ -248,7 +232,7 @@ const rankAccent = computed(() => {
             </span>
           </div>
 
-          <p class="ui-list-card__desc">{{ subtitle }}</p> 
+          <p class="ui-list-card__desc">{{ subtitle }}</p>
 
           <div class="ui-list-card__badges" @click.stop @touchstart.stop>
             <span v-if="isHospital" :class="[SOFT_LABEL, softLabelTone.violet]">
@@ -371,21 +355,5 @@ const rankAccent = computed(() => {
       </div>
     </div>
 
-    <!-- Rank label: sits on coloured outer area below white inner card -->
-    <div
-      v-if="rankHint && !actions && !isHospital"
-      class="ui-list-card__rank-strip"
-      :class="{
-        'text-emerald-600': rankHint.tone === 'good',
-        'text-blue-600': rankHint.tone === 'info',
-        'text-neutral-500': rankHint.tone === 'muted',
-      }"
-    >
-      <Icon
-        :icon="rankHint.tone === 'good' ? 'lucide:star' : rankHint.tone === 'info' ? 'lucide:zap' : 'lucide:shield'"
-        class="w-2.5 h-2.5 shrink-0"
-      />
-      #{{ rankHint.rank }} · {{ rankHint.label }}
-    </div>
   </article>
 </template>

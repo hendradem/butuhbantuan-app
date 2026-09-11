@@ -103,6 +103,10 @@ onMounted(async () => {
     attribution: tileAttribution(initialTiles),
     maxZoom: initialTiles === "classic" ? 19 : 20,
     subdomains: tileSubdomains(initialTiles),
+    crossOrigin: true,
+    keepBuffer: 8,
+    updateWhenIdle: false,
+    updateWhenZooming: false,
   }).addTo(map);
 
   const onColorMode = (e: Event) => {
@@ -114,6 +118,10 @@ onMounted(async () => {
       attribution: tileAttribution(next),
       maxZoom: next === "classic" ? 19 : 20,
       subdomains: tileSubdomains(next),
+      crossOrigin: true,
+      keepBuffer: 8,
+      updateWhenIdle: false,
+      updateWhenZooming: false,
     }).addTo(map);
     baseTileLayer.bringToBack?.();
     const tilePane = map.getPane("tilePane") as HTMLElement | undefined;

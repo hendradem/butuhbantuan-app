@@ -20,6 +20,22 @@ const { isLoading } = storeToRefs(emergencyStore);
 const sheetData = computed(() => exploreSheet.sheetData);
 const areaName = computed(() => cityNameFormat(userLocation.currentRegion.regency.name));
 const scrollContainer = ref<HTMLElement | null>(null);
+const sheetRef = ref<any>(null);
+
+// ── Snap coordination ──────────────────────────────────────────────────────
+// The list sheet has two heights: default (0.5vh) and tall (0.75vh). Scrolling
+// down inside the list auto-expands to tall; scrolling back to top collapses.
+// Whenever the snap changes (via drag or auto), the map is re-fit so the user
+// marker + nearby unit pins stay visible above the sheet.
+const SNAP_DEFAULT = 0;
+const SNAP_TALL = 1;
+const EXPAND_SCROLL_THRESHOLD_PX = 32;
+const currentSnapIdx = ref(SNAP_DEFAULT);
+let lastScrollTop = 0;
+let scrollerEl: HTMLElement | null = null;
+// Baseline map zoom captured when the sheet opens; used as the anchor for
+// `fitMapForSheet` so tall → default restores exactly (not `current - (-1)`).
+let baseZoom: number | null = null;
 
 const emergencyList = computed(() => {
   const typeName = sheetData.value?.emergencyType?.name;
@@ -82,20 +98,34 @@ watch(
   }
 );
 
-function centerUserAboveSheet() {
+/**
+ * Position the user marker in the centre of the visible map strip (the area
+ * above the sheet). Optionally applies a zoom delta so we can zoom out when
+ * the sheet expands so nearby unit markers stay in view.
+ */
+function fitMapForSheet(snapVh: number, zoomDelta = 0) {
   if (!import.meta.client || !leaflet.mapInstance || !userLocation.lat || !userLocation.long) return;
   const map = leaflet.mapInstance as any;
-  const zoom = map.getZoom();
+  if (baseZoom == null) baseZoom = map.getZoom() as number;
+  const anchor = baseZoom ?? map.getZoom();
+  const targetZoom = Math.max(10, anchor + zoomDelta);
   const H = window.innerHeight;
-  // Sheet is 50vh → visible map is top 50%.
-  // We want user at H*0.25 from top (centre of visible area) with 60px extra breathing room.
-  const offset = Math.round(H * 0.25) + 60;
-  // Project user coords to pixel space, shift the desired centre south by offset px, unproject back.
-  // This gives a single smooth setView call that places user correctly without a conflicting panBy.
-  const userPx = map.project([userLocation.lat, userLocation.long], zoom);
+  // Visible strip = (1 - snapVh) * H at the top of the viewport. Place the
+  // user marker ~1/3 down that strip so nearby unit pins still fit below it.
+  const targetUserY = Math.round(((1 - snapVh) / 3) * H);
+  const offset = Math.round(H / 2 - targetUserY);
+  const userPx = map.project([userLocation.lat, userLocation.long], targetZoom);
   const centrePx = userPx.add([0, offset]);
-  const centreLatLng = map.unproject(centrePx, zoom);
-  map.setView(centreLatLng, zoom, { animate: true, duration: 0.45, easeLinearity: 0.2 });
+  const centreLatLng = map.unproject(centrePx, targetZoom);
+  map.setView(centreLatLng, targetZoom, {
+    animate: true,
+    duration: 0.42,
+    easeLinearity: 0.2,
+  });
+}
+
+function centerUserAboveSheet() {
+  fitMapForSheet(0.5, 0);
 }
 
 watch(
@@ -103,11 +133,71 @@ watch(
   (open) => {
     if (!open) {
       filterOpen.value = false;
+      detachScrollListener();
+      currentSnapIdx.value = SNAP_DEFAULT;
+      baseZoom = null;
       return;
     }
+    baseZoom = null; // capture on first fit call
     centerUserAboveSheet();
+    nextTick(() => attachScrollListener());
   }
 );
+
+// ── Scroll → snap coordination ─────────────────────────────────────────────
+
+function findScrollableAncestor(from: HTMLElement | null): HTMLElement | null {
+  let el = from?.parentElement ?? null;
+  while (el && el !== document.body) {
+    const { overflowY } = getComputedStyle(el);
+    if (overflowY === "auto" || overflowY === "scroll") return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+function onListScroll() {
+  if (!scrollerEl) return;
+  const st = scrollerEl.scrollTop;
+  const delta = st - lastScrollTop;
+  lastScrollTop = st;
+
+  if (delta > 2 && st > EXPAND_SCROLL_THRESHOLD_PX && currentSnapIdx.value === SNAP_DEFAULT) {
+    sheetRef.value?.snapTo(SNAP_TALL);
+  } else if (st <= 2 && currentSnapIdx.value === SNAP_TALL) {
+    sheetRef.value?.snapTo(SNAP_DEFAULT);
+  }
+}
+
+function attachScrollListener() {
+  if (scrollerEl) return;
+  const el = findScrollableAncestor(scrollContainer.value);
+  if (!el) return;
+  scrollerEl = el;
+  lastScrollTop = el.scrollTop;
+  el.addEventListener("scroll", onListScroll, { passive: true });
+}
+
+function detachScrollListener() {
+  if (scrollerEl) {
+    scrollerEl.removeEventListener("scroll", onListScroll);
+    scrollerEl = null;
+  }
+  lastScrollTop = 0;
+}
+
+function onSnapChange(idx: number) {
+  currentSnapIdx.value = idx;
+  // Zoom out ~2 levels when tall so the user marker + emergency pins stay
+  // peekable above the raised sheet; restore to base zoom on collapse.
+  if (idx === SNAP_TALL) {
+    fitMapForSheet(0.75, -2);
+  } else {
+    fitMapForSheet(0.5, 0);
+  }
+}
+
+onBeforeUnmount(() => detachScrollListener());
 
 function etaMinutes(duration?: number) {
   const m = displayEtaMinutes(duration);
@@ -254,23 +344,45 @@ function chipClass(active: boolean) {
 </script>
 
 <template>
-  <CoreSheet :is-open="exploreSheet.isOpen" :snap-points="[0.5, 0]" scrollable @close="handleClose()">
+  <CoreSheet
+    ref="sheetRef"
+    :is-open="exploreSheet.isOpen"
+    :snap-points="[0.5, 0.75]"
+    :initial-snap="0"
+    draggable
+    no-swipe-dismiss
+    scrollable
+    @close="handleClose()"
+    @snap-change="onSnapChange"
+  >
     <template #header>
       <div
         v-if="sheetData?.emergencyType"
-        class="relative py-3 px-3 flex items-center justify-between gap-2"
-        style="border-bottom: 1px solid var(--bb-border); border-radius: var(--bb-radius-sheet) var(--bb-radius-sheet) 0 0"
+        class="relative py-2 px-4 flex items-center justify-between gap-2.5"
+        style="background: #ffffff; border-bottom: 1px solid var(--bb-border); border-radius: var(--bb-radius-sheet) var(--bb-radius-sheet) 0 0"
       >
-        <div class="flex gap-2 items-center min-w-0 flex-1">
-          <div class="flex items-center justify-center w-8 h-8 shrink-0 ui-icon-well--danger" style="border-radius: 0.75rem">
-            <Icon :icon="sheetData.emergencyType.icon" class="text-xl" />
+        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+          <div
+            class="flex h-9 w-9 shrink-0 items-center justify-center ui-icon-well--danger"
+            style="border-radius: 0.65rem"
+          >
+            <Icon :icon="sheetData.emergencyType.icon" class="text-[18px]" />
           </div>
-          <div class="min-w-0">
-            <h1 class="text-md leading-none m-0 font-semibold truncate ui-text-primary">
+          <div class="min-w-0 flex-1">
+            <h1
+              class="m-0 truncate text-[16px] font-semibold leading-tight"
+              style="color: #202124; letter-spacing: -0.01em"
+            >
               {{ sheetData.emergencyType.name }}
             </h1>
-            <p v-if="areaName" class="m-0 mt-1 leading-none text-[13px] ui-text-secondary truncate">
-              Dalam jangkauan · {{ areaName }}
+            <p
+              v-if="areaName"
+              class="mt-0.5 truncate text-[12px] leading-tight"
+              style="color: #5f6368"
+            >
+              <span style="color: #1a73e8; font-weight: 500">{{ filteredEmergencyList.length }} unit</span>
+              <span style="color: #dadce0"> · </span>
+              <span>{{ areaName }}</span>
             </p>
           </div>
         </div>

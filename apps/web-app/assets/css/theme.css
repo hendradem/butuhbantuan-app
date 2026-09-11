@@ -340,32 +340,6 @@ html[data-ui-theme="legacy"] .ui-list-card {
   padding: 0.85rem 1rem;
 }
 
-/* Ranked row in flat list: coloured left-border accent instead of card frame */
-.ui-list-card--ranked {
-  padding-left: calc(1rem - 3px);
-  border-left: 3px solid transparent;
-}
-
-/* Inner wrapper is now transparent — the coloured frame is gone in flat mode. */
-.ui-list-card__inner {
-  background: transparent;
-  border-radius: 0;
-  padding: 0;
-  box-shadow: none;
-}
-
-/* Rank label strip sits below the row, small caps hint */
-.ui-list-card__rank-strip {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.4rem 0 0;
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  line-height: 1;
-}
 
 /* Row layout: icon + content (previous structure) */
 .ui-list-card__row {

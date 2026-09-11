@@ -24,6 +24,8 @@ const props = defineProps<{
   disableOverlayClick?: boolean;
   square?: boolean;
   draggable?: boolean;
+  /** Clamp drag at the smallest snap; disable close-by-flick/drag-below. */
+  noSwipeDismiss?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -146,8 +148,9 @@ function onTouchMove(e: TouchEvent) {
 
   const delta = t.clientY - dragStartY;
   const maxH = Math.max(...snapPx.value);
+  const minH = props.noSwipeDismiss ? Math.min(...snapPx.value) : 0;
   const overshoot = 40;
-  currentHeight.value = Math.min(maxH + overshoot, Math.max(0, dragStartHeight - delta));
+  currentHeight.value = Math.min(maxH + overshoot, Math.max(minH, dragStartHeight - delta));
 }
 
 function nearestSnapIndex(h: number, vel: number): number {
@@ -187,16 +190,18 @@ function onTouchEnd() {
   if (!wasDragging || gestureCancelled) return;
 
   const smallest = Math.min(...snapPx.value);
-  const closingFlick = velocity > CLOSE_FLICK_VELOCITY && currentHeight.value <= smallest + 40;
-  // Also close when the user has quietly dragged the sheet significantly below
-  // its lowest snap (~30% under the peek height). This lets the user swipe
-  // down slowly from peek to dismiss, matching Google Maps' behaviour.
-  const draggedBelowPeek = currentHeight.value < smallest * 0.7;
-  if (closingFlick || draggedBelowPeek) {
-    currentHeight.value = 0;
-    emit("close");
-    coreSheet.onClose();
-    return;
+  if (!props.noSwipeDismiss) {
+    const closingFlick = velocity > CLOSE_FLICK_VELOCITY && currentHeight.value <= smallest + 40;
+    // Also close when the user has quietly dragged the sheet significantly below
+    // its lowest snap (~30% under the peek height). This lets the user swipe
+    // down slowly from peek to dismiss, matching Google Maps' behaviour.
+    const draggedBelowPeek = currentHeight.value < smallest * 0.7;
+    if (closingFlick || draggedBelowPeek) {
+      currentHeight.value = 0;
+      emit("close");
+      coreSheet.onClose();
+      return;
+    }
   }
 
   const idx = nearestSnapIndex(currentHeight.value, velocity);
@@ -235,8 +240,15 @@ const heightStyle = computed(() =>
 // Smoother snap: slightly slower ease that peaks near the end (iOS material
 // sheet feel). `will-change` + `contain` on the wrapper offload the reflow
 // to the compositor and stop the map tiles below from re-painting each frame.
+//
+// Includes transform + opacity so the `<Transition name="sheet">` enter/leave
+// classes can animate them without being overridden by this inline style
+// (inline transition would otherwise shadow the class-defined one).
+const SHEET_EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
 const transitionStyle = computed(() =>
-  isDragging.value ? "none" : "height 0.36s cubic-bezier(0.22, 0.61, 0.36, 1)",
+  isDragging.value
+    ? "none"
+    : `height 0.36s ${SHEET_EASE}, transform 0.4s ${SHEET_EASE}, opacity 0.28s ease`,
 );
 </script>
 
@@ -313,5 +325,28 @@ const transitionStyle = computed(() =>
 .bb-sheet-anim > .ui-sheet-panel {
   /* Panel painting isolated too — content changes don't invalidate the map. */
   contain: layout paint style;
+}
+
+/* Enter/leave: sheet slides up from bottom and fades in.
+ * `translate3d` keeps the compositor hint that `translateZ(0)` established. */
+.sheet-enter-from,
+.sheet-leave-to {
+  transform: translate3d(0, 100%, 0);
+  opacity: 0.85;
+}
+.sheet-enter-to,
+.sheet-leave-from {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+}
+
+/* Backdrop fade. */
+.overlay-enter-active,
+.overlay-leave-active {
+  transition: opacity 0.24s ease;
+}
+.overlay-enter-from,
+.overlay-leave-to {
+  opacity: 0;
 }
 </style>
