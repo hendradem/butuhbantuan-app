@@ -7,15 +7,20 @@ import {
   routeLineColorFromTravel,
 } from "~/utils/routeAdvice";
 
-const props = defineProps<{
-  requesterLat: number;
-  requesterLng: number;
-  responderLat?: number;
-  responderLng?: number;
-  unitLat?: number;
-  unitLng?: number;
-  updatedAt?: string | null;
-}>();
+const props = withDefaults(
+  defineProps<{
+    requesterLat: number;
+    requesterLng: number;
+    responderLat?: number;
+    responderLng?: number;
+    unitLat?: number;
+    unitLng?: number;
+    updatedAt?: string | null;
+    /** CSS height of the map canvas. */
+    height?: string;
+  }>(),
+  { height: "16rem" },
+);
 
 const mapEl = ref<HTMLElement | null>(null);
 let map: LeafletMap | null = null;
@@ -265,27 +270,87 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="border-t border-dashed border-neutral-200">
-    <div class="px-4 pt-3 pb-2 flex items-center justify-between gap-2">
-      <div>
-        <p class="text-sm font-semibold text-neutral-900">
-          {{ hasLive ? "Rute petugas → Anda" : fallbackUnit ? "Perkiraan dari posko" : "Peta lokasi" }}
+  <section class="tlm">
+    <header class="tlm-head">
+      <div class="min-w-0">
+        <p class="tlm-title">
+          {{ hasLive ? "Rute petugas → lokasi kamu" : fallbackUnit ? "Perkiraan dari posko" : "Lokasi kamu" }}
         </p>
-        <p v-if="hasLive && updatedLabel" class="text-xs text-emerald-700 mt-0.5">
+        <p v-if="hasLive && updatedLabel" class="tlm-meta tlm-meta--live">
           Diperbarui {{ updatedLabel }}
         </p>
-        <p v-else-if="!hasLive && fallbackUnit" class="text-xs text-neutral-500 mt-0.5">
-          Menunggu GPS petugas lapangan
+        <p v-else-if="!hasLive && fallbackUnit" class="tlm-meta">
+          Menunggu GPS petugas di lapangan
         </p>
       </div>
-      <span
-        v-if="hasLive"
-        class="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full"
-      >
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+      <span v-if="hasLive" class="tlm-live">
+        <span class="tlm-dot" />
         Live
       </span>
-    </div>
-    <div ref="mapEl" class="h-48 w-full bg-neutral-100" />
-  </div>
+    </header>
+    <div ref="mapEl" class="tlm-canvas" :style="{ height }" />
+  </section>
 </template>
+
+<style scoped>
+.tlm {
+  overflow: hidden;
+  border-radius: var(--bb-radius-card);
+  background: var(--bb-bg-surface);
+}
+.tlm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px 10px;
+}
+.tlm-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--bb-text);
+}
+.tlm-meta {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--bb-text-tertiary);
+}
+.tlm-meta--live {
+  color: #15803d;
+}
+.tlm-live {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #f0fdf4;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #15803d;
+}
+.tlm-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #22c55e;
+  animation: tlm-pulse 1.6s ease-in-out infinite;
+}
+.tlm-canvas {
+  width: 100%;
+  background: var(--bb-bg-muted);
+}
+
+@keyframes tlm-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tlm-dot {
+    animation: none;
+  }
+}
+</style>

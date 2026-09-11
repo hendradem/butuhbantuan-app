@@ -5,6 +5,9 @@ const STORAGE_KEY = "pwa-install-dismissed";
 const deferredPrompt = ref<any>(null);
 const showBanner = ref(false);
 
+// Keeps the ticket island below this banner while it is up.
+const bannerEl = useTopInset("pwa-install");
+
 onMounted(() => {
   if (localStorage.getItem(STORAGE_KEY) === "true") return;
 
@@ -41,6 +44,7 @@ async function handleInstall() {
   <Transition name="slide-down">
     <div
       v-if="showBanner"
+      ref="bannerEl"
       class="fixed top-0 left-0 right-0 max-w-md mx-auto z-50 w-full h-[60px] flex items-center justify-center px-3 text-white"
       style="background: var(--bb-accent); box-shadow: var(--bb-shadow-soft)"
     >

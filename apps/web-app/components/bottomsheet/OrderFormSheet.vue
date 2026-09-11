@@ -10,6 +10,8 @@ import { appToast } from "~/utils/appToast";
 import { displayEtaMinutes } from "~/utils/rankUnits";
 import { saveUnitJobLink } from "~/utils/unitJobLink";
 import { saveTicketAccess } from "~/utils/ticketAccess";
+import { saveActiveTicket } from "~/utils/activeTicket";
+import { emergencyLogoSrc } from "~/utils/emergencyLogo";
 import { unitUsesWaDispatch } from "~/utils/waContact";
 import {
   fallbackAssessmentTemplate,
@@ -328,6 +330,13 @@ async function submit() {
       if (orderSheet.callType === "whatsapp") query.via = "whatsapp";
       if (orderSheet.callNumber) query.to = orderSheet.callNumber;
       saveTicketAccess(publicToken, phone.value);
+      // Lets the ticket island follow this report on the map screen.
+      saveActiveTicket({
+        token: publicToken,
+        ticketNumber,
+        unitName: orderSheet.unitName,
+        unitLogo: live ? emergencyLogoSrc(live.emergencyData) : undefined,
+      });
       await navigateTo({ path: `/ticket/${publicToken}`, query });
     } else {
       toast.error("Tiket dibuat tapi link tidak tersedia. Hubungi unit.");

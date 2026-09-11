@@ -9,12 +9,16 @@ const searchSheet = useSearchSheetStore();
 
 const hl = computed(() => hotlines());
 const visible = computed(() => !online.value || fromCache.value);
+
+// Keeps the ticket island below this banner while it is up.
+const bannerEl = useTopInset("offline");
 </script>
 
 <template>
   <Transition name="slide">
     <div
       v-if="visible"
+      ref="bannerEl"
       class="absolute top-0 inset-x-0 z-[120] px-3 pt-3 pointer-events-none"
     >
       <div

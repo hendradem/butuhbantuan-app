@@ -2,6 +2,7 @@
 import { Icon } from "@iconify/vue";
 import { appToast } from "~/utils/appToast";
 import { saveTicketAccess } from "~/utils/ticketAccess";
+import { saveActiveTicket } from "~/utils/activeTicket";
 
 const sosStore = useSosStore();
 const location = useUserLocationStore();
@@ -70,6 +71,11 @@ async function submit() {
 
     if (result?.public_token) {
       saveTicketAccess(result.public_token, phone.value);
+      saveActiveTicket({
+        token: result.public_token,
+        ticketNumber: result.ticket_number ?? "",
+        unitName: result.unit_name ?? "",
+      });
       if (result.reused) {
         toast.success("Tiket aktif ditemukan — membuka e-tiket");
       }

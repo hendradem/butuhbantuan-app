@@ -4,7 +4,6 @@ import type { SavedPlace } from "~/utils/savedPlaces";
 import { formatGeoAddress } from "~/utils/geo";
 import { getSavedPlace } from "~/utils/savedPlaces";
 import { hasMapView } from "~/utils/mapUrl";
-import { PREVIEW_TICKET_ISLAND } from "~/utils/ticketIsland";
 
 const route = useRoute();
 const onboardingStore = useOnboardingStore();
@@ -136,8 +135,8 @@ async function goToSavedPlace(place: SavedPlace) {
         >
           <AddToHomeScreenBanner />
           <OfflineBanner />
-          <!-- Static preview — swap for the user's active ticket once wired up. -->
-          <TicketIsland :ticket="PREVIEW_TICKET_ISLAND" />
+          <!-- Appears only while this device has a running report. -->
+          <ActiveTicketIsland />
 
           <div class="absolute inset-0 z-0">
             <ClientOnly>

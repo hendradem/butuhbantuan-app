@@ -17,6 +17,8 @@ export type WaContactPayload = {
   lng?: number | null;
   /** Public e-ticket view token (share link). */
   viewToken?: string;
+  /** Ready-made e-ticket URL; takes precedence over viewToken. */
+  ticketUrl?: string;
   /** Magic-link for units without dashboard (/dispatch/{token}). */
   dispatchUrl?: string;
   /** Absolute URL to incident photo (wa.me cannot attach binary files). */

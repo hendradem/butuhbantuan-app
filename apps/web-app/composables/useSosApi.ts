@@ -14,7 +14,15 @@ export function useSosApi() {
     regency_id?: string;
     province_id?: string;
   }) {
-    const res = await $fetch<{ data: { ticket_number?: string; reused?: boolean } }>(
+    const res = await $fetch<{
+      data: {
+        ticket_number?: string;
+        /** Public e-ticket token — /ticket/{token}. */
+        public_token?: string;
+        unit_name?: string;
+        reused?: boolean;
+      };
+    }>(
       `${baseUrl}/api/v1/sos/`,
       { method: "POST", body: payload }
     );
