@@ -186,25 +186,31 @@ function distanceBadgeClass(meters: number | null) {
   if (m <= 10000) return softLabelTone.red;
   return softLabelTone.neutral;
 }
+
+const rankAccent = computed(() => {
+  switch (props.rankHint?.tone) {
+    case "good": return "#10b981"; // emerald-500
+    case "info": return "#3b82f6"; // blue-500
+    case "muted": return "#94a3b8"; // slate-400
+    default: return "transparent";
+  }
+});
 </script>
 
 <template>
   <!--
-    Ranked: article = coloured outer frame, ui-list-card__inner = white card inside.
-    Unranked / detail: article is the card itself (no inner wrapper needed).
+    Flat list row. `--ranked` adds a coloured left-border accent (tone-based)
+    to signal smart-rank position without breaking the flat rhythm.
   -->
   <article
     class="ui-list-card"
     :class="{
       'ui-list-card--detail': actions,
       'ui-list-card--ranked': !!rankHint && !actions && !isHospital,
-      'bg-emerald-50 border-emerald-100': rankHint?.tone === 'good' && !actions && !isHospital,
-      'bg-blue-50 border-blue-100': rankHint?.tone === 'info' && !actions && !isHospital,
-      'bg-neutral-100 border-neutral-200': rankHint?.tone === 'muted' && !actions && !isHospital,
     }"
+    :style="rankHint && !actions && !isHospital ? { borderLeftColor: rankAccent } : undefined"
   >
-    <!-- White content area (inner wrapper only for ranked non-hospital cards) -->
-    <div :class="{ 'ui-list-card__inner': !!rankHint && !actions && !isHospital }">
+    <div>
       <div class="ui-list-card__row">
         <div
           class="ui-list-card__icon"

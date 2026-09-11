@@ -508,74 +508,25 @@ function chipClass(active: boolean) {
 
     <div ref="scrollContainer" class="pb-20" style="background: #fafafa">
       <div v-if="isLoading" class="ui-list-stack animate-pulse">
-        <!-- Ranked card skeleton: tone 1 = emerald (best) -->
-        <div class="ui-list-card ui-list-card--ranked bg-emerald-50 border-emerald-100">
-          <div class="ui-list-card__inner">
-            <div class="ui-list-card__row">
-              <div class="w-11 h-11 rounded-[0.7rem] soft-skel shrink-0" />
-              <div class="min-w-0 flex-1">
-                <div class="flex items-start justify-between gap-2">
-                  <div class="h-4 w-3/5 soft-skel rounded" />
-                  <div class="h-3 w-14 soft-skel rounded shrink-0" />
-                </div>
-                <div class="h-3 w-2/5 soft-skel rounded mt-1.5" />
-                <div class="mt-2.5 flex flex-wrap gap-1.5">
-                  <div class="h-5 w-10 rounded-full soft-skel" />
-                  <div class="h-5 w-14 rounded-full soft-skel" />
-                  <div class="h-5 w-16 rounded-full soft-skel" />
-                </div>
+        <div
+          v-for="i in 6"
+          :key="i"
+          class="ui-list-card"
+        >
+          <div class="ui-list-card__row">
+            <div class="w-11 h-11 rounded-[0.7rem] soft-skel shrink-0" />
+            <div class="min-w-0 flex-1">
+              <div class="flex items-start justify-between gap-2">
+                <div class="h-4 w-3/5 soft-skel rounded" />
+                <div class="h-3 w-14 soft-skel rounded shrink-0" />
+              </div>
+              <div class="h-3 w-2/5 soft-skel rounded mt-1.5" />
+              <div class="mt-2.5 flex flex-wrap gap-1.5">
+                <div class="h-5 w-10 rounded-full soft-skel" />
+                <div class="h-5 w-14 rounded-full soft-skel" />
+                <div class="h-5 w-16 rounded-full soft-skel" />
               </div>
             </div>
-          </div>
-          <div class="ui-list-card__rank-strip">
-            <div class="h-2 w-20 soft-skel rounded" />
-          </div>
-        </div>
-
-        <!-- Ranked card skeleton: tone 2 = blue (alternative) -->
-        <div class="ui-list-card ui-list-card--ranked bg-blue-50 border-blue-100">
-          <div class="ui-list-card__inner">
-            <div class="ui-list-card__row">
-              <div class="w-11 h-11 rounded-[0.7rem] soft-skel shrink-0" />
-              <div class="min-w-0 flex-1">
-                <div class="flex items-start justify-between gap-2">
-                  <div class="h-4 w-1/2 soft-skel rounded" />
-                  <div class="h-3 w-12 soft-skel rounded shrink-0" />
-                </div>
-                <div class="h-3 w-1/3 soft-skel rounded mt-1.5" />
-                <div class="mt-2.5 flex flex-wrap gap-1.5">
-                  <div class="h-5 w-10 rounded-full soft-skel" />
-                  <div class="h-5 w-16 rounded-full soft-skel" />
-                  <div class="h-5 w-14 rounded-full soft-skel" />
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="ui-list-card__rank-strip">
-            <div class="h-2 w-24 soft-skel rounded" />
-          </div>
-        </div>
-
-        <!-- Ranked card skeleton: tone 3 = neutral (other) -->
-        <div class="ui-list-card ui-list-card--ranked bg-neutral-100 border-neutral-200">
-          <div class="ui-list-card__inner">
-            <div class="ui-list-card__row">
-              <div class="w-11 h-11 rounded-[0.7rem] soft-skel shrink-0" />
-              <div class="min-w-0 flex-1">
-                <div class="flex items-start justify-between gap-2">
-                  <div class="h-4 w-2/3 soft-skel rounded" />
-                  <div class="h-3 w-16 soft-skel rounded shrink-0" />
-                </div>
-                <div class="h-3 w-2/5 soft-skel rounded mt-1.5" />
-                <div class="mt-2.5 flex flex-wrap gap-1.5">
-                  <div class="h-5 w-10 rounded-full soft-skel" />
-                  <div class="h-5 w-14 rounded-full soft-skel" />
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="ui-list-card__rank-strip">
-            <div class="h-2 w-16 soft-skel rounded" />
           </div>
         </div>
       </div>

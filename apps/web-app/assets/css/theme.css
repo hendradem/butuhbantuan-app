@@ -264,34 +264,44 @@ html[data-color-mode="dark"] .divide-neutral-200 > :not([hidden]) ~ :not([hidden
   font-weight: 600;
 }
 
-/* Soft UI list cards (unit / emergency sheet list) — hierarchy matches order-card ref */
+/* Flat list rendering (unit / emergency sheet list) — hairline dividers,
+ * no per-row card. Detail variant below overrides for single-card contexts. */
 .ui-list-stack {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.625rem 0.75rem 1rem;
-  background: #fafafa;
+  gap: 0;
+  padding: 0 0 1rem;
+  background: var(--bb-bg-surface);
+}
+
+/* Divider on the card itself (border-top). Reset for the row rendered as
+ * the first child of the stack — handles both direct `.ui-list-card` and
+ * button-wrapped variants without depending on the wrapper's border styling. */
+.ui-list-stack > *:first-child > .ui-list-card,
+.ui-list-stack > .ui-list-card:first-child {
+  border-top: 0 !important;
 }
 
 html[data-ui-theme="legacy"] .ui-list-stack {
   background: transparent;
-  gap: 0.4rem;
-  padding: 0.5rem 0.75rem 1rem;
+  gap: 0;
+  padding: 0 0 1rem;
 }
 
 .ui-list-card {
-  background: var(--bb-bg-surface);
-  border: 1px solid var(--bb-border);
-  border-radius: 1rem;
-  padding: 0.75rem 0.85rem;
-  box-shadow: var(--bb-shadow-xs);
+  background: transparent;
+  border: 0 solid var(--bb-border);
+  border-top-width: 1px;
+  border-radius: 0;
+  padding: 0.9rem 1rem;
+  box-shadow: none;
   text-align: left;
   width: 100%;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: background 0.15s ease;
 }
 
 .ui-list-card:active {
-  transform: scale(0.992);
+  background: var(--bb-bg-muted);
 }
 
 /* Detail sheet card — flush layout: white surface, no border / shadow / radius,
@@ -326,30 +336,30 @@ html[data-ui-theme="legacy"] .ui-list-stack {
 }
 
 html[data-ui-theme="legacy"] .ui-list-card {
-  border-radius: 0.75rem;
-  padding: 0.7rem 0.8rem;
+  border-radius: 0;
+  padding: 0.85rem 1rem;
 }
 
-/* Ranked card: coloured outer frame, white inner area */
+/* Ranked row in flat list: coloured left-border accent instead of card frame */
 .ui-list-card--ranked {
-  padding: 0.3rem;
+  padding-left: calc(1rem - 3px);
+  border-left: 3px solid transparent;
 }
 
-/* White inner content area for ranked cards */
+/* Inner wrapper is now transparent — the coloured frame is gone in flat mode. */
 .ui-list-card__inner {
-  background: var(--bb-bg-surface);
-  border-radius: 0.75rem;
-  padding: 0.75rem 0.85rem;
-  box-shadow: var(--bb-shadow-xs);
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
 }
 
-/* Rank label strip sits below the white inner card */
+/* Rank label strip sits below the row, small caps hint */
 .ui-list-card__rank-strip {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.25rem 0.5rem;
-  margin-top: 0.25rem;
+  padding: 0.4rem 0 0;
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.07em;
