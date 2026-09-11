@@ -59,19 +59,14 @@ const tabs: { key: TabKey; label: string }[] = [
 // collapse, the previous view (center + zoom) is restored so the user gets
 // back exactly what they were looking at.
 
-const sheetRef = ref<{ snapTo(idx: number): void } | null>(null);
+const sheetRef = ref<{ snapTo(idx: number): void; visibleHeight(): number } | null>(null);
 const scrollBodyRef = ref<HTMLElement | null>(null);
 let expandedByScroll = false;
 let savedZoom: number | null = null;
 let savedCenter: { lat: number; lng: number } | null = null;
 
 function currentSheetHeightPx(): number {
-  if (typeof document === "undefined") return 0;
-  let tallest = 0;
-  document.querySelectorAll<HTMLElement>(".ui-sheet-panel").forEach((el) => {
-    if (el.offsetHeight > tallest) tallest = el.offsetHeight;
-  });
-  return tallest;
+  return sheetRef.value?.visibleHeight() ?? 0;
 }
 
 function routePoints(): Array<[number, number]> {
@@ -150,10 +145,8 @@ function onBodyScroll(e: Event) {
 }
 
 // Map view follows sheet size regardless of trigger (auto-snap or manual swipe).
-// CoreSheet's height transition runs ~0.28s (cubic-bezier). We wait for the
-// sheet to reach its final height before re-framing, otherwise the padding
-// calc is based on an intermediate height and the pin ends up under the sheet.
-const SHEET_ANIM_MS = 320;
+// CoreSheet reports its target height as soon as it snaps, so the map can
+// re-frame in parallel with the (compositor-only) sheet animation.
 
 function toggleMapSheetMax(on: boolean) {
   const el = leaflet.mapInstance?.getContainer?.();
@@ -163,7 +156,7 @@ function toggleMapSheetMax(on: boolean) {
 function onSnapChange(idx: number) {
   if (idx >= 2 && savedZoom == null) {
     toggleMapSheetMax(true);
-    setTimeout(applyMapViewForExpanded, SHEET_ANIM_MS);
+    applyMapViewForExpanded();
   } else if (idx < 2 && savedZoom != null) {
     toggleMapSheetMax(false);
     restoreMapView();

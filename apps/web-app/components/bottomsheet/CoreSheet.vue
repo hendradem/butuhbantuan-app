@@ -7,9 +7,16 @@
  *     whole lifecycle. No gesture. Backwards compatible with every existing
  *     sheet in the app.
  *   • Draggable (`draggable="true"`) — the user can touch-drag the handle
- *     bar or header slot to move between snap points. Momentum-based
+ *     bar or header slot to move between snap points. Velocity-projected
  *     nearest-snap on release; a hard downward flick past the smallest snap
  *     closes the sheet.
+ *   • Content drag (`draggable` + `scrollable` + `contentDrag`) — dragging the
+ *     body moves the sheet until it reaches its tallest snap, after which the
+ *     body scrolls natively; pulling down from scrollTop 0 moves it back.
+ *
+ * Draggable sheets are laid out once at their tallest snap and moved with
+ * `transform` only, so snapping and dragging stay on the compositor even
+ * while Leaflet is busy re-framing the map underneath.
  *
  * Snap heights: value < 2 → vh fraction (0.5 = 50vh); value ≥ 2 → pixels.
  * Snap-points list should be ordered peek → full when draggable.
@@ -26,6 +33,8 @@ const props = defineProps<{
   draggable?: boolean;
   /** Clamp drag at the smallest snap; disable close-by-flick/drag-below. */
   noSwipeDismiss?: boolean;
+  /** Let the scrollable body drive the sheet (requires draggable + scrollable). */
+  contentDrag?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -54,9 +63,31 @@ const currentSnap = ref(props.initialSnap ?? 0);
 const currentHeight = ref(0);
 const isDragging = ref(false);
 
+const maxPx = computed(() => Math.max(0, ...snapPx.value));
+const minPx = computed(() => Math.min(...snapPx.value));
+const maxSnapIndex = computed(() => snapPx.value.indexOf(maxPx.value));
+
+// ── Transform track (draggable mode) ─────────────────────────────────────────
+
+const SNAP_EASE = "cubic-bezier(0.32, 0.72, 0, 1)"; // iOS sheet curve
+const SNAP_MS = 480;
+const trackEl = ref<HTMLElement | null>(null);
+const scrollerEl = ref<HTMLElement | null>(null);
+
+/** Write the track transform directly — no Vue render per touchmove. */
+function paint(animate: boolean) {
+  const el = trackEl.value;
+  if (!el || !props.draggable) return;
+  el.style.transition = animate ? `transform ${SNAP_MS}ms ${SNAP_EASE}` : "none";
+  el.style.transform = `translate3d(0, ${maxPx.value - currentHeight.value}px, 0)`;
+}
+
+watch(trackEl, (el) => el && paint(false));
+
 function recomputeSnaps() {
   snapPx.value = points.value.map(toPx);
   currentHeight.value = snapPx.value[currentSnap.value] ?? snapPx.value[0] ?? 0;
+  paint(false);
 }
 
 onMounted(() => {
@@ -73,9 +104,8 @@ watch(
   (open) => {
     if (open) {
       zIndex.value = stack.acquire(stackId);
-      recomputeSnaps();
       currentSnap.value = props.initialSnap ?? 0;
-      currentHeight.value = snapPx.value[currentSnap.value] ?? 0;
+      recomputeSnaps();
     } else {
       stack.release(stackId);
     }
@@ -85,141 +115,190 @@ watch(
 
 watch(points, () => recomputeSnaps(), { deep: true });
 
+/** Height of the sheet currently on screen (px). */
+function visibleHeight() {
+  return currentHeight.value;
+}
+
+function settle(index: number) {
+  const changed = index !== currentSnap.value;
+  currentSnap.value = index;
+  currentHeight.value = snapPx.value[index]!;
+  paint(true);
+  // Collapsing below full height locks the body, so start it from the top.
+  if (props.contentDrag && index !== maxSnapIndex.value) {
+    scrollerEl.value?.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  if (changed) emit("snap-change", index);
+}
+
+/** Programmatic snap — for parents that move the sheet without a gesture. */
+function snapTo(index: number) {
+  if (index < 0 || index >= snapPx.value.length) return;
+  settle(index);
+}
+
+defineExpose({ snapTo, visibleHeight });
+
 // ── Drag gesture (touch only — desktop uses backdrop + close button) ─────────
 
 const CLOSE_FLICK_VELOCITY = 0.65; // px/ms — flick-down past peek to close
-const DIRECTIONAL_VELOCITY = 0.35; // px/ms — bias snap towards drag direction
-const INTENT_THRESHOLD_PX = 10;    // px — first significant move classifies the gesture
+const PROJECTION_MS = 180; // how far ahead a release "throws" the sheet
+const INTENT_THRESHOLD_PX = 8; // first significant move classifies the gesture
+const RUBBER_BAND_PX = 56; // max visual overshoot past the ends
+const VELOCITY_WINDOW_MS = 100;
 
-let dragStartX = 0;
-let dragStartY = 0;
+type Source = "handle" | "content";
+type Phase = "idle" | "pending" | "sheet" | "native";
+
+let phase: Phase = "idle";
+let source: Source = "handle";
+let startX = 0;
+let startY = 0;
+let dragOriginY = 0;
 let dragStartHeight = 0;
-let lastY = 0;
-let lastTs = 0;
-let velocity = 0; // px/ms — positive = dragging down
-// A touch stays "pending" until we've seen enough movement to decide whether
-// the user is dragging the sheet vertically or scrolling a child element
-// (action pills, tab bar) horizontally. Once classified as horizontal, we
-// bail out and let the child scroll natively.
-let gesturePending = false;
-let gestureCancelled = false;
+let samples: { y: number; t: number }[] = [];
 
-function onTouchStart(e: TouchEvent) {
-  if (!props.draggable) return;
+/** Asymptotic resistance past the ends: the further you pull, the less it moves. */
+function rubberBand(distance: number) {
+  return RUBBER_BAND_PX * (1 - Math.exp(-distance / (RUBBER_BAND_PX * 2.5)));
+}
+
+/** Does the sheet (rather than the body's native scroll) own this drag? */
+function sheetOwns(dy: number) {
+  if (source === "handle") return true;
+  if (currentSnap.value !== maxSnapIndex.value) return true;
+  return dy > 0 && (scrollerEl.value?.scrollTop ?? 0) <= 0;
+}
+
+function onTouchStart(e: TouchEvent, from: Source) {
+  if (!props.draggable || (from === "content" && !props.contentDrag)) return;
   const t = e.touches[0];
   if (!t) return;
-  dragStartX = t.clientX;
-  dragStartY = t.clientY;
-  lastY = t.clientY;
-  lastTs = performance.now();
-  dragStartHeight = currentHeight.value;
-  velocity = 0;
-  gesturePending = true;
-  gestureCancelled = false;
-  isDragging.value = false; // flipped to true once classified as vertical
+  source = from;
+  phase = "pending";
+  startX = t.clientX;
+  startY = t.clientY;
 }
 
 function onTouchMove(e: TouchEvent) {
-  if (!props.draggable || gestureCancelled) return;
+  if (phase === "idle" || phase === "native") return;
   const t = e.touches[0];
   if (!t) return;
+  const dx = t.clientX - startX;
+  const dy = t.clientY - startY;
 
-  // First-move classifier: bail out if the swipe is horizontally dominant
-  // (user is trying to scroll the action pills or tabs, not drag the sheet).
-  if (gesturePending) {
-    const dx = Math.abs(t.clientX - dragStartX);
-    const dy = Math.abs(t.clientY - dragStartY);
-    if (dx < INTENT_THRESHOLD_PX && dy < INTENT_THRESHOLD_PX) return;
-    if (dx > dy * 1.4) {
-      gestureCancelled = true;
-      gesturePending = false;
+  if (phase === "pending") {
+    const owns = sheetOwns(dy);
+    if (Math.abs(dx) < INTENT_THRESHOLD_PX && Math.abs(dy) < INTENT_THRESHOLD_PX) {
+      // Stop native scroll from starting before we've classified the gesture.
+      if (owns && e.cancelable && Math.abs(dy) >= Math.abs(dx)) e.preventDefault();
       return;
     }
-    gesturePending = false;
+    // Horizontal swipes (action pills, tabs) and body scrolls stay native.
+    if (Math.abs(dx) > Math.abs(dy) * 1.4 || !owns) {
+      phase = "native";
+      return;
+    }
+    phase = "sheet";
     isDragging.value = true;
+    dragOriginY = t.clientY;
+    dragStartHeight = currentHeight.value;
+    samples = [];
   }
-  if (!isDragging.value) return;
+
+  if (e.cancelable) e.preventDefault();
 
   const now = performance.now();
-  const dt = Math.max(1, now - lastTs);
-  velocity = (t.clientY - lastY) / dt;
-  lastY = t.clientY;
-  lastTs = now;
+  samples.push({ y: t.clientY, t: now });
+  while (samples.length > 2 && now - samples[0]!.t > VELOCITY_WINDOW_MS) samples.shift();
 
-  const delta = t.clientY - dragStartY;
-  const maxH = Math.max(...snapPx.value);
-  const minH = props.noSwipeDismiss ? Math.min(...snapPx.value) : 0;
-  const overshoot = 40;
-  currentHeight.value = Math.min(maxH + overshoot, Math.max(minH, dragStartHeight - delta));
+  const raw = dragStartHeight - (t.clientY - dragOriginY);
+  const floor = props.noSwipeDismiss ? minPx.value : 0;
+  let h = raw;
+  if (raw > maxPx.value) h = maxPx.value + rubberBand(raw - maxPx.value);
+  else if (raw < floor) h = floor - rubberBand(floor - raw);
+  currentHeight.value = h;
+  paint(false);
 }
 
-function nearestSnapIndex(h: number, vel: number): number {
-  // Directional bias: a flick chooses the next snap in that direction.
-  if (Math.abs(vel) > DIRECTIONAL_VELOCITY) {
-    if (vel > 0) {
-      // Dragging down → next smaller snap
-      for (let i = 0; i < snapPx.value.length; i++) {
-        if (snapPx.value[i]! < h) return i;
-      }
-      return 0;
-    }
-    // Dragging up → next larger snap
-    for (let i = snapPx.value.length - 1; i >= 0; i--) {
-      if (snapPx.value[i]! > h) return i;
-    }
-    return snapPx.value.length - 1;
-  }
-  // Otherwise nearest by absolute distance.
-  let bestIdx = 0;
-  let bestDist = Infinity;
+/** px/ms over the last ~100 ms; positive = moving down. */
+function releaseVelocity() {
+  if (samples.length < 2) return 0;
+  const first = samples[0]!;
+  const last = samples[samples.length - 1]!;
+  return (last.y - first.y) / Math.max(1, last.t - first.t);
+}
+
+function nearestSnapIndex(h: number) {
+  let best = 0;
   snapPx.value.forEach((sp, i) => {
-    const d = Math.abs(sp - h);
-    if (d < bestDist) {
-      bestDist = d;
-      bestIdx = i;
-    }
+    if (Math.abs(sp - h) < Math.abs(snapPx.value[best]! - h)) best = i;
   });
-  return bestIdx;
+  return best;
+}
+
+/** A drag that ends over a card must not also "tap" it. */
+function swallowNextClick() {
+  const stop = (ev: Event) => {
+    ev.stopPropagation();
+    ev.preventDefault();
+  };
+  window.addEventListener("click", stop, { capture: true, once: true });
+  setTimeout(() => window.removeEventListener("click", stop, { capture: true }), 350);
 }
 
 function onTouchEnd() {
-  // Clean up gesture bookkeeping regardless of state.
-  gesturePending = false;
-  const wasDragging = isDragging.value;
+  const wasSheetDrag = phase === "sheet";
+  phase = "idle";
   isDragging.value = false;
-  if (!wasDragging || gestureCancelled) return;
+  if (!wasSheetDrag) return;
+  if (source === "content") swallowNextClick();
 
-  const smallest = Math.min(...snapPx.value);
+  const velocity = releaseVelocity();
+  const smallest = minPx.value;
+
   if (!props.noSwipeDismiss) {
     const closingFlick = velocity > CLOSE_FLICK_VELOCITY && currentHeight.value <= smallest + 40;
-    // Also close when the user has quietly dragged the sheet significantly below
-    // its lowest snap (~30% under the peek height). This lets the user swipe
-    // down slowly from peek to dismiss, matching Google Maps' behaviour.
+    // Quietly dragging well below peek (~30% under it) also dismisses.
     const draggedBelowPeek = currentHeight.value < smallest * 0.7;
     if (closingFlick || draggedBelowPeek) {
-      currentHeight.value = 0;
       emit("close");
       coreSheet.onClose();
       return;
     }
   }
 
-  const idx = nearestSnapIndex(currentHeight.value, velocity);
-  currentSnap.value = idx;
-  currentHeight.value = snapPx.value[idx]!;
-  emit("snap-change", idx);
+  settle(nearestSnapIndex(currentHeight.value - velocity * PROJECTION_MS));
 }
 
-/** Programmatic snap — called from parents that want to move the sheet
- * without a user gesture (e.g. auto-expand on scroll). */
-function snapTo(index: number) {
-  if (index < 0 || index >= snapPx.value.length) return;
-  currentSnap.value = index;
-  currentHeight.value = snapPx.value[index]!;
-  emit("snap-change", index);
+// Desktop / trackpad: wheel on the body expands, and pulling up at the top
+// (after scrolling has come to rest) collapses one step.
+let lastBodyScrollTs = 0;
+
+function onBodyScroll() {
+  lastBodyScrollTs = performance.now();
 }
 
-defineExpose({ snapTo });
+function onBodyWheel(e: WheelEvent) {
+  if (!props.contentDrag) return;
+  const atMax = currentSnap.value === maxSnapIndex.value;
+  if (!atMax && e.deltaY > 4) {
+    snapTo(maxSnapIndex.value);
+  } else if (
+    atMax &&
+    e.deltaY < -4 &&
+    (scrollerEl.value?.scrollTop ?? 0) <= 0 &&
+    performance.now() - lastBodyScrollTs > 300
+  ) {
+    snapTo(Math.max(0, maxSnapIndex.value - 1));
+  }
+}
+
+/** Body only scrolls natively once the sheet is fully open. */
+const bodyScrollLocked = computed(
+  () => props.contentDrag && (isDragging.value || currentSnap.value !== maxSnapIndex.value),
+);
 
 // ── Overlay / close ──────────────────────────────────────────────────────────
 
@@ -234,22 +313,9 @@ function handleOverlayClick() {
 
 // ── Rendering ────────────────────────────────────────────────────────────────
 
-const heightStyle = computed(() =>
-  currentHeight.value === 0 ? "0px" : `${currentHeight.value}px`,
-);
-// Smoother snap: slightly slower ease that peaks near the end (iOS material
-// sheet feel). `will-change` + `contain` on the wrapper offload the reflow
-// to the compositor and stop the map tiles below from re-painting each frame.
-//
-// Includes transform + opacity so the `<Transition name="sheet">` enter/leave
-// classes can animate them without being overridden by this inline style
-// (inline transition would otherwise shadow the class-defined one).
-const SHEET_EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
-const transitionStyle = computed(() =>
-  isDragging.value
-    ? "none"
-    : `height 0.36s ${SHEET_EASE}, transform 0.4s ${SHEET_EASE}, opacity 0.28s ease`,
-);
+// Draggable sheets keep a fixed box (tallest snap) and move via the track's
+// transform; static sheets simply size to their snap.
+const boxHeight = computed(() => `${props.draggable ? maxPx.value : currentHeight.value}px`);
 </script>
 
 <template>
@@ -266,12 +332,14 @@ const transitionStyle = computed(() =>
     <Transition name="sheet">
       <div
         v-if="isOpen"
-        class="fixed bottom-0 left-0 right-0 mx-auto max-w-md bg-transparent bb-sheet-anim"
-        :style="{ height: heightStyle, zIndex, transition: transitionStyle }"
+        class="bb-sheet fixed bottom-0 left-0 right-0 mx-auto max-w-md bg-transparent"
+        :style="{ height: boxHeight, zIndex }"
       >
         <div
+          ref="trackEl"
           :class="[
             'ui-sheet-panel flex flex-col h-full',
+            draggable && 'bb-sheet-track',
             square && 'ui-sheet-panel--square',
           ]"
         >
@@ -279,8 +347,8 @@ const transitionStyle = computed(() =>
           <div
             v-if="draggable"
             class="flex-shrink-0 pt-2 pb-1 flex items-center justify-center touch-none select-none cursor-grab active:cursor-grabbing"
-            @touchstart.passive="onTouchStart"
-            @touchmove.passive="onTouchMove"
+            @touchstart.passive="onTouchStart($event, 'handle')"
+            @touchmove="onTouchMove"
             @touchend="onTouchEnd"
             @touchcancel="onTouchEnd"
           >
@@ -290,20 +358,33 @@ const transitionStyle = computed(() =>
             />
           </div>
 
-          <!-- Header slot is also draggable so users can grab any part of it -->
+          <!-- Header slot is also draggable so users can grab any part of it.
+               pan-x keeps horizontal pills scrollable; vertical is ours. -->
           <div
             v-if="$slots.header"
             class="flex-shrink-0"
-            :class="draggable && 'touch-pan-y'"
-            @touchstart.passive="draggable ? onTouchStart($event) : undefined"
-            @touchmove.passive="draggable ? onTouchMove($event) : undefined"
-            @touchend="draggable ? onTouchEnd() : undefined"
-            @touchcancel="draggable ? onTouchEnd() : undefined"
+            :class="draggable && 'touch-pan-x'"
+            @touchstart.passive="onTouchStart($event, 'handle')"
+            @touchmove="onTouchMove"
+            @touchend="onTouchEnd"
+            @touchcancel="onTouchEnd"
           >
             <slot name="header" />
           </div>
 
-          <div :class="['flex-1 min-h-0', scrollable ? 'overflow-y-auto' : 'overflow-hidden']">
+          <div
+            ref="scrollerEl"
+            :class="[
+              'flex-1 min-h-0 overscroll-contain',
+              scrollable && !bodyScrollLocked ? 'overflow-y-auto' : 'overflow-hidden',
+            ]"
+            @touchstart.passive="onTouchStart($event, 'content')"
+            @touchmove="onTouchMove"
+            @touchend="onTouchEnd"
+            @touchcancel="onTouchEnd"
+            @scroll.passive="onBodyScroll"
+            @wheel.passive="onBodyWheel"
+          >
             <slot />
           </div>
         </div>
@@ -313,31 +394,43 @@ const transitionStyle = computed(() =>
 </template>
 
 <style scoped>
-/* Isolate the sheet's reflow so animating `height` doesn't invalidate the
- * map / tile layers beneath it — the main source of PWA snap jank. */
-.bb-sheet-anim {
-  will-change: height, transform;
-  contain: layout paint style;
-  backface-visibility: hidden;
-  transform: translateZ(0); /* force compositor layer */
-  -webkit-transform: translateZ(0);
-}
-.bb-sheet-anim > .ui-sheet-panel {
-  /* Panel painting isolated too — content changes don't invalidate the map. */
-  contain: layout paint style;
+.bb-sheet {
+  /* Own compositor layer; `layout style` (not paint) so the track can
+     overshoot above the box during rubber-banding without being clipped. */
+  contain: layout style;
+  transform: translate3d(0, 0, 0);
 }
 
-/* Enter/leave: sheet slides up from bottom and fades in.
- * `translate3d` keeps the compositor hint that `translateZ(0)` established. */
+.bb-sheet-track {
+  position: relative;
+  will-change: transform;
+}
+/* Fills the gap under the panel while it's rubber-banded above its box. */
+.bb-sheet-track::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: -1px;
+  right: -1px;
+  height: 80px;
+  background: var(--bb-bg-surface);
+}
+
+/* Enter/leave: the box slides up from the bottom. */
+.sheet-enter-active {
+  transition:
+    transform 0.46s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.2s ease;
+}
+.sheet-leave-active {
+  transition:
+    transform 0.3s cubic-bezier(0.4, 0, 1, 1),
+    opacity 0.3s ease;
+}
 .sheet-enter-from,
 .sheet-leave-to {
   transform: translate3d(0, 100%, 0);
-  opacity: 0.85;
-}
-.sheet-enter-to,
-.sheet-leave-from {
-  transform: translate3d(0, 0, 0);
-  opacity: 1;
+  opacity: 0.9;
 }
 
 /* Backdrop fade. */

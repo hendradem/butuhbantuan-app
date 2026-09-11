@@ -234,7 +234,7 @@ function distanceBadgeClass(meters: number | null) {
 
           <p class="ui-list-card__desc">{{ subtitle }}</p>
 
-          <div class="ui-list-card__badges" @click.stop @touchstart.stop>
+          <div class="ui-list-card__badges" @click.stop>
             <span v-if="isHospital" :class="[SOFT_LABEL, softLabelTone.violet]">
               <Icon icon="lucide:hospital" />
               IGD

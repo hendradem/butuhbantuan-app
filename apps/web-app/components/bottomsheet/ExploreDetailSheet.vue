@@ -20,19 +20,16 @@ const { isLoading } = storeToRefs(emergencyStore);
 const sheetData = computed(() => exploreSheet.sheetData);
 const areaName = computed(() => cityNameFormat(userLocation.currentRegion.regency.name));
 const scrollContainer = ref<HTMLElement | null>(null);
-const sheetRef = ref<any>(null);
 
 // ── Snap coordination ──────────────────────────────────────────────────────
-// The list sheet has two heights: default (0.5vh) and tall (0.75vh). Scrolling
-// down inside the list auto-expands to tall; scrolling back to top collapses.
-// Whenever the snap changes (via drag or auto), the map is re-fit so the user
-// marker + nearby unit pins stay visible above the sheet.
+// The list sheet has two heights: default (0.5vh) and tall (0.75vh). CoreSheet
+// runs in content-drag mode: dragging the list moves the sheet until it's
+// tall, then the list scrolls; pulling down from the top collapses it.
+// Whenever the snap changes, the map is re-fit so the user marker + nearby
+// unit pins stay visible above the sheet.
 const SNAP_DEFAULT = 0;
 const SNAP_TALL = 1;
-const EXPAND_SCROLL_THRESHOLD_PX = 32;
 const currentSnapIdx = ref(SNAP_DEFAULT);
-let lastScrollTop = 0;
-let scrollerEl: HTMLElement | null = null;
 // Baseline map zoom captured when the sheet opens; used as the anchor for
 // `fitMapForSheet` so tall → default restores exactly (not `current - (-1)`).
 let baseZoom: number | null = null;
@@ -133,58 +130,14 @@ watch(
   (open) => {
     if (!open) {
       filterOpen.value = false;
-      detachScrollListener();
       currentSnapIdx.value = SNAP_DEFAULT;
       baseZoom = null;
       return;
     }
     baseZoom = null; // capture on first fit call
     centerUserAboveSheet();
-    nextTick(() => attachScrollListener());
   }
 );
-
-// ── Scroll → snap coordination ─────────────────────────────────────────────
-
-function findScrollableAncestor(from: HTMLElement | null): HTMLElement | null {
-  let el = from?.parentElement ?? null;
-  while (el && el !== document.body) {
-    const { overflowY } = getComputedStyle(el);
-    if (overflowY === "auto" || overflowY === "scroll") return el;
-    el = el.parentElement;
-  }
-  return null;
-}
-
-function onListScroll() {
-  if (!scrollerEl) return;
-  const st = scrollerEl.scrollTop;
-  const delta = st - lastScrollTop;
-  lastScrollTop = st;
-
-  if (delta > 2 && st > EXPAND_SCROLL_THRESHOLD_PX && currentSnapIdx.value === SNAP_DEFAULT) {
-    sheetRef.value?.snapTo(SNAP_TALL);
-  } else if (st <= 2 && currentSnapIdx.value === SNAP_TALL) {
-    sheetRef.value?.snapTo(SNAP_DEFAULT);
-  }
-}
-
-function attachScrollListener() {
-  if (scrollerEl) return;
-  const el = findScrollableAncestor(scrollContainer.value);
-  if (!el) return;
-  scrollerEl = el;
-  lastScrollTop = el.scrollTop;
-  el.addEventListener("scroll", onListScroll, { passive: true });
-}
-
-function detachScrollListener() {
-  if (scrollerEl) {
-    scrollerEl.removeEventListener("scroll", onListScroll);
-    scrollerEl = null;
-  }
-  lastScrollTop = 0;
-}
 
 function onSnapChange(idx: number) {
   currentSnapIdx.value = idx;
@@ -196,8 +149,6 @@ function onSnapChange(idx: number) {
     fitMapForSheet(0.5, 0);
   }
 }
-
-onBeforeUnmount(() => detachScrollListener());
 
 function etaMinutes(duration?: number) {
   const m = displayEtaMinutes(duration);
@@ -275,6 +226,9 @@ async function handleSelect(item: any) {
 const LIST_SCROLL_TOP_MARGIN = 16;
 
 function scrollSelectedCardToTop(idx: number) {
+  // Only the tall sheet scrolls; at default height the list is locked at top
+  // and the tapped card is already on screen.
+  if (currentSnapIdx.value !== SNAP_TALL) return;
   const el = scrollContainer.value?.querySelector(
     `[data-item-idx="${idx}"]`,
   ) as HTMLElement | null;
@@ -345,13 +299,13 @@ function chipClass(active: boolean) {
 
 <template>
   <CoreSheet
-    ref="sheetRef"
     :is-open="exploreSheet.isOpen"
     :snap-points="[0.5, 0.75]"
     :initial-snap="0"
     draggable
     no-swipe-dismiss
     scrollable
+    content-drag
     @close="handleClose()"
     @snap-change="onSnapChange"
   >

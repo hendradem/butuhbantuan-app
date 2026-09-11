@@ -1,0 +1,458 @@
+/**
+ * Public marketing pages (/landing, /tentang, /support).
+ *
+ * Everything is namespaced under `.lp` so none of it leaks into the citizen
+ * app. Visual language: white canvas, warm stone neutrals, one accent (brand
+ * emergency red), Plus Jakarta Sans for text and Geist Mono for labels/data.
+ */
+
+.lp {
+  --lp-bg: #ffffff;
+  --lp-surface: #f6f5f3;
+  --lp-surface-2: #efedea;
+  --lp-line: #e8e6e2;
+  --lp-ink: #1c1917;
+  --lp-ink-2: #44403c;
+  --lp-muted: #78716c;
+  --lp-faint: #a8a29e;
+  --lp-accent: #dc2626;
+  --lp-accent-ink: #b91c1c;
+  --lp-accent-soft: #fef2f2;
+  /* Supporting tones, one per service family (ambulans, damkar, SAR, RS…).
+     Apply with .lp-tone-* and read var(--tone) / var(--tone-soft). */
+  --lp-red: #dc2626;
+  --lp-red-soft: #fef2f2;
+  --lp-amber: #d97706;
+  --lp-amber-soft: #fff7e8;
+  --lp-sky: #0284c7;
+  --lp-sky-soft: #eef7fd;
+  --lp-green: #059669;
+  --lp-green-soft: #ebf8f2;
+  --lp-rose: #e11d48;
+  --lp-rose-soft: #fff0f3;
+  --lp-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --lp-font: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --lp-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  /* The soft UI theme bumps every Tailwind weight class one step up (see
+     main.css). Reset the variables it reads so weights mean what they say. */
+  --bb-fw-body: 400;
+  --bb-fw-secondary: 400;
+  --bb-fw-medium: 500;
+  --bb-fw-semibold: 600;
+  --bb-fw-bold: 700;
+  /* The same file colours h1–h4 with var(--bb-text) at higher specificity
+     than a utility class; currentColor makes headings inherit instead, so
+     set heading colours on a wrapper, not on the heading itself. */
+  --bb-text: currentColor;
+
+  min-height: 100dvh;
+  background: var(--lp-bg);
+  color: var(--lp-ink);
+  font-family: var(--lp-font);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* `clip` (not `hidden`) so sticky descendants keep working. */
+  overflow-x: clip;
+}
+
+.lp ::selection {
+  background: #fecaca;
+  color: var(--lp-ink);
+}
+
+.lp :focus-visible {
+  outline: 2px solid var(--lp-accent);
+  outline-offset: 3px;
+}
+
+.lp [id] {
+  scroll-margin-top: 96px;
+}
+
+/* Passive classes (type, surfaces, layout) use :where() — zero specificity —
+   so a Tailwind utility on the same element always wins. Interactive classes
+   (.lp-btn, .lp-link, .lp-chip, .lp-skip) keep normal specificity: they sit
+   on <a>/<button>, where Tailwind preflight's element selectors would
+   otherwise override their colour and background. Shadows go through
+   --tw-shadow because main.css's `*:focus { ring-0 }` rebuilds box-shadow
+   from Tailwind's ring variables on focus. */
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+
+:where(.lp-container) {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 20px;
+}
+@media (min-width: 640px) {
+  :where(.lp-container) {
+    padding-inline: 28px;
+  }
+}
+
+:where(.lp-section) {
+  padding-block: 96px 112px;
+}
+@media (min-width: 1024px) {
+  :where(.lp-section) {
+    padding-block: 128px 144px;
+  }
+}
+
+.lp-skip {
+  position: absolute;
+  left: 16px;
+  top: -64px;
+  z-index: 60;
+  border-radius: 999px;
+  background: var(--lp-ink);
+  color: #fff;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: top 0.2s var(--lp-ease);
+}
+.lp-skip:focus {
+  top: 16px;
+}
+
+/* ── Type ───────────────────────────────────────────────────────────────── */
+
+:where(.lp-mono) {
+  font-family: var(--lp-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+:where(.lp-eyebrow) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--lp-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lp-muted);
+}
+:where(.lp-eyebrow)::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--lp-accent);
+}
+
+.lp .lp-display {
+  font-size: clamp(2.6rem, 7vw, 5.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+.lp .lp-h2 {
+  font-size: clamp(2rem, 4.2vw, 3.3rem);
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+.lp .lp-h3 {
+  font-size: 1.3rem;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+:where(.lp-lead) {
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  color: var(--lp-muted);
+  text-wrap: pretty;
+}
+@media (min-width: 640px) {
+  :where(.lp-lead) {
+    font-size: 1.1875rem;
+  }
+}
+
+:where(.lp-body) {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--lp-muted);
+  text-wrap: pretty;
+}
+
+:where(.lp-muted-ink) {
+  color: var(--lp-faint);
+}
+
+/* ── Buttons & links ───────────────────────────────────────────────────── */
+
+.lp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  padding-inline: 22px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  transition:
+    background-color 0.2s var(--lp-ease),
+    color 0.2s var(--lp-ease),
+    box-shadow 0.2s var(--lp-ease),
+    transform 0.16s var(--lp-ease);
+}
+.lp-btn:active {
+  transform: scale(0.97);
+}
+.lp-btn--sm {
+  height: 40px;
+  padding-inline: 16px;
+  font-size: 14px;
+}
+.lp-btn--accent {
+  background: var(--lp-accent);
+  color: #fff;
+  --tw-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 8px 20px -8px rgba(220, 38, 38, 0.55);
+  box-shadow: var(--tw-shadow);
+}
+.lp-btn--accent:hover {
+  background: var(--lp-accent-ink);
+}
+.lp-btn--ink {
+  background: var(--lp-ink);
+  color: #fff;
+  --tw-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: var(--tw-shadow);
+}
+.lp-btn--ink:hover {
+  background: #292524;
+}
+.lp-btn--ghost {
+  background: #fff;
+  color: var(--lp-ink);
+  --tw-shadow:
+    inset 0 0 0 1px var(--lp-line),
+    0 1px 2px rgba(28, 25, 23, 0.04);
+  box-shadow: var(--tw-shadow);
+}
+.lp-btn--ghost:hover {
+  background: var(--lp-surface);
+}
+
+/* For use on the red CTA panel. */
+.lp-btn--light {
+  background: #fff;
+  color: var(--lp-accent-ink);
+  --tw-shadow: 0 10px 24px -10px rgba(69, 10, 10, 0.5);
+  box-shadow: var(--tw-shadow);
+}
+.lp-btn--light:hover {
+  background: #fff5f5;
+}
+.lp-btn--outline-light {
+  background: transparent;
+  color: #fff;
+  --tw-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.45);
+  box-shadow: var(--tw-shadow);
+}
+.lp-btn--outline-light:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.lp-btn .lp-btn-arrow {
+  transition: transform 0.2s var(--lp-ease);
+}
+.lp-btn:hover .lp-btn-arrow,
+.lp-link:hover .lp-btn-arrow {
+  transform: translateX(3px);
+}
+
+.lp-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--lp-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--lp-line);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 5px;
+  transition: text-decoration-color 0.2s var(--lp-ease);
+}
+.lp-link:hover {
+  text-decoration-color: var(--lp-ink);
+}
+
+/* ── Surfaces ──────────────────────────────────────────────────────────── */
+
+:where(.lp-card) {
+  border-radius: 28px;
+  background: var(--lp-surface);
+}
+
+:where(.lp-panel) {
+  border-radius: 20px;
+  background: #fff;
+  --tw-shadow:
+    0 0 0 1px rgba(28, 25, 23, 0.06),
+    0 12px 32px -16px rgba(28, 25, 23, 0.16);
+  box-shadow: var(--tw-shadow);
+}
+
+.lp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding-inline: 14px 16px;
+  border-radius: 999px;
+  background: #fff;
+  --tw-shadow: inset 0 0 0 1px var(--lp-line);
+  box-shadow: var(--tw-shadow);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--lp-ink-2);
+}
+
+:where(.lp-dots) {
+  background-image: radial-gradient(rgba(28, 25, 23, 0.09) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+:where(.lp-live-dot) {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #10b981;
+}
+:where(.lp-live-dot)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation: lp-ping 1.8s var(--lp-ease) infinite;
+}
+@keyframes lp-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  80%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+/* Closing call-to-action: brand red, soft light from the top, faint grid. */
+:where(.lp-cta-panel) {
+  color: #fff;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% -10%, rgba(255, 255, 255, 0.22), transparent 70%),
+    radial-gradient(rgba(255, 255, 255, 0.14) 1px, transparent 1px) 0 0 / 20px 20px,
+    linear-gradient(160deg, #e53935 0%, #c62828 100%);
+  box-shadow: 0 40px 80px -40px rgba(185, 28, 28, 0.6);
+}
+.lp-cta-panel .lp-lead {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* ── Tones ─────────────────────────────────────────────────────────────── */
+
+.lp-tone-red {
+  --tone: var(--lp-red);
+  --tone-soft: var(--lp-red-soft);
+}
+.lp-tone-amber {
+  --tone: var(--lp-amber);
+  --tone-soft: var(--lp-amber-soft);
+}
+.lp-tone-sky {
+  --tone: var(--lp-sky);
+  --tone-soft: var(--lp-sky-soft);
+}
+.lp-tone-green {
+  --tone: var(--lp-green);
+  --tone-soft: var(--lp-green-soft);
+}
+.lp-tone-rose {
+  --tone: var(--lp-rose);
+  --tone-soft: var(--lp-rose-soft);
+}
+
+/* Tinted icon well: soft tone background, tone-coloured glyph. */
+:where(.lp-well) {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: var(--tone-soft, var(--lp-surface));
+  color: var(--tone, var(--lp-ink));
+}
+:where(.lp-well--sm) {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+}
+/* Card surface tinted with the current tone. */
+:where(.lp-tint) {
+  background: var(--tone-soft, var(--lp-surface));
+}
+
+/* ── Accordion (FAQ) ───────────────────────────────────────────────────── */
+
+:where(.lp-acc-body) {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.32s var(--lp-ease);
+}
+:where(.lp-acc-body > div) {
+  overflow: hidden;
+}
+:where(.lp-acc-body--open) {
+  grid-template-rows: 1fr;
+}
+
+/* ── Scroll reveal (enabled by LandingShell once JS is ready) ──────────── */
+
+.lp--ready [data-reveal] {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 0.7s var(--lp-ease),
+    transform 0.7s var(--lp-ease);
+  transition-delay: var(--d, 0ms);
+}
+.lp--ready [data-reveal].is-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp *,
+  .lp *::before,
+  .lp *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

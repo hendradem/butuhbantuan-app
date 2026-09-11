@@ -79,7 +79,7 @@ const detailTitle = computed(() =>
 
 const sheetSnap = computed(() => {
   const extra = moreSheet.overflowServices.length * 64;
-  return [Math.min(560, 380 + extra), 0];
+  return [Math.min(620, 470 + extra), 0];
 });
 
 function openDetail(id: "about" | "support") {
@@ -234,6 +234,8 @@ function openDetail(id: "about" | "support") {
         <Icon icon="lucide:chevron-right" class="shrink-0" style="color: var(--bb-text-tertiary)" />
       </button>
 
+      <SponsorStrip class="px-0.5 pt-3" />
+
       <p class="text-center text-[11px] ui-text-secondary pt-2 pb-1">
         ButuhBantuan · bantuan darurat lebih dekat
       </p>
@@ -335,6 +337,8 @@ function openDetail(id: "about" | "support") {
           </div>
         </div>
       </section>
+
+      <SponsorStrip variant="grid" title="Sponsor saat ini" />
 
       <section class="space-y-2.5">
         <h3 class="text-sm font-semibold ui-text-primary">Hubungi kami</h3>
