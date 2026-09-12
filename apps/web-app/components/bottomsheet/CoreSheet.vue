@@ -399,6 +399,13 @@ const boxHeight = computed(() => `${props.draggable ? maxPx.value : currentHeigh
      overshoot above the box during rubber-banding without being clipped. */
   contain: layout style;
   transform: translate3d(0, 0, 0);
+  /* A draggable box is always as tall as its tallest snap, so while the sheet
+     sits lower the empty part would otherwise swallow taps and drags meant for
+     the map behind it. Only the panel itself takes input. */
+  pointer-events: none;
+}
+.bb-sheet > * {
+  pointer-events: auto;
 }
 
 .bb-sheet-track {
