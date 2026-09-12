@@ -311,7 +311,9 @@ function segmentState(i: number) {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: var(--bb-text);
+  background-color: var(--bb-text);
+  background-image: var(--bb-btn-sheen);
+  box-shadow: var(--bb-btn-raise);
   color: var(--bb-bg-surface);
   font-size: 21px;
   transition: transform 0.16s ease;

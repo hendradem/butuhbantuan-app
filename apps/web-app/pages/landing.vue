@@ -310,7 +310,7 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
             <span class="font-semibold text-[var(--lp-ink)]">Kondisi gawat?</span>
             Jangan tunggu — telepon langsung:
           </p>
-          <div class="flex flex-wrap justify-center gap-2">
+          <div class="flex flex-wrap justify-center gap-2" data-stagger>
             <a
               v-for="n in EMERGENCY_NUMBERS"
               :key="n.number"
@@ -491,7 +491,7 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
                 {{ f.title }}
               </h3>
               <p class="lp-body mt-5 max-w-[50ch] text-[16px]">{{ f.description }}</p>
-              <div class="mt-8 grid gap-5 sm:grid-cols-2">
+              <div class="mt-8 grid gap-5 sm:grid-cols-2" data-stagger>
                 <div v-for="sub in f.subs" :key="sub.title" class="flex items-start gap-3">
                   <span class="lp-well h-9 w-9 rounded-xl">
                     <Icon :icon="sub.icon" class="text-[16px]" />
@@ -558,27 +558,33 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
 
         <div class="mt-14 grid gap-4 lg:grid-cols-6">
           <!-- A: one map -->
-          <article class="lp-card lp-tint lp-tone-sky relative flex min-h-[420px] flex-col overflow-hidden p-7 sm:p-9 lg:col-span-4" data-reveal>
-            <span class="lp-well bg-white"><Icon icon="lucide:map" class="text-[20px]" /></span>
-            <div class="mt-6 max-w-[42ch]">
-              <h3 class="lp-h3">Satu peta untuk semua unit</h3>
-              <p class="lp-body mt-2">
-                Ambulans, damkar, SAR, PMI, PSC 119, dan rumah sakit tampil
-                bersama. Ketuk salah satu untuk lihat detail dan minta bantuan
-                tanpa pindah halaman.
-              </p>
+          <article class="lp-feature lp-tone-sky relative min-h-[460px] lg:col-span-4" data-reveal="card">
+            <span class="lp-feature-icon"><Icon icon="lucide:map" class="text-[20px]" /></span>
+            <h3 class="lp-feature-head max-w-[24ch]">
+              <span>Satu peta</span> untuk semua unit di sekitarmu.
+            </h3>
+            <ul class="lp-feature-list">
+              <li><Icon icon="lucide:layers" class="text-[17px]" /> Ambulans, damkar, SAR, PMI, PSC 119, rumah sakit</li>
+              <li><Icon icon="lucide:gauge" class="text-[17px]" /> Jarak dan perkiraan tiba tiap unit</li>
+              <li><Icon icon="lucide:hand" class="text-[17px]" /> Minta bantuan tanpa pindah halaman</li>
+            </ul>
+            <NuxtLink to="/" class="lp-feature-link">
+              Coba sekarang
+              <Icon icon="lucide:chevron-right" class="text-[15px]" />
+            </NuxtLink>
+            <div class="lp-feature-preview">
+              <div class="mb-5 flex flex-wrap gap-1.5">
+                <span
+                  v-for="(c, ci) in unitFilters"
+                  :key="c"
+                  class="rounded-full px-3 py-1.5 text-[12.5px] font-medium"
+                  :class="ci === 0 ? 'bg-[var(--tone)] text-white' : 'bg-white text-[var(--lp-muted)]'"
+                >
+                  {{ c }}
+                </span>
+              </div>
             </div>
-            <div class="mt-8 flex flex-wrap gap-1.5">
-              <span
-                v-for="(c, ci) in unitFilters"
-                :key="c"
-                class="rounded-full px-3 py-1.5 text-[12.5px] font-medium"
-                :class="ci === 0 ? 'bg-[var(--tone)] text-white' : 'bg-white text-[var(--lp-muted)]'"
-              >
-                {{ c }}
-              </span>
-            </div>
-            <div class="lp-panel -mb-16 mt-5 divide-y divide-[var(--lp-line)] sm:mr-16">
+            <div class="lp-panel -mb-16 divide-y divide-[var(--lp-line)] sm:mr-16" data-stagger>
               <div
                 v-for="u in [
                   { name: 'PSC 119 Sleman', kind: 'Ambulans', dist: '1,2 km', eta: '3 mnt', icon: 'mynaui:ambulance-solid', tone: 'red' },
@@ -600,11 +606,17 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
           </article>
 
           <!-- B: report from the card -->
-          <article class="lp-card lp-tint lp-tone-red flex min-h-[420px] flex-col overflow-hidden p-7 sm:p-9 lg:col-span-2" data-reveal style="--d: 80ms">
-            <span class="lp-well bg-white"><Icon icon="lucide:file-plus-2" class="text-[20px]" /></span>
-            <h3 class="lp-h3 mt-6">Lapor langsung dari kartu unit</h3>
-            <p class="lp-body mt-2">Lokasi dan foto terisi sendiri. Laporanmu langsung dikirim ke unit terdekat.</p>
-            <div class="mt-auto pt-8">
+          <article class="lp-feature lp-tone-red min-h-[460px] lg:col-span-2" data-reveal="card" style="--d: 80ms">
+            <span class="lp-feature-icon"><Icon icon="lucide:file-plus-2" class="text-[20px]" /></span>
+            <h3 class="lp-feature-head max-w-[18ch]">
+              <span>Lapor</span> langsung dari kartu unit.
+            </h3>
+            <ul class="lp-feature-list">
+              <li><Icon icon="lucide:map-pin" class="text-[17px]" /> Lokasi terisi sendiri</li>
+              <li><Icon icon="lucide:camera" class="text-[17px]" /> Foto langsung dari kamera</li>
+              <li><Icon icon="lucide:send" class="text-[17px]" /> Terkirim ke unit terdekat</li>
+            </ul>
+            <div class="lp-feature-preview">
               <div class="lp-panel p-4">
                 <div class="flex items-center justify-between">
                   <span class="lp-mono text-[11.5px] text-[var(--lp-muted)]">TKT-2591</span>
@@ -624,11 +636,16 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
           </article>
 
           <!-- C: automatic hand-off -->
-          <article class="lp-card lp-tint lp-tone-amber flex min-h-[380px] flex-col overflow-hidden p-7 sm:p-9 lg:col-span-2" data-reveal>
-            <span class="lp-well bg-white"><Icon icon="lucide:timer" class="text-[20px]" /></span>
-            <h3 class="lp-h3 mt-6">Petugas belum jawab? Langsung dioper.</h3>
-            <p class="lp-body mt-2">Kalau 2 menit belum ada respons, laporan otomatis diteruskan ke unit terdekat berikutnya.</p>
-            <div class="mt-auto flex items-center gap-5 pt-8">
+          <article class="lp-feature lp-tone-amber min-h-[380px] lg:col-span-2" data-reveal="card">
+            <span class="lp-feature-icon"><Icon icon="lucide:timer" class="text-[20px]" /></span>
+            <h3 class="lp-feature-head max-w-[18ch]">
+              <span>Belum dijawab?</span> Langsung dioper.
+            </h3>
+            <ul class="lp-feature-list">
+              <li><Icon icon="lucide:alarm-clock" class="text-[17px]" /> Batas tunggu 2 menit</li>
+              <li><Icon icon="lucide:repeat" class="text-[17px]" /> Diteruskan ke unit berikutnya</li>
+            </ul>
+            <div class="lp-feature-preview flex items-center gap-5">
               <div class="relative h-[104px] w-[104px] shrink-0">
                 <svg viewBox="0 0 100 100" class="h-full w-full -rotate-90" aria-hidden="true">
                   <circle cx="50" cy="50" r="44" fill="none" stroke="#fff" stroke-width="6" />
@@ -648,15 +665,18 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
           </article>
 
           <!-- D: PWA, no account -->
-          <article class="lp-card lp-tint lp-tone-green relative flex min-h-[380px] flex-col overflow-hidden p-7 sm:p-9 lg:col-span-4" data-reveal style="--d: 80ms">
+          <article class="lp-feature lp-tone-green relative min-h-[380px] lg:col-span-4" data-reveal="card" style="--d: 80ms">
             <div class="grid h-full gap-8 sm:grid-cols-[1fr_auto] sm:items-end">
               <div class="max-w-[36ch] self-start">
-                <span class="lp-well bg-white"><Icon icon="lucide:smartphone" class="text-[20px]" /></span>
-                <h3 class="lp-h3 mt-6">Tanpa install, tanpa akun.</h3>
-                <p class="lp-body mt-2">
-                  Cukup buka butuhbantuan.space dari browser. Mau lebih cepat?
-                  Tambahkan ke layar utama — rasanya seperti aplikasi biasa.
-                </p>
+                <span class="lp-feature-icon"><Icon icon="lucide:smartphone" class="text-[20px]" /></span>
+                <h3 class="lp-feature-head max-w-[20ch]">
+                  <span>Tanpa install,</span> tanpa akun.
+                </h3>
+                <ul class="lp-feature-list">
+                  <li><Icon icon="lucide:globe" class="text-[17px]" /> Cukup buka dari browser</li>
+                  <li><Icon icon="lucide:home" class="text-[17px]" /> Bisa ditambah ke layar utama</li>
+                  <li><Icon icon="lucide:wifi-off" class="text-[17px]" /> Nomor darurat tetap ada saat offline</li>
+                </ul>
                 <div class="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[13px]">
                   <Icon icon="lucide:lock" class="text-[12px] text-[var(--tone)]" />
                   <span class="text-[var(--lp-ink)]">butuhbantuan.space</span>

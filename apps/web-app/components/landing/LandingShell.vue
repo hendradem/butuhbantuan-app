@@ -1,8 +1,11 @@
 <script setup lang="ts">
 /**
  * Frame shared by the public pages (/landing, /tentang, /support): fonts,
- * the `.lp` design scope, floating nav, footer, and scroll-reveal for any
- * descendant marked `data-reveal` (optionally with `style="--d: 120ms"`).
+ * the `.lp` design scope, floating nav, footer, and scroll-reveal.
+ *
+ * Mark an element `data-reveal` to have it rise into place (optionally with
+ * `style="--d: 120ms"`, or `data-reveal="card"` for a heavier lift), or
+ * `data-stagger` to cascade its direct children in one after another.
  */
 import "~/assets/css/landing.css";
 
@@ -33,7 +36,9 @@ onMounted(() => {
     },
     { rootMargin: "0px 0px -8% 0px", threshold: 0.12 },
   );
-  rootEl.value.querySelectorAll("[data-reveal]").forEach((el) => io!.observe(el));
+  rootEl.value
+    .querySelectorAll("[data-reveal], [data-stagger]")
+    .forEach((el) => io!.observe(el));
   revealReady.value = true;
 });
 

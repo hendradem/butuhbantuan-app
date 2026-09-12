@@ -551,13 +551,20 @@ async function manualRefresh() {
   margin-top: 12px;
   padding: 12px;
   border-radius: var(--bb-radius-control);
-  background: var(--bb-accent);
+  background-color: var(--bb-accent);
+  background-image: var(--bb-btn-sheen);
+  box-shadow: var(--bb-btn-raise);
   font-size: 15px;
   font-weight: 600;
   color: var(--bb-accent-contrast);
 }
+.eticket-submit:not(:disabled):active {
+  background-image: var(--bb-btn-sheen-active);
+  box-shadow: var(--bb-btn-raise-active);
+}
 .eticket-submit:disabled {
   opacity: 0.65;
+  box-shadow: none;
 }
 
 .eticket-panel--alert {
@@ -573,10 +580,16 @@ async function manualRefresh() {
   margin-top: 12px;
   padding: 12px;
   border-radius: var(--bb-radius-control);
-  background: #25d366;
+  background-color: #25d366;
+  background-image: var(--bb-btn-sheen);
+  box-shadow: var(--bb-btn-raise);
   font-size: 15px;
   font-weight: 600;
   color: #fff;
+}
+.eticket-wa-btn:active {
+  background-image: var(--bb-btn-sheen-active);
+  box-shadow: var(--bb-btn-raise-active);
 }
 
 .eticket-choice {
@@ -675,14 +688,22 @@ async function manualRefresh() {
   padding: 10px;
   border: 1px solid var(--bb-border-strong);
   border-radius: var(--bb-radius-control);
-  background: var(--bb-bg-surface);
+  background-color: var(--bb-bg-surface);
+  background-image: var(--bb-btn-sheen-light);
+  box-shadow: var(--bb-btn-raise-light);
   font-size: 14px;
   font-weight: 600;
   color: var(--bb-text);
 }
 .eticket-btn--primary {
   border-color: transparent;
-  background: var(--bb-text);
+  background-color: var(--bb-text);
+  background-image: var(--bb-btn-sheen);
+  box-shadow: var(--bb-btn-raise);
   color: var(--bb-bg-surface);
+}
+.eticket-btn:active {
+  background-image: var(--bb-btn-sheen-active);
+  box-shadow: var(--bb-btn-raise-active);
 }
 </style>

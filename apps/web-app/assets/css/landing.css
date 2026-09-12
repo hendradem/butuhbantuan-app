@@ -421,6 +421,112 @@
   background: var(--tone-soft, var(--lp-surface));
 }
 
+/* ── Feature card ──────────────────────────────────────────────────────────
+   Quiet neutral surface, a white circular icon, and a headline whose opening
+   phrase carries the tone colour while the statement itself stays black — the
+   colour names the feature, the black says what it does. */
+
+:where(.lp-feature) {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 28px;
+  background: var(--lp-surface);
+  padding: 28px;
+}
+@media (min-width: 640px) {
+  :where(.lp-feature) {
+    padding: 34px;
+  }
+}
+
+.lp .lp-feature-icon {
+  display: inline-flex;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--tone, var(--lp-accent));
+  --tw-shadow: 0 1px 2px rgba(28, 25, 23, 0.06), 0 6px 16px -8px rgba(28, 25, 23, 0.18);
+  box-shadow: var(--tw-shadow);
+}
+
+.lp .lp-feature-head {
+  margin-top: 26px;
+  font-size: clamp(1.4rem, 2.4vw, 1.75rem);
+  font-weight: 700;
+  line-height: 1.22;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.lp .lp-feature-head > span {
+  color: var(--tone, var(--lp-accent));
+}
+
+.lp .lp-feature-list {
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+.lp .lp-feature-list li {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--lp-ink-2);
+}
+.lp .lp-feature-list li svg {
+  flex-shrink: 0;
+  color: var(--tone, var(--lp-accent));
+}
+
+.lp-feature-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-top: 26px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--lp-ink);
+  font-size: 14px;
+  font-weight: 600;
+  --tw-shadow: 0 1px 2px rgba(28, 25, 23, 0.06), 0 4px 12px -6px rgba(28, 25, 23, 0.2);
+  box-shadow: var(--tw-shadow);
+  transition:
+    transform 0.24s var(--lp-ease),
+    box-shadow 0.24s var(--lp-ease);
+}
+.lp-feature-link:hover {
+  transform: translateY(-1px);
+  --tw-shadow: 0 2px 4px rgba(28, 25, 23, 0.08), 0 10px 20px -8px rgba(28, 25, 23, 0.26);
+  box-shadow: var(--tw-shadow);
+}
+.lp-feature-link:active {
+  transform: translateY(0);
+}
+/* The arrow leans out on hover, so the pill reads as "there is more here". */
+.lp-feature-link svg {
+  transition: transform 0.24s var(--lp-ease);
+}
+.lp-feature-link:hover svg {
+  transform: translateX(3px);
+}
+
+/* Preview sits flush to the bottom edge, cropped by the card. */
+.lp .lp-feature-preview {
+  margin-top: auto;
+  padding-top: 30px;
+}
+
 /* ── Accordion (FAQ) ───────────────────────────────────────────────────── */
 
 :where(.lp-acc-body) {
@@ -448,6 +554,72 @@
 .lp--ready [data-reveal].is-in {
   opacity: 1;
   transform: none;
+}
+
+/* A card rises a little further than plain text, so a grid of them settles
+   with some weight instead of just fading. */
+.lp--ready [data-reveal="card"] {
+  transform: translateY(22px) scale(0.985);
+}
+.lp--ready [data-reveal="card"].is-in {
+  transform: none;
+}
+
+/* Children cascade in behind their own container once it lands. */
+.lp--ready [data-stagger] > * {
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 0.55s var(--lp-ease),
+    transform 0.55s var(--lp-ease);
+}
+.lp--ready [data-stagger].is-in > * {
+  opacity: 1;
+  transform: none;
+}
+.lp--ready [data-stagger].is-in > *:nth-child(1) { transition-delay: 120ms; }
+.lp--ready [data-stagger].is-in > *:nth-child(2) { transition-delay: 200ms; }
+.lp--ready [data-stagger].is-in > *:nth-child(3) { transition-delay: 280ms; }
+.lp--ready [data-stagger].is-in > *:nth-child(4) { transition-delay: 360ms; }
+.lp--ready [data-stagger].is-in > *:nth-child(5) { transition-delay: 440ms; }
+.lp--ready [data-stagger].is-in > *:nth-child(n + 6) { transition-delay: 520ms; }
+
+/* ── Interaction ───────────────────────────────────────────────────────────
+   Hover lifts are pointer-only: on touch there is no hover to leave, so the
+   card would stay raised after a tap. */
+
+@media (hover: hover) {
+  :where(.lp-card, .lp-feature) {
+    transition:
+      transform 0.42s var(--lp-ease),
+      box-shadow 0.42s var(--lp-ease);
+  }
+  :where(.lp-card, .lp-feature):hover {
+    transform: translateY(-4px);
+    --tw-shadow: 0 2px 6px rgba(28, 25, 23, 0.05), 0 26px 44px -24px rgba(28, 25, 23, 0.3);
+    box-shadow: var(--tw-shadow);
+  }
+  /* Rows and panels inside a hovered card lift a touch more. */
+  :where(.lp-card, .lp-feature) :where(.lp-panel) {
+    transition: transform 0.42s var(--lp-ease);
+  }
+  :where(.lp-card, .lp-feature):hover :where(.lp-panel) {
+    transform: translateY(-3px);
+  }
+}
+
+/* The icon tips forward as its card is hovered. */
+@media (hover: hover) {
+  .lp .lp-feature-icon,
+  :where(.lp-well) {
+    transition:
+      transform 0.42s var(--lp-ease),
+      background-color 0.24s var(--lp-ease);
+  }
+  .lp .lp-feature:hover .lp-feature-icon,
+  :where(.lp-card):hover :where(.lp-well) {
+    transform: rotate(-6deg) scale(1.06);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

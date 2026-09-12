@@ -1,3 +1,7 @@
+/* Open Runde — Medium (500) for text, Semibold (600) for emphasis. Bundled
+   rather than fetched so the app keeps its type offline. */
+@import "@fontsource/open-runde/500.css";
+@import "@fontsource/open-runde/600.css";
 @import "./theme.css";
 
 @tailwind base;
@@ -7,7 +11,7 @@
 body {
   background-color: var(--bb-bg-page);
   color: var(--bb-text);
-  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Open Runde", ui-rounded, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-weight: var(--bb-fw-body, 500);
   font-optical-sizing: auto;
   /* Subpixel keeps strokes a bit fuller than antialiased-only (less “thin”) */
@@ -17,39 +21,38 @@ body {
 }
 
 /**
- * Soft theme typography: stronger hierarchy like the design refs.
- * Avoid light/thin; body ≈ medium, labels/titles = semibold/bold.
+ * Typography: Open Runde ships here in two weights, so every step resolves to
+ * Medium for text or Semibold for emphasis. Asking for 700/800 would only get
+ * a synthesised fake bold, so heavier steps stop at Semibold and hierarchy
+ * comes from size and colour instead.
  */
+:root,
 html[data-ui-theme="soft"] {
   --bb-fw-body: 500;
   --bb-fw-secondary: 500;
   --bb-fw-medium: 600;
-  --bb-fw-semibold: 700;
-  --bb-fw-bold: 800;
+  --bb-fw-semibold: 600;
+  --bb-fw-bold: 600;
 }
 
-html[data-ui-theme="soft"] .font-light,
-html[data-ui-theme="soft"] .font-thin,
-html[data-ui-theme="soft"] .font-extralight {
+/* Clamp every Tailwind weight onto a face we actually ship — outside .lp,
+   which loads its own family. */
+:where(:not(.lp *)) .font-light,
+:where(:not(.lp *)) .font-thin,
+:where(:not(.lp *)) .font-extralight,
+:where(:not(.lp *)) .font-normal {
   font-weight: var(--bb-fw-secondary) !important;
 }
 
-html[data-ui-theme="soft"] .font-normal {
-  font-weight: var(--bb-fw-secondary) !important;
-}
-
-html[data-ui-theme="soft"] .font-medium {
+:where(:not(.lp *)) .font-medium {
   font-weight: var(--bb-fw-medium) !important;
 }
 
-html[data-ui-theme="soft"] .font-semibold {
+:where(:not(.lp *)) .font-semibold,
+:where(:not(.lp *)) .font-bold,
+:where(:not(.lp *)) .font-extrabold,
+:where(:not(.lp *)) .font-black {
   font-weight: var(--bb-fw-semibold) !important;
-}
-
-html[data-ui-theme="soft"] .font-bold,
-html[data-ui-theme="soft"] .font-extrabold,
-html[data-ui-theme="soft"] .font-black {
-  font-weight: var(--bb-fw-bold) !important;
 }
 
 html[data-ui-theme="soft"] h1,
@@ -164,19 +167,35 @@ html[data-ui-theme="soft"] h4 {
   }
   .btn-whatsapp {
     @apply btn-base flex items-center w-full justify-center text-white transition;
-    background: #16a34a;
+    background-color: #16a34a;
+    background-image: var(--bb-btn-sheen);
+    --tw-shadow: var(--bb-btn-raise);
+    box-shadow: var(--bb-btn-raise);
     border-radius: var(--bb-radius-control);
   }
   .btn-whatsapp:hover {
-    background: #15803d;
+    background-color: #15803d;
+  }
+  .btn-whatsapp:active {
+    background-image: var(--bb-btn-sheen-active);
+    --tw-shadow: var(--bb-btn-raise-active);
+    box-shadow: var(--bb-btn-raise-active);
   }
   .btn-report {
     @apply btn-base flex items-center w-full justify-center text-white transition;
-    background: var(--bb-accent);
+    background-color: var(--bb-accent);
+    background-image: var(--bb-btn-sheen);
+    --tw-shadow: var(--bb-btn-raise);
+    box-shadow: var(--bb-btn-raise);
     border-radius: var(--bb-radius-control);
   }
   .btn-report:hover {
-    filter: brightness(0.92);
+    filter: brightness(0.94);
+  }
+  .btn-report:active {
+    background-image: var(--bb-btn-sheen-active);
+    --tw-shadow: var(--bb-btn-raise-active);
+    box-shadow: var(--bb-btn-raise-active);
   }
   .btn-report:disabled {
     opacity: 0.5;
@@ -184,21 +203,37 @@ html[data-ui-theme="soft"] h4 {
   }
   .btn-call {
     @apply btn-base flex w-full items-center justify-center transition;
-    background: var(--bb-bg-surface);
+    background-color: var(--bb-bg-surface);
+    background-image: var(--bb-btn-sheen-light);
+    --tw-shadow: var(--bb-btn-raise-light);
+    box-shadow: var(--bb-btn-raise-light);
     color: var(--bb-text-secondary);
     border: 1px solid var(--bb-border-strong);
     border-radius: var(--bb-radius-control);
   }
   .btn-call:hover {
-    background: var(--bb-bg-muted);
+    background-color: var(--bb-bg-muted);
+  }
+  .btn-call:active {
+    background-image: var(--bb-btn-sheen-active);
+    --tw-shadow: var(--bb-btn-raise-active);
+    box-shadow: var(--bb-btn-raise-active);
   }
   .btn-dark {
     @apply btn-base flex w-full items-center justify-center text-white transition;
-    background: var(--bb-accent);
+    background-color: var(--bb-accent);
+    background-image: var(--bb-btn-sheen);
+    --tw-shadow: var(--bb-btn-raise);
+    box-shadow: var(--bb-btn-raise);
     border-radius: var(--bb-radius-control);
   }
   .btn-dark:hover {
-    filter: brightness(1.08);
+    filter: brightness(1.06);
+  }
+  .btn-dark:active {
+    background-image: var(--bb-btn-sheen-active);
+    --tw-shadow: var(--bb-btn-raise-active);
+    box-shadow: var(--bb-btn-raise-active);
   }
   .bottom-menu-shadow {
     box-shadow: var(--bb-shadow-menu);

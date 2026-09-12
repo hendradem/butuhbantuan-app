@@ -53,12 +53,8 @@ export default defineNuxtConfig({
         { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1" },
       ],
       link: [
-        { rel: "preconnect", href: "https://fonts.googleapis.com" },
-        { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "" },
-        {
-          rel: "stylesheet",
-          href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap",
-        },
+        // Open Runde is bundled (see main.css) so the app still renders in its
+        // own type with no network — the case this app exists for.
         { rel: "manifest", href: "/manifest.json" },
         { rel: "apple-touch-icon", href: "/ambulance-logo.jpg" },
       ],

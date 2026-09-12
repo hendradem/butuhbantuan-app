@@ -176,15 +176,23 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
   padding: 10px;
   border: 1px solid var(--bb-border-strong);
   border-radius: var(--bb-radius-control);
-  background: var(--bb-bg-surface);
+  background-color: var(--bb-bg-surface);
+  background-image: var(--bb-btn-sheen-light);
+  box-shadow: var(--bb-btn-raise-light);
   font-size: 14px;
   font-weight: 600;
   color: var(--bb-text);
 }
 .island-btn--primary {
   border-color: transparent;
-  background: var(--bb-text);
+  background-color: var(--bb-text);
+  background-image: var(--bb-btn-sheen);
+  box-shadow: var(--bb-btn-raise);
   color: var(--bb-bg-surface);
+}
+.island-btn:active {
+  background-image: var(--bb-btn-sheen-active);
+  box-shadow: var(--bb-btn-raise-active);
 }
 
 /* ── Motion ──────────────────────────────────────────────────────────────── */

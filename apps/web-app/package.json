@@ -16,6 +16,7 @@
     "@butuhbantuan/types": "workspace:*",
     "@butuhbantuan/ui": "workspace:*",
     "@butuhbantuan/utils": "workspace:*",
+    "@fontsource/open-runde": "^5.3.0",
     "@iconify/vue": "^5.0.1",
     "@turf/turf": "^6.5.0",
     "@vueuse/core": "^14.4.0",

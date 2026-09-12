@@ -33,6 +33,74 @@ html[data-ui-theme="soft"] {
   color-scheme: light;
 }
 
+/**
+ * Buttons: a solid fill plus a top-down sheen and a hairline highlight, so a
+ * button reads as a raised surface rather than a flat block. The fill colour
+ * is untouched — this only layers light over it.
+ *
+ * Shadows go through --tw-shadow as well because main.css's `*:focus { ring-0 }`
+ * rebuilds box-shadow out of Tailwind's ring variables when focused.
+ */
+:root {
+  --bb-btn-sheen: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.04) 48%,
+    rgba(0, 0, 0, 0.06) 100%
+  );
+  --bb-btn-raise:
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+    0 1px 2px rgba(26, 28, 46, 0.14),
+    0 3px 8px -3px rgba(26, 28, 46, 0.24);
+  /* Pressed: the sheen flips so the surface reads as pushed in. */
+  --bb-btn-sheen-active: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.02) 100%);
+  --bb-btn-raise-active: inset 0 1px 3px rgba(0, 0, 0, 0.18);
+  /* Light-surfaced buttons need the reverse: bright top, barely-there edge. */
+  --bb-btn-sheen-light: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(26, 28, 46, 0.03) 100%);
+  --bb-btn-raise-light:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(26, 28, 46, 0.07),
+    0 2px 6px -2px rgba(26, 28, 46, 0.12);
+}
+
+/* Dark mode: less white to lift with, more depth below. */
+html[data-color-mode="dark"] {
+  --bb-btn-sheen: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.02) 48%,
+    rgba(0, 0, 0, 0.14) 100%
+  );
+  --bb-btn-raise:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 3px 8px -3px rgba(0, 0, 0, 0.5);
+  --bb-btn-sheen-light: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(0, 0, 0, 0.12) 100%);
+  --bb-btn-raise-light:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* Apply with a solid background-color already set on the element. */
+.ui-raised {
+  background-image: var(--bb-btn-sheen);
+  --tw-shadow: var(--bb-btn-raise);
+  box-shadow: var(--bb-btn-raise);
+}
+.ui-raised--light {
+  background-image: var(--bb-btn-sheen-light);
+  --tw-shadow: var(--bb-btn-raise-light);
+  box-shadow: var(--bb-btn-raise-light);
+}
+.ui-raised:not(:disabled):active,
+.ui-raised--light:not(:disabled):active {
+  background-image: var(--bb-btn-sheen-active);
+  --tw-shadow: var(--bb-btn-raise-active);
+  box-shadow: var(--bb-btn-raise-active);
+}
+
 html[data-ui-theme="legacy"] {
   --bb-bg-page: #e5e5e5;
   --bb-bg-surface: #ffffff;
@@ -736,14 +804,20 @@ html[data-ui-theme="legacy"] .ui-list-card {
   gap: 0.5rem;
   width: 100%;
   font-size: 0.875rem;
-  font-weight: 700;
+  font-weight: var(--bb-fw-semibold, 600);
   color: var(--bb-accent-contrast);
-  background: var(--bb-accent);
+  background-color: var(--bb-accent);
+  background-image: var(--bb-btn-sheen);
+  --tw-shadow: var(--bb-btn-raise);
+  box-shadow: var(--bb-btn-raise);
   border: none;
   border-radius: var(--bb-radius-control);
   padding: 0.75rem 1.25rem;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition:
+    box-shadow 0.15s ease,
+    background-image 0.15s ease,
+    opacity 0.15s ease;
 }
 
 .ui-btn-primary:disabled {
@@ -752,7 +826,9 @@ html[data-ui-theme="legacy"] .ui-list-card {
 }
 
 .ui-btn-primary:not(:disabled):active {
-  opacity: 0.9;
+  background-image: var(--bb-btn-sheen-active);
+  --tw-shadow: var(--bb-btn-raise-active);
+  box-shadow: var(--bb-btn-raise-active);
 }
 
 .ui-choice-on {
