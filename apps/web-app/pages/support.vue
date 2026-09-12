@@ -1,15 +1,14 @@
 <script setup lang="ts">
 /**
- * /support — help centre: emergency numbers first, quick paths, searchable
- * FAQ grouped by audience, and a contact form. There is no support backend,
- * so the form composes a mailto: to SUPPORT_EMAIL.
+ * /support — sponsorship pitch, searchable FAQ grouped by audience, and a
+ * contact form. There is no support backend, so the form composes a
+ * mailto: to SUPPORT_EMAIL.
  *
  * Deep links: `#privasi` opens the privacy FAQ tab; `#kerja-sama` lands on
  * the sponsorship packages; `?topik=unit#kontak` pre-selects a form topic.
  */
 import { Icon } from "@iconify/vue";
 import {
-  EMERGENCY_NUMBERS,
   FAQ_CATEGORIES,
   FAQS,
   SUPPORT_EMAIL,
@@ -33,7 +32,6 @@ useHead({
 });
 
 const route = useRoute();
-const linkComponent = resolveComponent("NuxtLink");
 
 // ── FAQ search + tabs ─────────────────────────────────────────────────────
 const query = ref("");
@@ -57,18 +55,6 @@ function toggleFaq(q: string) {
 
 function countFor(id: FaqCategory | "semua") {
   return id === "semua" ? FAQS.length : FAQS.filter((f) => f.category === id).length;
-}
-
-const faqSection = ref<HTMLElement | null>(null);
-
-function openCategory(id: FaqCategory) {
-  query.value = "";
-  category.value = id;
-  faqSection.value?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function submitSearch() {
-  faqSection.value?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // ── Contact form (mailto) ─────────────────────────────────────────────────
@@ -141,45 +127,6 @@ onMounted(() => {
     if (t === "unit") form.role = "Unit emergency";
   }
 });
-
-const quickPaths: {
-  icon: string;
-  title: string;
-  body: string;
-  tone: Tone;
-  to?: string;
-  href?: string;
-  category?: FaqCategory;
-}[] = [
-  {
-    icon: "lucide:ticket",
-    title: "Cek status tiket",
-    body: "Masukkan nomor HP dan kode OTP untuk melihat laporanmu.",
-    tone: "sky",
-    to: "/my-tickets",
-  },
-  {
-    icon: "mynaui:ambulance-solid",
-    title: "Bantuan untuk unit",
-    body: "Cara bergabung, batas waktu respons, dan dashboard unit.",
-    tone: "red",
-    category: "unit",
-  },
-  {
-    icon: "lucide:handshake",
-    title: "Kerja sama & sponsor",
-    body: "Bantu biaya server dan perluasan layanan.",
-    tone: "amber",
-    href: "#kerja-sama",
-  },
-  {
-    icon: "lucide:message-circle",
-    title: "Hubungi tim",
-    body: "Tidak menemukan jawabannya? Kirim pesan ke kami.",
-    tone: "green",
-    href: "#kontak",
-  },
-];
 
 // ── Sponsorship ───────────────────────────────────────────────────────────
 const fundedCosts: { icon: string; title: string; body: string; tone: Tone }[] = [
@@ -278,99 +225,8 @@ function startPartnership(pkg: Package) {
 
 <template>
   <LandingShell>
-    <!-- ================= HERO + SEARCH ================= -->
-    <section class="relative pb-14 pt-36 sm:pt-44">
-      <div aria-hidden="true" class="support-backdrop pointer-events-none absolute inset-x-0 top-0 h-[560px]" />
-      <div class="lp-container relative text-center">
-        <span class="lp-eyebrow" data-reveal>Pusat bantuan</span>
-        <h1 class="lp-display mx-auto mt-6 max-w-[14ch]" data-reveal style="--d: 80ms">Ada yang bisa kami bantu?</h1>
-        <p class="lp-lead mx-auto mt-5 max-w-[48ch]" data-reveal style="--d: 160ms">
-          Cari jawaban seputar laporan, tiket, unit, dan privasi data.
-        </p>
-
-        <form role="search" class="mx-auto mt-9 max-w-[560px]" data-reveal style="--d: 240ms" @submit.prevent="submitSearch">
-          <label for="support-search" class="sr-only">Cari pertanyaan</label>
-          <div class="search-box flex h-14 items-center gap-3 rounded-full bg-white pl-5 pr-2">
-            <Icon icon="lucide:search" class="shrink-0 text-[19px] text-[var(--lp-faint)]" />
-            <input
-              id="support-search"
-              v-model="query"
-              type="search"
-              autocomplete="off"
-              placeholder="Contoh: lokasi tidak akurat"
-              class="h-full min-w-0 flex-1 bg-transparent text-[15.5px] text-[var(--lp-ink)] placeholder:text-[var(--lp-faint)] focus:outline-none"
-            />
-            <button type="submit" class="lp-btn lp-btn--ink lp-btn--sm shrink-0">Cari</button>
-          </div>
-        </form>
-      </div>
-    </section>
-
-    <!-- ================= EMERGENCY ================= -->
-    <section class="pb-6">
-      <div class="lp-container">
-        <div class="emergency-card grid gap-6 rounded-[28px] p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center lg:gap-10" data-reveal>
-          <div class="flex gap-4">
-            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--lp-accent)] text-white">
-              <Icon icon="lucide:siren" class="text-[22px]" />
-            </span>
-            <div>
-              <h2 class="text-[19px] font-semibold">Sedang dalam keadaan darurat?</h2>
-              <p class="mt-1 max-w-[52ch] text-[15px] leading-[1.6] text-[var(--lp-ink-2)]">
-                Jangan menunggu balasan dari kami. Telepon nomor darurat sekarang,
-                atau buka aplikasi untuk mencari unit terdekat.
-              </p>
-            </div>
-          </div>
-          <div class="flex flex-wrap gap-2 lg:justify-end">
-            <a
-              v-for="n in EMERGENCY_NUMBERS"
-              :key="n.number"
-              :href="`tel:${n.number}`"
-              class="flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[13.5px] text-[var(--lp-ink-2)] shadow-[0_0_0_1px_rgba(220,38,38,0.15)] transition-colors hover:bg-red-50"
-              :aria-label="`Telepon ${n.number}, ${n.label}`"
-            >
-              <Icon icon="lucide:phone" class="text-[13px] text-[var(--lp-accent)]" />
-              <span class="lp-mono font-medium text-[var(--lp-ink)]">{{ n.number }}</span>
-              {{ n.label }}
-            </a>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ================= QUICK PATHS ================= -->
-    <section class="pb-24 pt-6 lg:pb-32">
-      <div class="lp-container">
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <component
-            :is="p.to ? linkComponent : p.href ? 'a' : 'button'"
-            v-for="(p, i) in quickPaths"
-            :key="p.title"
-            :to="p.to"
-            :href="p.href"
-            :type="!p.to && !p.href ? 'button' : undefined"
-            class="quick-path group flex flex-col rounded-[24px] bg-[var(--lp-surface)] p-6 text-left"
-            :class="`lp-tone-${p.tone}`"
-            data-reveal
-            :style="{ '--d': `${i * 70}ms` }"
-            @click="p.category && openCategory(p.category)"
-          >
-            <span class="lp-well">
-              <Icon :icon="p.icon" class="text-[19px]" />
-            </span>
-            <span class="mt-8 flex items-center justify-between gap-2 text-[16.5px] font-semibold tracking-[-0.015em]">
-              {{ p.title }}
-              <Icon icon="lucide:arrow-right" class="quick-path-arrow text-[16px] text-[var(--lp-faint)]" />
-            </span>
-            <span class="mt-1.5 text-[14px] leading-[1.55] text-[var(--lp-muted)]">{{ p.body }}</span>
-          </component>
-        </div>
-      </div>
-    </section>
-
     <!-- ================= SPONSORSHIP ================= -->
-    <section id="kerja-sama" class="border-t border-[var(--lp-line)] py-24 lg:py-32">
+    <section id="kerja-sama" class="pb-24 pt-36 sm:pt-44 lg:pb-32">
       <div class="lp-container">
         <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end lg:gap-16">
           <div data-reveal>
@@ -453,7 +309,7 @@ function startPartnership(pkg: Package) {
     </section>
 
     <!-- ================= FAQ ================= -->
-    <section id="faq" ref="faqSection" class="border-t border-[var(--lp-line)] py-24 lg:py-32">
+    <section id="faq" class="border-t border-[var(--lp-line)] py-24 lg:py-32">
       <span id="privasi" aria-hidden="true" />
       <div class="lp-container grid gap-12 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20">
         <div class="lg:sticky lg:top-28 lg:self-start">
@@ -659,61 +515,6 @@ function startPartnership(pkg: Package) {
 </template>
 
 <style scoped>
-.support-backdrop {
-  background-image:
-    radial-gradient(ellipse 55% 50% at 50% 0%, rgba(220, 38, 38, 0.06), transparent 70%),
-    radial-gradient(rgba(28, 25, 23, 0.09) 1px, transparent 1px);
-  background-size:
-    100% 100%,
-    22px 22px;
-  mask-image: radial-gradient(ellipse 65% 60% at 50% 15%, #000 30%, transparent 75%);
-  -webkit-mask-image: radial-gradient(ellipse 65% 60% at 50% 15%, #000 30%, transparent 75%);
-}
-
-.search-box {
-  box-shadow:
-    0 0 0 1px rgba(28, 25, 23, 0.08),
-    0 16px 40px -20px rgba(28, 25, 23, 0.25);
-  transition: box-shadow 0.2s var(--lp-ease);
-}
-.search-box:focus-within {
-  box-shadow:
-    0 0 0 2px var(--lp-ink),
-    0 16px 40px -20px rgba(28, 25, 23, 0.25);
-}
-.search-box input:focus-visible {
-  outline: none;
-}
-.search-box input::-webkit-search-cancel-button {
-  cursor: pointer;
-}
-
-.emergency-card {
-  background: linear-gradient(180deg, #fef2f2, #fff5f5);
-  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.12);
-}
-
-.quick-path {
-  transition:
-    background-color 0.25s var(--lp-ease),
-    transform 0.25s var(--lp-ease);
-}
-.quick-path:hover {
-  background: var(--lp-surface-2);
-}
-.quick-path:active {
-  transform: scale(0.985);
-}
-.quick-path-arrow {
-  transition:
-    transform 0.25s var(--lp-ease),
-    color 0.25s var(--lp-ease);
-}
-.quick-path:hover .quick-path-arrow {
-  transform: translateX(3px);
-  color: var(--lp-ink);
-}
-
 .package {
   box-shadow: 0 0 0 1px var(--lp-line);
 }
