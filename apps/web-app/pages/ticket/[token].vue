@@ -11,6 +11,7 @@ import { clearActiveTicket, loadActiveTicket, saveActiveTicket } from "~/utils/a
 import { saveTicketAccess } from "~/utils/ticketAccess";
 import { ticketDisplayUrl, ticketViewUrl } from "~/utils/ticketUrl";
 import { toTicketView, type TicketViewSource } from "~/utils/ticketView";
+import { buildUnitWaMessage, waDeepLink } from "~/utils/waContact";
 
 definePageMeta({ layout: false, ssr: false });
 useHead({ title: "E-Tiket · ButuhBantuan" });
@@ -33,10 +34,30 @@ const phaseHint = computed(() => CITIZEN_PHASE_HINT[ticket.value?.citizen_phase 
 const ticketNumber = computed(() => String(ticket.value?.ticket_number || "").trim());
 const completed = computed(() => ticket.value?.status === "completed");
 
-/** A WA-dispatch unit sees nothing until the citizen sends the message. */
-const needsWaHandoff = computed(
-  () => !!ticket.value?.wa_dispatch && ticket.value?.status === "pending" && !!view.value?.waHref,
-);
+/**
+ * A WA-dispatch unit sees nothing until the citizen sends the message, so this
+ * carries the whole report — it is a handoff, not just a way to reach them.
+ */
+const waHandoffHref = computed(() => {
+  const t = ticket.value;
+  if (!t?.wa_dispatch || t.status !== "pending") return "";
+  const number = String(t.unit_whatsapp || t.unit_phone || "").trim();
+  if (!number) return "";
+  return waDeepLink(
+    number,
+    buildUnitWaMessage({
+      unitName: t.unit_name,
+      ticketNumber: t.ticket_number,
+      requesterName: t.requester_name,
+      requesterPhone: t.requester_phone,
+      address: t.location,
+      condition: t.condition,
+      lat: t.requester_lat,
+      lng: t.requester_lng,
+      ticketUrl: ticketViewUrl(viewToken.value),
+    }),
+  );
+});
 
 /** Logo lives in the emergency directory, not the public ticket payload. */
 const unitLogo = ref<string | undefined>();
@@ -277,13 +298,13 @@ async function manualRefresh() {
         <p v-if="phaseHint" class="eticket-hint">{{ phaseHint }}</p>
 
         <!-- Units without a dashboard only find out when the citizen sends WA. -->
-        <section v-if="needsWaHandoff" class="eticket-panel eticket-panel--alert">
+        <section v-if="waHandoffHref" class="eticket-panel eticket-panel--alert">
           <p class="m-0 font-semibold">Kirim WhatsApp ke unit</p>
           <p class="eticket-note mt-1">
             {{ ticket?.unit_name }} belum punya dashboard. Mereka baru tahu laporan ini setelah
             kamu mengirim pesan.
           </p>
-          <a :href="view.waHref" target="_blank" rel="noopener noreferrer" class="eticket-wa-btn">
+          <a :href="waHandoffHref" target="_blank" rel="noopener noreferrer" class="eticket-wa-btn">
             <Icon icon="ic:baseline-whatsapp" class="text-xl" />
             Kirim sekarang
           </a>

@@ -54,9 +54,9 @@ function segmentState(i: number) {
       :to="linkable ? view.href : undefined"
       class="tcard-head"
     >
+      <!-- The kind of help on its way; the unit itself is named below. -->
       <span class="tcard-logo">
-        <img v-if="view.unitLogo" :src="view.unitLogo" :alt="view.unitName" />
-        <Icon v-else icon="mynaui:ambulance-solid" class="tcard-logo-icon" />
+        <Icon :icon="view.serviceIcon" class="tcard-logo-icon" />
       </span>
 
       <span class="min-w-0 flex-1">
@@ -97,14 +97,12 @@ function segmentState(i: number) {
       </span>
 
       <a
-        v-if="view.waHref"
-        :href="view.waHref"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="tcard-wa"
-        :aria-label="`Hubungi ${view.unitName} lewat WhatsApp`"
+        v-if="view.callHref"
+        :href="view.callHref"
+        class="tcard-call"
+        :aria-label="`Telepon ${view.unitName}`"
       >
-        <Icon icon="ic:baseline-whatsapp" />
+        <Icon icon="ion:call" />
       </a>
     </div>
   </div>
@@ -140,7 +138,6 @@ function segmentState(i: number) {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
   border-radius: 16px;
   background: var(--bb-accent-soft);
   color: var(--bb-accent);
@@ -149,12 +146,6 @@ function segmentState(i: number) {
   width: 44px;
   height: 44px;
   border-radius: 14px;
-}
-.tcard-logo img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  padding: 7px;
 }
 .tcard-logo-icon {
   font-size: 26px;
@@ -312,7 +303,7 @@ function segmentState(i: number) {
   font-size: 10.5px;
 }
 
-.tcard-wa {
+.tcard-call {
   display: flex;
   width: 46px;
   height: 46px;
@@ -320,17 +311,17 @@ function segmentState(i: number) {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: #25d366;
-  color: #fff;
-  font-size: 24px;
+  background: var(--bb-text);
+  color: var(--bb-bg-surface);
+  font-size: 21px;
   transition: transform 0.16s ease;
 }
-.tcard--compact .tcard-wa {
+.tcard--compact .tcard-call {
   width: 40px;
   height: 40px;
-  font-size: 21px;
+  font-size: 18px;
 }
-.tcard-wa:active {
+.tcard-call:active {
   transform: scale(0.93);
 }
 

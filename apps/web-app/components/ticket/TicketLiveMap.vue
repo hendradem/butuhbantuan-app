@@ -120,14 +120,20 @@ function setStraightRoute(
   addRoutePolyline([from, to], { dashed, durationSec: approxSec });
 }
 
+/**
+ * Before a unit accepts we only know where its post is, so the line is drawn
+ * dashed — an estimate. Once the unit shares GPS it becomes a solid live route.
+ */
 async function drawRoute(from: [number, number], to: [number, number]) {
   if (!map || !Lref) return;
 
+  const estimate = !hasLive.value;
   const key = [
     from[0].toFixed(4),
     from[1].toFixed(4),
     to[0].toFixed(4),
     to[1].toFixed(4),
+    estimate ? "e" : "l",
   ].join(",");
   if (key === lastRouteKey && routeLine) return;
 
@@ -145,7 +151,7 @@ async function drawRoute(from: [number, number], to: [number, number]) {
     if (coords?.length) {
       clearRoute();
       const latlngs = coords.map((c) => [c[1], c[0]] as [number, number]);
-      addRoutePolyline(latlngs, { durationSec: Number(route?.duration) });
+      addRoutePolyline(latlngs, { dashed: estimate, durationSec: Number(route?.duration) });
       lastRouteKey = key;
       if (routeLine) {
         map.fitBounds(routeLine.getBounds(), { padding: [28, 28], maxZoom: 15 });
@@ -274,13 +280,13 @@ onUnmounted(() => {
     <header class="tlm-head">
       <div class="min-w-0">
         <p class="tlm-title">
-          {{ hasLive ? "Rute petugas → lokasi kamu" : fallbackUnit ? "Perkiraan dari posko" : "Lokasi kamu" }}
+          {{ hasLive ? "Rute petugas → lokasi kamu" : fallbackUnit ? "Perkiraan rute dari posko" : "Lokasi kamu" }}
         </p>
         <p v-if="hasLive && updatedLabel" class="tlm-meta tlm-meta--live">
           Diperbarui {{ updatedLabel }}
         </p>
         <p v-else-if="!hasLive && fallbackUnit" class="tlm-meta">
-          Menunggu GPS petugas di lapangan
+          Rute pastinya muncul setelah petugas berangkat
         </p>
       </div>
       <span v-if="hasLive" class="tlm-live">

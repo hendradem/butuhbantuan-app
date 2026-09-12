@@ -7,8 +7,8 @@
  */
 
 import { citizenTrackStepIndex, resolveCitizenPhase } from "~/utils/citizenPhase";
-import { ticketDisplayUrl, ticketViewPath, ticketViewUrl } from "~/utils/ticketUrl";
-import { buildUnitWaMessage, waDeepLink } from "~/utils/waContact";
+import { ticketDisplayUrl, ticketViewPath } from "~/utils/ticketUrl";
+import { convertPhoneNumber } from "~/utils/convertPhoneNumber";
 
 export type TicketView = {
   ticketNumber: string;
@@ -17,17 +17,32 @@ export type TicketView = {
   /** 0 Diproses · 1 Menuju lokasi · 2 Penanganan · 3 Selesai · −1 dibatalkan. */
   step: number;
   unitName: string;
-  /** Unit / organisation logo; falls back to a service icon when absent. */
+  /** Unit / organisation logo; falls back to the unit's initials. */
   unitLogo?: string;
+  /** Icon for the kind of help on its way (ambulans, damkar, SAR, RS). */
+  serviceIcon: string;
   etaMinutes?: number | null;
   /** Wall-clock arrival estimate, e.g. "10:30". */
   arrivalTime?: string;
-  /** wa.me deep link to the handling unit, empty when no number is known. */
-  waHref?: string;
+  /** tel: link to the handling unit, empty when no number is known. */
+  callHref?: string;
   /** Public e-ticket link: absolute href + the label shown to citizens. */
   href: string;
   linkLabel: string;
 };
+
+/**
+ * type_id → icon, mirroring /api/v1/emergency/type so the ticket shows the
+ * same symbol the citizen picked on the map. type_id is redacted until the
+ * viewer verifies, hence the ambulance default.
+ */
+const SERVICE_ICON: Record<number, string> = {
+  1: "mynaui:ambulance-solid",
+  2: "mdi:fire-truck",
+  3: "fa-solid:car-crash",
+  5: "mdi:hospital-building",
+};
+const DEFAULT_SERVICE_ICON = "mynaui:ambulance-solid";
 
 export const TICKET_STEPS = ["Diproses", "Menuju lokasi", "Penanganan", "Selesai"];
 
@@ -80,6 +95,8 @@ export type TicketViewSource = {
   unit_phone?: string;
   unit_lat?: number;
   unit_lng?: number;
+  /** Emergency type — see SERVICE_ICON. */
+  type_id?: number;
   eta_minutes?: number;
   requester_name?: string;
   requester_phone?: string;
@@ -106,10 +123,9 @@ export function toTicketView(
   const step = citizenTrackStepIndex(ticket);
   const eta = Number(ticket.eta_minutes) || 0;
   // Once the job is over or cancelled there is nothing left to ask the unit.
-  const waNumber = isTicketOngoing(step)
-    ? String(ticket.unit_whatsapp || ticket.unit_phone || "").trim()
+  const phone = isTicketOngoing(step)
+    ? convertPhoneNumber(String(ticket.unit_phone || ticket.unit_whatsapp || "").trim())
     : "";
-  const href = ticketViewUrl(viewToken);
 
   return {
     ticketNumber: String(ticket.ticket_number || "").trim(),
@@ -117,24 +133,10 @@ export function toTicketView(
     step,
     unitName: String(ticket.unit_name || "").trim() || "Mencari unit terdekat",
     unitLogo: opts?.unitLogo || String(ticket.unit_logo || "").trim() || undefined,
+    serviceIcon: SERVICE_ICON[Number(ticket.type_id)] ?? DEFAULT_SERVICE_ICON,
     etaMinutes: ticketHasEta(step) && eta > 0 ? eta : null,
     arrivalTime: ticketHasEta(step) ? arrivalClock(eta) : undefined,
-    waHref: waNumber
-      ? waDeepLink(
-          waNumber,
-          buildUnitWaMessage({
-            unitName: ticket.unit_name,
-            ticketNumber: ticket.ticket_number,
-            requesterName: ticket.requester_name,
-            requesterPhone: ticket.requester_phone,
-            address: ticket.location,
-            condition: ticket.condition,
-            lat: ticket.requester_lat,
-            lng: ticket.requester_lng,
-            ticketUrl: href,
-          }),
-        )
-      : undefined,
+    callHref: phone ? `tel:${phone}` : undefined,
     href: ticketViewPath(viewToken),
     linkLabel: ticketDisplayUrl(viewToken),
   };
