@@ -11,8 +11,7 @@ import { DASHBOARD_URL } from "~/utils/landingContent";
 const route = useRoute();
 
 const links = [
-  { label: "Fitur", to: "/landing#fitur" },
-  { label: "Untuk unit", to: "/landing#dashboard" },
+  { label: "Home", to: "/landing" },
   { label: "Tentang", to: "/tentang" },
   { label: "Support", to: "/support" },
 ];

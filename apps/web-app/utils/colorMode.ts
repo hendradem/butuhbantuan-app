@@ -1,6 +1,11 @@
 /**
  * Web-app light / dark color mode (independent of soft | legacy chrome).
  *
+ * The in-app toggle is dropped for now — getColorMode() always resolves to
+ * light, including for anyone who had previously switched to dark, so no
+ * one is left stuck without a way back. The rest of the module stays in
+ * place so the feature is a one-line revert away.
+ *
  * Persist:
  *   localStorage.setItem('bb-color-mode-v1', 'dark'); location.reload()
  * Clear:
@@ -35,7 +40,7 @@ function fromStorage(): ColorMode | null {
 }
 
 export function getColorMode(): ColorMode {
-  return fromStorage() ?? fromEnv() ?? COLOR_MODE_DEFAULT;
+  return COLOR_MODE_DEFAULT;
 }
 
 export function setColorMode(mode: ColorMode) {

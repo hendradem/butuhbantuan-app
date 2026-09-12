@@ -17,7 +17,7 @@ export type Sponsor = {
 export const SPONSORS: Sponsor[] = [];
 
 /** Placeholder slots rendered while SPONSORS is empty. */
-export const SPONSOR_PLACEHOLDER_SLOTS = 3;
+export const SPONSOR_PLACEHOLDER_SLOTS = 6;
 
 /** Sponsorship packages & benefits live on the public support page. */
 export const SPONSOR_INFO_PATH = "/support#kerja-sama";

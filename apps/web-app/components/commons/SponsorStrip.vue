@@ -21,13 +21,7 @@ const isEmpty = computed(() => sorted.value.length === 0);
 
 <template>
   <section class="sponsor" :class="`sponsor--${variant}`" :aria-label="title">
-    <div class="flex items-center justify-between gap-3">
-      <p class="sponsor-title">{{ title }}</p>
-      <NuxtLink :to="SPONSOR_INFO_PATH" class="sponsor-cta">
-        Jadi sponsor
-        <Icon icon="lucide:arrow-right" class="text-[12px]" />
-      </NuxtLink>
-    </div>
+    <p class="sponsor-title">{{ title }}</p>
 
     <ul class="sponsor-list">
       <template v-if="isEmpty">
@@ -60,6 +54,11 @@ const isEmpty = computed(() => sorted.value.length === 0);
         </li>
       </template>
     </ul>
+
+    <NuxtLink :to="SPONSOR_INFO_PATH" class="ui-btn-primary sponsor-cta-btn">
+      Jadi sponsor
+      <Icon icon="lucide:arrow-right" class="text-[16px]" />
+    </NuxtLink>
   </section>
 </template>
 
@@ -72,13 +71,8 @@ const isEmpty = computed(() => sorted.value.length === 0);
   text-transform: uppercase;
   color: var(--bb-text-tertiary);
 }
-.sponsor-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--bb-text-secondary);
+.sponsor-cta-btn {
+  margin-top: 12px;
 }
 
 .sponsor-list {
