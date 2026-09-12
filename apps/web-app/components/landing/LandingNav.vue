@@ -22,6 +22,9 @@ function isActive(to: string) {
 }
 
 const visible = useState("lp-nav-visible", () => true);
+// Set by /landing while its dashboard section's sticky pill bar is docked
+// under the nav — scrolling up there must not pop the nav back over it.
+const suppressed = useState("lp-nav-suppressed", () => false);
 const menuOpen = ref(false);
 const scrolled = ref(false);
 
@@ -32,7 +35,9 @@ function update() {
   const y = window.scrollY;
   const delta = y - lastY;
   scrolled.value = y > 8;
-  if (y < 120 || menuOpen.value) visible.value = true;
+  if (menuOpen.value) visible.value = true;
+  else if (suppressed.value) visible.value = false;
+  else if (y < 120) visible.value = true;
   else if (delta > 4) visible.value = false;
   else if (delta < -4) visible.value = true;
   if (Math.abs(delta) > 4) lastY = y;
@@ -51,6 +56,10 @@ function onKey(e: KeyboardEvent) {
 }
 
 watch(() => route.fullPath, () => (menuOpen.value = false));
+// /landing computes this in its own scroll handler, which can run either
+// before or after ours within the same frame — re-run update() once it
+// settles so a stale read never survives past that frame.
+watch(suppressed, () => update());
 
 onMounted(() => {
   visible.value = true;

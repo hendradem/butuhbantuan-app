@@ -29,6 +29,21 @@ useHead({
 });
 
 const navVisible = useState("lp-nav-visible", () => true);
+// While the dashboard section's sticky pill bar is docked under the nav,
+// scrolling up must not pop the nav back over it — only once the section is
+// fully scrolled past (either edge) does normal reveal-on-scroll-up resume.
+const navSuppressed = useState("lp-nav-suppressed", () => false);
+const dashboardSectionRef = ref<HTMLElement | null>(null);
+
+function updateNavSuppression() {
+  const el = dashboardSectionRef.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  // True exactly while the viewport's top edge sits inside the section — i.e.
+  // the user has scrolled into it and hasn't come out the other side yet,
+  // from either direction.
+  navSuppressed.value = rect.top <= 0 && rect.bottom > 0;
+}
 
 // ── Citizen walkthrough (sticky phone + scroll spy) ────────────────────────
 const features: { title: string; subtitle: string; tone: Tone }[] = [
@@ -87,6 +102,7 @@ function onScroll() {
   scrollRaf = requestAnimationFrame(() => {
     scrollRaf = 0;
     readActiveFromScroll();
+    updateNavSuppression();
   });
 }
 
@@ -199,6 +215,7 @@ function scrollToDashboardFeature(idx: number) {
 onMounted(() => {
   window.addEventListener("scroll", onScroll, { passive: true });
   readActiveFromScroll();
+  updateNavSuppression();
 
   dashboardIO = new IntersectionObserver(
     (entries) => {
@@ -226,6 +243,7 @@ onBeforeUnmount(() => {
   if (scrollRaf) cancelAnimationFrame(scrollRaf);
   dashboardIO?.disconnect();
   dashboardIO = null;
+  navSuppressed.value = false;
 });
 
 // ── Coverage ───────────────────────────────────────────────────────────────
@@ -407,7 +425,11 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
     </section>
 
     <!-- ================= UNIT DASHBOARD (sticky browser) ================= -->
-    <section id="dashboard" class="relative bg-[var(--lp-surface)] pb-24 pt-24 lg:pb-32 lg:pt-32">
+    <section
+      id="dashboard"
+      ref="dashboardSectionRef"
+      class="relative bg-[var(--lp-surface)] pb-24 pt-24 lg:pb-32 lg:pt-32"
+    >
       <div class="lp-container">
         <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end lg:gap-16">
           <div data-reveal>
