@@ -263,6 +263,8 @@ function handleClose() {
   detailSheet.onClose();
   exploreSheet.onClose();
   mapUrl.clearService();
+  // The sheet had pushed the map up — hand the whole view back to the user.
+  leaflet.requestRecenter();
 }
 
 async function shareResults() {

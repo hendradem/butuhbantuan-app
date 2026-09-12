@@ -365,6 +365,22 @@ onMounted(async () => {
     },
   );
 
+  // A sheet that had shifted the map closed → user pin back in the centre
+  watch(
+    () => leafletStore.recenterNonce,
+    () => {
+      const lat = userLocationStore.lat;
+      const lng = userLocationStore.long;
+      if (!map || !lat || !lng) return;
+      map.setView([lat, lng], DEFAULT_ZOOM, {
+        animate: true,
+        duration: 0.45,
+        easeLinearity: 0.2,
+      });
+      leafletStore.setMapZoom(DEFAULT_ZOOM);
+    },
+  );
+
   // Card/list or map select → enlarge + re-animate that pin
   watch(
     () =>

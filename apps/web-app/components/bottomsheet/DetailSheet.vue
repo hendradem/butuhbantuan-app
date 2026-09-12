@@ -350,7 +350,10 @@ watch(
       // Sheet closed — put the map back to whatever view the user had.
       restoreMapView();
       toggleMapSheetMax(false);
-      if (detailSheet.fromExploreList) {
+      if (!detailSheet.fromExploreList) {
+        // Nothing left over the map: centre on the user pin again.
+        leaflet.requestRecenter();
+      } else {
         detailSheet.clearExploreReturn();
         // Wait for the sheet close animation (~360 ms) to finish before
         // reopening the explore list. Reopening synchronously briefly stacks

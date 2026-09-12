@@ -13,8 +13,8 @@
   --lp-line: #e8e6e2;
   --lp-ink: #1c1917;
   --lp-ink-2: #44403c;
-  --lp-muted: #78716c;
-  --lp-faint: #a8a29e;
+  --lp-muted: #6b6560;
+  --lp-faint: #9c968f;
   --lp-accent: #dc2626;
   --lp-accent-ink: #b91c1c;
   --lp-accent-soft: #fef2f2;
@@ -35,9 +35,11 @@
   --lp-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 
   /* The soft UI theme bumps every Tailwind weight class one step up (see
-     main.css). Reset the variables it reads so weights mean what they say. */
-  --bb-fw-body: 400;
-  --bb-fw-secondary: 400;
+     main.css). Reset the variables it reads so weights mean what they say.
+     Body copy sits at medium: Plus Jakarta Sans at 400 reads thin against
+     this much white. */
+  --bb-fw-body: 500;
+  --bb-fw-secondary: 500;
   --bb-fw-medium: 500;
   --bb-fw-semibold: 600;
   --bb-fw-bold: 700;
@@ -50,7 +52,7 @@
   background: var(--lp-bg);
   color: var(--lp-ink);
   font-family: var(--lp-font);
-  font-weight: 400;
+  font-weight: 500;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* `clip` (not `hidden`) so sticky descendants keep working. */
@@ -171,6 +173,7 @@
 
 :where(.lp-lead) {
   font-size: 1.0625rem;
+  font-weight: 500;
   line-height: 1.65;
   color: var(--lp-muted);
   text-wrap: pretty;
@@ -183,6 +186,7 @@
 
 :where(.lp-body) {
   font-size: 0.9375rem;
+  font-weight: 500;
   line-height: 1.65;
   color: var(--lp-muted);
   text-wrap: pretty;
