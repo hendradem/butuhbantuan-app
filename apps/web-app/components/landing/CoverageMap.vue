@@ -4,10 +4,11 @@
  * (rectangles per island) and hub-city markers.
  *
  * Client-only: dynamically imports leaflet in onMounted so it never runs on
- * SSR. Tiles are OSM (the main app's default), desaturated via CSS so the
+ * SSR. Tiles match the main app's default, desaturated via CSS so the
  * coverage overlay and markers carry the colour.
  */
 import type { Map as LeafletMap } from "leaflet";
+import { tileAttribution, tileLayerExtraOptions, tileLayerUrl, tileSubdomains, watchTileQuota } from "~/utils/mapAppearance";
 
 type City = { name: string; lat: number; lng: number; tier?: 1 | 2 };
 
@@ -162,14 +163,17 @@ onMounted(async () => {
 
   map.attributionControl.setPrefix(false);
 
-  // OSM standard tiles — same default as the main app. CARTO raster tiles
-  // now render an "API key required" watermark without a key.
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
+  // Same tile source as the main app (see utils/mapAppearance.ts) — kept in
+  // one place so the two never drift.
+  const baseLayer = L.tileLayer(tileLayerUrl("classic"), {
+    maxZoom: 20,
+    subdomains: tileSubdomains("classic"),
     crossOrigin: true,
     keepBuffer: 4,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    attribution: tileAttribution("classic"),
+    ...tileLayerExtraOptions("classic"),
   }).addTo(map);
+  watchTileQuota(L, map, baseLayer, "classic");
 
   // Fit the Indonesian archipelago.
   const bounds = L.latLngBounds([

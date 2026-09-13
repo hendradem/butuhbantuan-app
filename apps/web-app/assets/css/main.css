@@ -356,13 +356,19 @@ html[data-ui-theme="soft"] h4 {
   transform-origin: 50% 100%;
 }
 
+/* Glossy 3D head — same sheen recipe as our raised buttons (--bb-btn-sheen),
+ * layered over each type's flat background-color below. */
 .bb-svc-pin__head {
   width: 22px;
   height: 22px;
   border-radius: 50% 50% 50% 3px;
   transform: rotate(-45deg);
   border: 2px solid #fff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.32);
+  background-image: var(--bb-btn-sheen);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.16),
+    0 2px 8px rgba(15, 23, 42, 0.32);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -425,7 +431,10 @@ html[data-ui-theme="soft"] h4 {
   width: 40px;
   height: 40px;
   border-width: 3px;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -3px 5px rgba(0, 0, 0, 0.18),
+    0 6px 18px rgba(15, 23, 42, 0.45);
 }
 
 .bb-svc-pin--active .bb-svc-pin__icon {
@@ -699,14 +708,14 @@ html[data-ui-theme="soft"] h4 {
   transform-origin: 50% 100%;
 }
 
-/* Slim the route stroke on zoom-out — default 3.5 / 5.5 → 2 / 3.
+/* Slim the route stroke on zoom-out — default 5 / 8 → 3 / 4.5.
  * `!important` because Leaflet also writes stroke-width as an SVG attribute
  * on every redraw. */
 .bb-map--zoomed-out .bb-route-line {
-  stroke-width: 2 !important;
+  stroke-width: 3 !important;
 }
 .bb-map--zoomed-out .bb-route-casing {
-  stroke-width: 3 !important;
+  stroke-width: 4.5 !important;
   opacity: 0.85;
 }
 
@@ -717,10 +726,10 @@ html[data-ui-theme="soft"] h4 {
   transform-origin: 50% 100%;
 }
 
-/* When the detail sheet is at its tallest snap, the map is only ~25 vh tall,
- * so the ETA badge would cover the pins. The same info is already shown in
- * the sheet header ("9 min · 6.9 km"), so hide the badge here. */
-.bb-map--sheet-max .bb-route-bubble-wrap {
+/* The detail sheet shows this same ETA (and the full advice hint) in its
+ * Detail tab (RouteEtaCard) the moment it opens, at any snap size — so the
+ * floating badge would only duplicate it and sit over the sheet/pins. */
+.bb-map--detail-open .bb-route-bubble-wrap {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;

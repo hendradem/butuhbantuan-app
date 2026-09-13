@@ -20,6 +20,9 @@ export type RouteAdvice = {
   level: RouteAdviceLevel;
   /** Short line under ETA — e.g. "Direkomendasikan dihubungi" */
   hint: string;
+  /** One or two words — for badges sitting inline next to a label, where
+   *  `hint`'s full sentence would wrap or overflow. */
+  shortHint: string;
 };
 
 /** Minutes thresholds for advice + route line color. */
@@ -45,9 +48,9 @@ export const ROUTE_LINE_CASING_NEAR = "#1D4ED8";
 export const ROUTE_LINE_CASING_MID = "#C2410C";
 export const ROUTE_LINE_CASING_FAR = "#B91C1C";
 
-/** Slimmer than SafeCircle mock — readable without overpowering the map. */
-export const ROUTE_LINE_WEIGHT = 3.5;
-export const ROUTE_LINE_CASING_WEIGHT = 5.5;
+/** Bold enough to read at a glance against the basemap. */
+export const ROUTE_LINE_WEIGHT = 5;
+export const ROUTE_LINE_CASING_WEIGHT = 8;
 
 /** @deprecated Use ROUTE_LINE_CASING_NEAR / routeLineCasingColor. */
 export const ROUTE_LINE_CASING_COLOR = ROUTE_LINE_CASING_NEAR;
@@ -70,23 +73,27 @@ export function routeAdviceFromTravel(opts: {
     return {
       level: "good",
       hint: "Direkomendasikan dihubungi",
+      shortHint: "Direkomendasikan",
     };
   }
   if (minutes <= ROUTE_ADVICE_MINUTES.ok) {
     return {
       level: "ok",
       hint: "Masih layak dihubungi",
+      shortHint: "Layak dihubungi",
     };
   }
   if (minutes <= ROUTE_ADVICE_MINUTES.stretch) {
     return {
       level: "stretch",
       hint: "Boleh dihubungi · pertimbangkan unit lain",
+      shortHint: "Unit lain lebih dekat",
     };
   }
   return {
     level: "far",
     hint: "Cari unit lain yang lebih dekat",
+    shortHint: "Terlalu jauh",
   };
 }
 

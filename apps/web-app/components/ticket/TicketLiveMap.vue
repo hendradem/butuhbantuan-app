@@ -6,6 +6,7 @@ import {
   routeLineCasingColor,
   routeLineColorFromTravel,
 } from "~/utils/routeAdvice";
+import { tileLayerExtraOptions, tileLayerUrl, tileSubdomains, watchTileQuota } from "~/utils/mapAppearance";
 
 const props = withDefaults(
   defineProps<{
@@ -177,9 +178,12 @@ async function ensureMap() {
       zoomControl: false,
       attributionControl: false,
     });
-    Lref.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
+    const baseLayer = Lref.tileLayer(tileLayerUrl("classic"), {
+      maxZoom: 20,
+      subdomains: tileSubdomains("classic"),
+      ...tileLayerExtraOptions("classic"),
     }).addTo(map);
+    watchTileQuota(Lref, map!, baseLayer, "classic");
   }
   await syncMarkers();
 }

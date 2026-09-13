@@ -30,6 +30,9 @@ const scrollContainer = ref<HTMLElement | null>(null);
 const SNAP_DEFAULT = 0;
 const SNAP_TALL = 1;
 const currentSnapIdx = ref(SNAP_DEFAULT);
+// Must match LeafletMap.vue's DEFAULT_ZOOM — opening the list always
+// resets to this, even if the user had zoomed the map out/in beforehand.
+const DEFAULT_ZOOM = 14;
 // Baseline map zoom captured when the sheet opens; used as the anchor for
 // `fitMapForSheet` so tall → default restores exactly (not `current - (-1)`).
 let baseZoom: number | null = null;
@@ -56,6 +59,43 @@ const onlyComplete = ref(false);
 
 const filterOpen = ref(false);
 const filterMenuRef = ref<HTMLElement | null>(null);
+
+// ── Scroll-revealed search + quick filters ──────────────────────────────────
+// Hidden while at the top of the list (the header alone is enough there);
+// once the user scrolls the list, a compact search box + one-tap filter
+// chips slide in so they don't have to scroll back up to refine results.
+const searchQuery = ref("");
+const listScrolled = ref(false);
+const SCROLL_REVEAL_THRESHOLD = 8;
+
+function onListScroll(e: Event) {
+  // One-way latch, not a live toggle: filtering the list (search/chips) can
+  // shrink it enough that the browser snaps scrollTop back to 0 on its own,
+  // which must not yank the search box away while someone's mid-search.
+  if ((e.target as HTMLElement).scrollTop > SCROLL_REVEAL_THRESHOLD) {
+    listScrolled.value = true;
+  }
+}
+
+// CoreSheet puts the real `overflow-y: auto` (and so the actual `scroll`
+// events) on its own wrapper one level above this component's content div —
+// not on scrollContainer itself — so the listener has to attach there
+// directly rather than through a template `@scroll`. Watched (not just
+// onMounted) because this component renders once at the app root and
+// scrollContainer's parent may not exist yet the first time onMounted runs.
+let scrollParent: HTMLElement | null = null;
+watch(
+  scrollContainer,
+  (el) => {
+    scrollParent?.removeEventListener("scroll", onListScroll);
+    scrollParent = el?.parentElement ?? null;
+    scrollParent?.addEventListener("scroll", onListScroll, { passive: true });
+  },
+  { immediate: true },
+);
+onUnmounted(() => {
+  scrollParent?.removeEventListener("scroll", onListScroll);
+});
 
 const showServiceFilter = computed(() => {
   const name = String(sheetData.value?.emergencyType?.name || "").toLowerCase();
@@ -103,8 +143,11 @@ watch(
 function fitMapForSheet(snapVh: number, zoomDelta = 0) {
   if (!import.meta.client || !leaflet.mapInstance || !userLocation.lat || !userLocation.long) return;
   const map = leaflet.mapInstance as any;
-  if (baseZoom == null) baseZoom = map.getZoom() as number;
-  const anchor = baseZoom ?? map.getZoom();
+  // Anchor on the standard zoom, not whatever the map happened to be at —
+  // otherwise opening the list while zoomed out just re-centers at that
+  // zoom instead of returning to the default view.
+  if (baseZoom == null) baseZoom = DEFAULT_ZOOM;
+  const anchor = baseZoom;
   const targetZoom = Math.max(10, anchor + zoomDelta);
   const H = window.innerHeight;
   // Visible strip = (1 - snapVh) * H at the top of the viewport. Place the
@@ -132,6 +175,8 @@ watch(
       filterOpen.value = false;
       currentSnapIdx.value = SNAP_DEFAULT;
       baseZoom = null;
+      listScrolled.value = false;
+      searchQuery.value = "";
       return;
     }
     baseZoom = null; // capture on first fit call
@@ -147,6 +192,9 @@ function onSnapChange(idx: number) {
     fitMapForSheet(0.75, -2);
   } else {
     fitMapForSheet(0.5, 0);
+    // Collapsed back down — the list isn't scrollable here anyway, so start
+    // the search/quick-filter reveal fresh next time it's expanded.
+    listScrolled.value = false;
   }
 }
 
@@ -170,8 +218,17 @@ function matchesService(item: any): boolean {
   return tipes.includes(serviceMode.value);
 }
 
+function matchesSearch(item: any): boolean {
+  const q = searchQuery.value.trim().toLowerCase();
+  if (!q) return true;
+  const name = String(item.emergencyData?.name ?? "").toLowerCase();
+  const org = String(item.emergencyData?.organization_name ?? "").toLowerCase();
+  return name.includes(q) || org.includes(q);
+}
+
 const filteredEmergencyList = computed(() => {
   let list = emergencyList.value.filter((item: any) => {
+    if (!matchesSearch(item)) return false;
     if (!matchesService(item)) return false;
 
     if (tierFilter.value !== "all") {
@@ -314,9 +371,10 @@ function chipClass(active: boolean) {
     <template #header>
       <div
         v-if="sheetData?.emergencyType"
-        class="relative py-2 px-4 flex items-center justify-between gap-2.5"
+        class="relative"
         style="background: #ffffff; border-bottom: 1px solid var(--bb-border); border-radius: var(--bb-radius-sheet) var(--bb-radius-sheet) 0 0"
       >
+        <div class="flex items-center justify-between gap-2.5 py-2 px-4">
         <div class="flex items-center gap-2.5 min-w-0 flex-1">
           <div
             class="flex h-9 w-9 shrink-0 items-center justify-center ui-icon-well--danger"
@@ -571,6 +629,62 @@ function chipClass(active: boolean) {
             <Icon icon="ion:close" class="text-xl" style="color: var(--bb-text-secondary)" />
           </button>
         </div>
+        </div>
+
+        <!-- Scroll-revealed: search + one-tap filter chips. The funnel button
+             above still opens the full dropdown for sort/24h/compliance. -->
+        <Transition name="quick-filter">
+          <div v-if="listScrolled" class="px-4 pb-2.5 pt-1">
+            <div class="relative">
+              <Icon
+                icon="lucide:search"
+                class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[15px]"
+                style="color: var(--bb-text-tertiary)"
+              />
+              <input
+                v-model="searchQuery"
+                type="search"
+                inputmode="search"
+                placeholder="Cari nama unit atau organisasi"
+                class="w-full rounded-full border border-neutral-200 bg-neutral-50 py-2 pl-9 pr-3 text-[13px] text-neutral-800 outline-none transition-colors focus:border-neutral-300 focus:bg-white"
+              />
+            </div>
+
+            <div class="mt-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+              <template v-if="showServiceFilter">
+                <button
+                  v-for="opt in [
+                    { id: 'all', label: 'Semua layanan' },
+                    { id: 'emergency', label: 'Darurat' },
+                    { id: 'transport', label: 'Transport' },
+                  ]"
+                  :key="`svc-${opt.id}`"
+                  type="button"
+                  :class="[chipClass(serviceMode === opt.id), 'shrink-0']"
+                  @click="serviceMode = opt.id as ServiceMode"
+                >
+                  {{ opt.label }}
+                </button>
+                <span class="h-4 w-px shrink-0 bg-neutral-200" />
+              </template>
+
+              <button
+                v-for="opt in [
+                  { id: 'all', label: 'Semua mitra' },
+                  { id: 'psc', label: 'Resmi' },
+                  { id: 'verified', label: 'Swasta' },
+                  { id: 'community', label: 'Komunitas' },
+                ]"
+                :key="`tier-${opt.id}`"
+                type="button"
+                :class="[chipClass(tierFilter === opt.id), 'shrink-0']"
+                @click="tierFilter = opt.id as TierFilter"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
+          </div>
+        </Transition>
       </div>
     </template>
 
@@ -618,5 +732,17 @@ function chipClass(active: boolean) {
 .filter-drop-leave-to {
   opacity: 0;
   transform: translateY(-4px) scale(0.97);
+}
+
+.quick-filter-enter-active,
+.quick-filter-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+.quick-filter-enter-from,
+.quick-filter-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 </style>

@@ -15,10 +15,12 @@
  *   [ Laporan · Telepon · Share · Simpan ]
  */
 import { Icon } from "@iconify/vue";
+import { isAmbulanceServiceType, isDamkarType, isSarType, jenisPelayananLabel } from "@butuhbantuan/utils";
 import { appToast } from "~/utils/appToast";
 import { convertPhoneNumber } from "~/utils/convertPhoneNumber";
 import { displayEtaMinutes } from "~/utils/rankUnits";
 import { formatDistance } from "~/utils/geo";
+import { routeAdviceFromTravel } from "~/utils/routeAdvice";
 import { unitUsesWaDispatch } from "~/utils/waContact";
 
 type TabKey = "detail" | "reviews" | "about";
@@ -101,8 +103,8 @@ function applyMapViewForExpanded() {
 
   const sheetH = currentSheetHeightPx() || Math.round(window.innerHeight * 0.75);
   const opts = {
-    paddingTopLeft: [24, 60] as [number, number],
-    paddingBottomRight: [24, sheetH + 20] as [number, number],
+    paddingTopLeft: [16, 28] as [number, number],
+    paddingBottomRight: [16, sheetH + 12] as [number, number],
     maxZoom: 16,
     animate: true,
     duration: 0.4,
@@ -153,6 +155,14 @@ function toggleMapSheetMax(on: boolean) {
   el?.classList.toggle("bb-map--sheet-max", on);
 }
 
+// The route ETA is shown in this sheet's Detail tab (see RouteEtaCard), so
+// the map's floating badge would just duplicate it and overlap the panel —
+// hide it for as long as this sheet is open, at any snap size.
+function toggleMapDetailOpen(on: boolean) {
+  const el = leaflet.mapInstance?.getContainer?.();
+  el?.classList.toggle("bb-map--detail-open", on);
+}
+
 function onSnapChange(idx: number) {
   if (idx >= 2 && savedZoom == null) {
     toggleMapSheetMax(true);
@@ -176,10 +186,41 @@ const distanceLabel = computed(() => {
   return typeof m === "number" && Number.isFinite(m) ? formatDistance(m) : "";
 });
 
+// Same content as the map's floating ETA badge, moved here so it stops
+// overlapping the sheet (the map hides its badge while this sheet is open).
+const routeAdvice = computed(() => {
+  if (etaMinutes.value == null) return null;
+  return routeAdviceFromTravel({ durationSec: etaMinutes.value * 60 });
+});
+
 const roleLabel = computed(() => {
   if (emergencyData.value?.is_province_dispatcher) return "Dispatcher Provinsi";
   if (emergencyData.value?.is_dispatcher) return "Dispatcher Kab/Kota";
   return "Komunitas";
+});
+
+const serviceCategoryName = computed(
+  () => emergencyType.value?.name || emergencyData.value?.emergency_type?.name || "",
+);
+
+// What the unit actually does — shown next to roleLabel in the header.
+// ETA/distance already live in RouteEtaCard below, so this line no longer
+// repeats them.
+const serviceTypeLabel = computed(() => {
+  const name = serviceCategoryName.value;
+  if (isSarType(name)) return "Pencarian dan Pertolongan";
+  if (isDamkarType(name)) return "Pemadam dan Penyelamatan";
+  if (isAmbulanceServiceType(name)) {
+    const raw = String(emergencyData.value?.type_of_service ?? "").trim();
+    if (raw) {
+      return raw
+        .split(",")
+        .map((code) => jenisPelayananLabel(code.trim()))
+        .filter(Boolean)
+        .join(" · ");
+    }
+  }
+  return name;
 });
 
 const headerTitle = computed(() => emergencyData.value?.name ?? "Bantuan darurat");
@@ -343,6 +384,7 @@ watch(
     if (open) {
       activeTab.value = "detail";
       expandedByScroll = false;
+      toggleMapDetailOpen(true);
       nextTick(() => {
         if (scrollBodyRef.value) scrollBodyRef.value.scrollTop = 0;
       });
@@ -350,6 +392,7 @@ watch(
       // Sheet closed — put the map back to whatever view the user had.
       restoreMapView();
       toggleMapSheetMax(false);
+      toggleMapDetailOpen(false);
       if (!detailSheet.fromExploreList) {
         // Nothing left over the map: centre on the user pin again.
         leaflet.requestRecenter();
@@ -412,17 +455,9 @@ watch(activeTab, () => {
             </p>
             <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
               <span class="text-[12px] font-medium" style="color: #1a73e8">{{ roleLabel }}</span>
-              <span v-if="etaMinutes != null" style="color: #dadce0">·</span>
-              <span
-                v-if="etaMinutes != null"
-                class="text-[12px] font-medium"
-                :style="{ color: etaMinutes <= 5 ? '#137333' : '#5f6368' }"
-              >
-                {{ etaMinutes }} min
-              </span>
-              <span v-if="distanceLabel" style="color: #dadce0">·</span>
-              <span v-if="distanceLabel" class="text-[12px] font-medium" style="color: #5f6368">
-                {{ distanceLabel }}
+              <span v-if="serviceTypeLabel" style="color: #dadce0">·</span>
+              <span v-if="serviceTypeLabel" class="text-[12px] font-medium" style="color: #5f6368">
+                {{ serviceTypeLabel }}
               </span>
             </div>
           </div>
@@ -500,6 +535,14 @@ watch(activeTab, () => {
       >
         <!-- Detail tab -->
         <template v-if="activeTab === 'detail'">
+          <RouteEtaCard
+            v-if="routeAdvice"
+            :time-label="`${etaMinutes} mnt`"
+            :distance-label="distanceLabel"
+            :hint="routeAdvice.shortHint"
+            :level="routeAdvice.level"
+          />
+
           <DetailNoticeCard :items="noticeItems" />
 
           <DetailCard

@@ -16,9 +16,11 @@ import {
   emergencyPinIconHtml,
   getMapAppearance,
   tileAttribution,
+  tileLayerExtraOptions,
   tileLayerUrl,
   tileSubdomains,
   userLocationIconHtml,
+  watchTileQuota,
 } from "~/utils/mapAppearance";
 import { getColorMode } from "~/utils/colorMode";
 
@@ -101,13 +103,15 @@ onMounted(async () => {
   const initialTiles = effectiveTileStyle(mapAppearance.tiles, getColorMode());
   baseTileLayer = L.tileLayer(tileLayerUrl(initialTiles), {
     attribution: tileAttribution(initialTiles),
-    maxZoom: initialTiles === "classic" ? 19 : 20,
+    maxZoom: 20,
     subdomains: tileSubdomains(initialTiles),
     crossOrigin: true,
     keepBuffer: 8,
     updateWhenIdle: false,
     updateWhenZooming: false,
+    ...tileLayerExtraOptions(initialTiles),
   }).addTo(map);
+  watchTileQuota(L, map!, baseTileLayer, initialTiles);
 
   const onColorMode = (e: Event) => {
     const mode = (e as CustomEvent).detail?.mode === "dark" ? "dark" : "light";
@@ -116,13 +120,15 @@ onMounted(async () => {
     map.removeLayer(baseTileLayer);
     baseTileLayer = L.tileLayer(tileLayerUrl(next), {
       attribution: tileAttribution(next),
-      maxZoom: next === "classic" ? 19 : 20,
+      maxZoom: 20,
       subdomains: tileSubdomains(next),
       crossOrigin: true,
       keepBuffer: 8,
       updateWhenIdle: false,
       updateWhenZooming: false,
+      ...tileLayerExtraOptions(next),
     }).addTo(map);
+    watchTileQuota(L, map, baseTileLayer, next);
     baseTileLayer.bringToBack?.();
     const tilePane = map.getPane("tilePane") as HTMLElement | undefined;
     if (tilePane) {
@@ -1047,10 +1053,10 @@ function measureBottomSheetInset(): number {
 }
 
 function routeFitOptions() {
-  const side = 28;
-  const top = 56;
-  // Clear sheet + a little breathing room under markers / ETA bubble
-  const bottom = measureBottomSheetInset() + 28;
+  const side = 16;
+  const top = 28;
+  // Clear the sheet, plus a little breathing room under the markers.
+  const bottom = measureBottomSheetInset() + 14;
   return {
     paddingTopLeft: [side, top] as [number, number],
     paddingBottomRight: [side, bottom] as [number, number],
