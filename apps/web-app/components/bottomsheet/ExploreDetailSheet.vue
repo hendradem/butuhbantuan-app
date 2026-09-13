@@ -74,6 +74,29 @@ const showServiceFilter = computed(() => {
 
 const showFilterMenu = computed(() => emergencyList.value.length > 0);
 
+/** One-tap chips in the quick row. Service chips are ambulance-only; the
+ *  rest map straight onto the same state the full filter dropdown drives. */
+const quickFilters = computed(() => {
+  const chips: { key: string; label: string; icon: string; active: boolean; apply: () => void }[] = [];
+
+  if (showServiceFilter.value) {
+    chips.push(
+      { key: "svc-all", label: "Semua", icon: "ion:apps-outline", active: serviceMode.value === "all", apply: () => (serviceMode.value = "all") },
+      { key: "svc-emergency", label: "Darurat", icon: "ion:medkit-outline", active: serviceMode.value === "emergency", apply: () => (serviceMode.value = "emergency") },
+      { key: "svc-transport", label: "Transport", icon: "ion:car-outline", active: serviceMode.value === "transport", apply: () => (serviceMode.value = "transport") },
+    );
+  }
+
+  chips.push(
+    { key: "tier-all", label: "Semua mitra", icon: "ion:people-outline", active: tierFilter.value === "all", apply: () => (tierFilter.value = "all") },
+    { key: "tier-psc", label: "Resmi", icon: "ion:shield-checkmark-outline", active: tierFilter.value === "psc", apply: () => (tierFilter.value = "psc") },
+    { key: "tier-verified", label: "Swasta", icon: "ion:business-outline", active: tierFilter.value === "verified", apply: () => (tierFilter.value = "verified") },
+    { key: "tier-community", label: "Komunitas", icon: "ion:heart-outline", active: tierFilter.value === "community", apply: () => (tierFilter.value = "community") },
+  );
+
+  return chips;
+});
+
 const showComplianceFilter = computed(() => {
   const name = String(sheetData.value?.emergencyType?.name || "").toLowerCase();
   return name.includes("ambulance") || name.includes("ambulans");
@@ -138,6 +161,12 @@ function centerUserAboveSheet() {
   fitMapForSheet(0.5, 0);
 }
 
+/** Parks the map's looping marker pulses while the sheet covers it — they
+ *  keep compositing behind the panel and fight the list scroll otherwise. */
+function toggleMapSheetMax(on: boolean) {
+  leaflet.mapInstance?.getContainer?.()?.classList.toggle("bb-map--sheet-max", on);
+}
+
 watch(
   () => exploreSheet.isOpen,
   (open) => {
@@ -146,6 +175,7 @@ watch(
       currentSnapIdx.value = SNAP_DEFAULT;
       baseZoom = null;
       searchQuery.value = "";
+      toggleMapSheetMax(false);
       return;
     }
     baseZoom = null; // capture on first fit call
@@ -157,6 +187,7 @@ function onSnapChange(idx: number) {
   currentSnapIdx.value = idx;
   // Zoom out ~2 levels when tall so the user marker + emergency pins stay
   // peekable above the raised sheet; restore to base zoom on collapse.
+  toggleMapSheetMax(idx === SNAP_TALL);
   if (idx === SNAP_TALL) {
     fitMapForSheet(0.75, -2);
   } else {
@@ -616,39 +647,27 @@ function chipClass(active: boolean) {
               />
             </div>
 
-            <!-- Wraps instead of scrolling: a horizontal scroller clipped
-                 chips mid-word at the sheet edge. -->
-            <div class="mt-1.5 flex flex-wrap items-center gap-x-1 gap-y-1 px-4">
-              <template v-if="showServiceFilter">
-                <button
-                  v-for="opt in [
-                    { id: 'all', label: 'Semua' },
-                    { id: 'emergency', label: 'Darurat' },
-                    { id: 'transport', label: 'Transport' },
-                  ]"
-                  :key="`svc-${opt.id}`"
-                  type="button"
-                  class="bb-quick-chip"
-                  :class="serviceMode === opt.id && 'bb-quick-chip--on'"
-                  @click="serviceMode = opt.id as ServiceMode"
-                >
-                  {{ opt.label }}
-                </button>
-              </template>
-
+            <!-- Single row, scrolls sideways with no visible scrollbar. -->
+            <div class="mt-1.5 flex items-center gap-1.5 overflow-x-auto scrollbar-none px-4">
               <button
-                v-for="opt in [
-                  { id: 'psc', label: 'Resmi' },
-                  { id: 'verified', label: 'Swasta' },
-                  { id: 'community', label: 'Komunitas' },
-                ]"
-                :key="`tier-${opt.id}`"
+                v-for="f in quickFilters"
+                :key="f.key"
                 type="button"
                 class="bb-quick-chip"
-                :class="tierFilter === opt.id && 'bb-quick-chip--on'"
-                @click="tierFilter = tierFilter === opt.id ? 'all' : (opt.id as TierFilter)"
+                :class="f.active && 'bb-quick-chip--on'"
+                @click="f.apply()"
               >
-                {{ opt.label }}
+                <Icon :icon="f.icon" class="text-[14px]" />
+                {{ f.label }}
+              </button>
+
+              <button
+                type="button"
+                class="bb-quick-chip bb-quick-chip--more"
+                @click="filterOpen = true"
+              >
+                <Icon icon="ion:options-outline" class="text-[14px]" />
+                Filter lainnya
               </button>
             </div>
           </div>
@@ -735,7 +754,10 @@ function chipClass(active: boolean) {
 
 /* Filter chips: plain text until selected, then a soft filled pill. */
 .bb-quick-chip {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  gap: 5px;
   padding: 5px 11px;
   border: none;
   border-radius: 999px;
@@ -743,6 +765,7 @@ function chipClass(active: boolean) {
   font-size: 13px;
   font-weight: 500;
   color: #5f6368;
+  white-space: nowrap;
   transition:
     background-color 0.15s ease,
     color 0.15s ease;
@@ -751,5 +774,10 @@ function chipClass(active: boolean) {
   background: #f1f3f4;
   font-weight: 600;
   color: #202124;
+}
+
+/* Opens the full filter dropdown — an action, not a filter state. */
+.bb-quick-chip--more {
+  color: #1a73e8;
 }
 </style>

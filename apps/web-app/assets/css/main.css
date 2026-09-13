@@ -329,6 +329,24 @@ html[data-ui-theme="soft"] h4 {
   cursor: pointer;
 }
 
+/* A raised sheet leaves only a sliver of map visible, but the marker pulses
+   keep animating behind it — constant compositing that competes with the
+   list scroll. Park them until the sheet comes back down. */
+.bb-map--sheet-max .bb-svc-pin__pulse,
+.bb-map--sheet-max .bb-user-pin__ring {
+  animation-play-state: paused;
+}
+
+/* Horizontal chip/pill rows scroll without showing a scrollbar. Referenced
+   by several sheets; it had never actually been defined. */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Route focus — other units/hospitals recede so the active path stays readable */
 .ambulance-marker.bb-marker--muted,
 .fire-fighter-marker.bb-marker--muted,

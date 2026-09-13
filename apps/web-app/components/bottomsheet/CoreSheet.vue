@@ -276,9 +276,24 @@ function onTouchEnd() {
 // (after scrolling has come to rest) collapses one step.
 let lastBodyScrollTs = 0;
 
+/**
+ * True while the body is being scrolled. Dragging a finger down a list makes
+ * the browser synthesise pointerover/enter against every row it crosses, and
+ * each one recalculates that row's hover/active styles — hundreds of extra
+ * style+paint passes mid-scroll. CSS keyed off this flag switches the rows
+ * inert until the scroll settles.
+ */
+const isScrolling = ref(false);
+let scrollIdleTimer: ReturnType<typeof setTimeout> | undefined;
+
 function onBodyScroll() {
   lastBodyScrollTs = performance.now();
+  if (!isScrolling.value) isScrolling.value = true;
+  clearTimeout(scrollIdleTimer);
+  scrollIdleTimer = setTimeout(() => (isScrolling.value = false), 120);
 }
+
+onUnmounted(() => clearTimeout(scrollIdleTimer));
 
 function onBodyWheel(e: WheelEvent) {
   if (!props.contentDrag) return;
@@ -375,8 +390,9 @@ const boxHeight = computed(() => `${props.draggable ? maxPx.value : currentHeigh
           <div
             ref="scrollerEl"
             :class="[
-              'flex-1 min-h-0 overscroll-contain',
+              'flex-1 min-h-0 overscroll-contain bb-sheet-scroller',
               scrollable && !bodyScrollLocked ? 'overflow-y-auto' : 'overflow-hidden',
+              isScrolling && 'bb-sheet-scroller--busy',
             ]"
             @touchstart.passive="onTouchStart($event, 'content')"
             @touchmove="onTouchMove"
@@ -421,6 +437,25 @@ const boxHeight = computed(() => `${props.draggable ? maxPx.value : currentHeigh
   right: -1px;
   height: 80px;
   background: var(--bb-bg-surface);
+}
+
+/* Keep scroll repaints inside the scroller instead of letting them invalidate
+   the panel (and the map composited under it). `paint` matches what an
+   overflow container already clips, so nothing visually changes. */
+.bb-sheet-scroller {
+  contain: paint;
+}
+
+/* Mid-scroll the rows go inert: no hover/active recalcs from the synthesised
+   pointer events, and no transitions competing with the scroll. Restored
+   ~120 ms after the last scroll tick, well before a tap can land. */
+.bb-sheet-scroller--busy * {
+  pointer-events: none !important;
+}
+.bb-sheet-scroller--busy *,
+.bb-sheet-scroller--busy *::before,
+.bb-sheet-scroller--busy *::after {
+  transition: none !important;
 }
 
 /* Enter/leave: the box slides up from the bottom. */

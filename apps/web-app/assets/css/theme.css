@@ -366,6 +366,9 @@ html[data-ui-theme="legacy"] .ui-list-stack {
   text-align: left;
   width: 100%;
   transition: background 0.15s ease;
+  /* Each row is its own style/layout scope, so recalculating one (hover,
+     active, filter change) can't invalidate the rest of the list. */
+  contain: layout style;
 }
 
 .ui-list-card:active {
