@@ -157,9 +157,27 @@ function fitMapForSheet(snapVh: number, zoomDelta = 0) {
   });
 }
 
-function centerUserAboveSheet() {
-  fitMapForSheet(0.5, 0);
+/** CoreSheet snaps over 480 ms; a little past that so the re-frame lands
+ *  after the last animated frame rather than on it. */
+const SNAP_SETTLE_MS = 540;
+let mapFitTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Leaflet's setView is main-thread heavy: a zoom change rebuilds the tile
+ * pyramid and runs its own animation. Doing that while the sheet is sliding
+ * cost ~4 dropped frames and made the header's search/filter reveal stutter,
+ * so the re-frame is queued until the sheet has settled.
+ */
+function scheduleMapFit(snapVh: number, zoomDelta = 0) {
+  clearTimeout(mapFitTimer);
+  mapFitTimer = setTimeout(() => fitMapForSheet(snapVh, zoomDelta), SNAP_SETTLE_MS);
 }
+
+function centerUserAboveSheet() {
+  scheduleMapFit(0.5, 0);
+}
+
+onUnmounted(() => clearTimeout(mapFitTimer));
 
 /** Parks the map's looping marker pulses while the sheet covers it — they
  *  keep compositing behind the panel and fight the list scroll otherwise. */
@@ -176,6 +194,7 @@ watch(
       baseZoom = null;
       searchQuery.value = "";
       toggleMapSheetMax(false);
+      clearTimeout(mapFitTimer);
       return;
     }
     baseZoom = null; // capture on first fit call
@@ -189,9 +208,9 @@ function onSnapChange(idx: number) {
   // peekable above the raised sheet; restore to base zoom on collapse.
   toggleMapSheetMax(idx === SNAP_TALL);
   if (idx === SNAP_TALL) {
-    fitMapForSheet(0.75, -2);
+    scheduleMapFit(0.75, -2);
   } else {
-    fitMapForSheet(0.5, 0);
+    scheduleMapFit(0.5, 0);
   }
 }
 

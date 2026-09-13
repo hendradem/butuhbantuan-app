@@ -3,9 +3,15 @@
 // - Persists map tiles with a cache-first strategy so zoom-out doesn't
 //   re-download tiles the user has already seen this session (or previous).
 
-const TILE_CACHE = "bb-map-tiles-v1";
-const TILE_CACHE_MAX_ENTRIES = 800; // ~800 tiles ≈ 20–40 MB depending on style
-const TILE_HOST_RE = /(^https:\/\/[a-d]?\.?basemaps\.cartocdn\.com\/)|(^https:\/\/[a-c]?\.?tile\.openstreetmap\.org\/)/;
+// v2 drops the v1 cache, which only holds tiles from providers the app no
+// longer draws from.
+const TILE_CACHE = "bb-map-tiles-v2";
+const TILE_CACHE_MAX_ENTRIES = 1200; // ~1200 tiles ≈ 40–70 MB at @2x
+// Stadia is the current basemap and is metered (free tier: 200k tiles/month),
+// so every cache hit is a request we don't spend. CARTO/OSM stay listed —
+// they're still used for the dark style and the quota fallback.
+const TILE_HOST_RE =
+  /(^https:\/\/tiles\.stadiamaps\.com\/)|(^https:\/\/[a-d]?\.?basemaps\.cartocdn\.com\/)|(^https:\/\/[a-c]?\.?tile\.openstreetmap\.org\/)/;
 
 self.addEventListener("install", () => {
   self.skipWaiting();
