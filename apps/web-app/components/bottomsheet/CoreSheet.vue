@@ -126,8 +126,10 @@ function settle(index: number) {
   currentHeight.value = snapPx.value[index]!;
   paint(true);
   // Collapsing below full height locks the body, so start it from the top.
+  // Jump rather than smooth-scroll: a main-thread scroll animation running
+  // against the sheet's own transform is what made the collapse look choppy.
   if (props.contentDrag && index !== maxSnapIndex.value) {
-    scrollerEl.value?.scrollTo({ top: 0, behavior: "smooth" });
+    scrollerEl.value?.scrollTo({ top: 0, behavior: "auto" });
   }
   if (changed) emit("snap-change", index);
 }

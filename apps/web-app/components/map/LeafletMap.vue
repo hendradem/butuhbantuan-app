@@ -1034,13 +1034,19 @@ function showRouteEtaBubble(
  */
 function measureBottomSheetInset(): number {
   if (typeof document === "undefined") return 280;
-  // CoreSheet panels are teleported to body
+  // CoreSheet panels are teleported to body. A draggable sheet is always laid
+  // out at its tallest snap and moved down with a transform, so offsetHeight
+  // reports that full height even when most of it sits below the fold —
+  // measure from the panel's top edge instead, which is what actually covers
+  // the map.
   const panels = document.querySelectorAll(".ui-sheet-panel");
   let tallest = 0;
   panels.forEach((el) => {
-    const h = (el as HTMLElement).offsetHeight;
-    if (h > tallest) tallest = h;
+    const top = (el as HTMLElement).getBoundingClientRect().top;
+    const visible = window.innerHeight - top;
+    if (visible > tallest) tallest = visible;
   });
+  tallest = Math.min(tallest, window.innerHeight);
   if (tallest > 80) return tallest;
 
   // Fallback estimates when sheet DOM not ready yet

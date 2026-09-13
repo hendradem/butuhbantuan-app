@@ -629,9 +629,11 @@ function chipClass(active: boolean) {
         </div>
 
         <!-- Raised sheet: search + one-tap filter chips. The funnel button
-             above still opens the full dropdown for sort/24h/compliance. -->
-        <Transition name="quick-filter">
-          <div v-if="showQuickFilters" class="pb-2">
+             above still opens the full dropdown for sort/24h/compliance.
+             Kept mounted and collapsed by height so the header shrinks with
+             the sheet instead of the block popping out of the layout. -->
+        <div class="bb-quick" :class="showQuickFilters && 'bb-quick--open'">
+          <div class="bb-quick__inner" :inert="!showQuickFilters">
             <div class="relative px-4">
               <Icon
                 icon="lucide:search"
@@ -648,7 +650,7 @@ function chipClass(active: boolean) {
             </div>
 
             <!-- Single row, scrolls sideways with no visible scrollbar. -->
-            <div class="mt-1.5 flex items-center gap-1.5 overflow-x-auto scrollbar-none px-4">
+            <div class="mt-1.5 flex items-center gap-1.5 overflow-x-auto scrollbar-none px-4 pb-2">
               <button
                 v-for="f in quickFilters"
                 :key="f.key"
@@ -671,7 +673,7 @@ function chipClass(active: boolean) {
               </button>
             </div>
           </div>
-        </Transition>
+        </div>
       </div>
     </template>
 
@@ -721,16 +723,24 @@ function chipClass(active: boolean) {
   transform: translateY(-4px) scale(0.97);
 }
 
-.quick-filter-enter-active,
-.quick-filter-leave-active {
-  transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
-}
-.quick-filter-enter-from,
-.quick-filter-leave-to {
+/* Collapses by height rather than unmounting, on the same duration and curve
+   CoreSheet uses for its snap, so the header shrinks with the sheet instead
+   of the block disappearing partway through the slide. */
+.bb-quick {
+  display: grid;
+  grid-template-rows: 0fr;
   opacity: 0;
-  transform: translateY(-6px);
+  transition:
+    grid-template-rows 480ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 200ms ease;
+}
+.bb-quick--open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.bb-quick__inner {
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* iOS-style search field: filled, borderless, compact. */
