@@ -11,7 +11,7 @@ definePageMeta({ layout: false });
 
 const title = "Tentang ButuhBantuan";
 const description =
-  "ButuhBantuan menghubungkan warga dengan unit ambulans, damkar, SAR, PMI, dan PSC 119 terdekat — gratis, tanpa akun, dan dibangun bersama komunitas.";
+  "ButuhBantuan menghubungkan warga dengan unit ambulans, damkar, SAR, PMI, dan PSC 119 terdekat secara gratis, tanpa akun, dan dibangun bersama komunitas.";
 
 useHead({
   title: `${title} · ButuhBantuan`,
@@ -159,9 +159,10 @@ const partners: {
         </h1>
         <div class="mt-10 grid gap-8 lg:grid-cols-[1fr_1fr] lg:gap-20" data-reveal style="--d: 160ms">
           <p class="lp-lead max-w-[48ch]">
-            ButuhBantuan adalah platform darurat sipil yang menghubungkan warga
-            dengan unit ambulans, damkar, SAR, PMI, PSC 119, dan rumah sakit
-            terdekat — resmi maupun komunitas — dalam satu peta.
+            ButuhBantuan adalah platform emergency assistant yang
+            mengintegrasikan berbagai layanan bantuan (ambulans, damkar, SAR,
+            PMI, PSC 119, dan rumah sakit) ke dalam satu peta yang mudah
+            diakses masyarakat.
           </p>
           <p class="lp-body max-w-[48ch] text-[16px] lg:pt-1">
             Kami percaya bantuan seharusnya bisa ditemukan secepat kita

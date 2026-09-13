@@ -6,15 +6,17 @@
  * warm-stone surfaces, brand red as the lead accent plus one supporting tone
  * per service family (see .lp-tone-* in landing.css). Sections: hero →
  * citizen walkthrough (sticky phone + scroll spy) → unit dashboard (sticky
- * browser + scroll spy) → bento → coverage → FAQ → CTA. Nav/footer/fonts
- * live in LandingShell so /tentang and /support share them.
+ * browser + scroll spy) → bento → install-to-home-screen steps → coverage →
+ * sponsors → FAQ → CTA. Nav/footer/fonts live in LandingShell so /tentang
+ * and /support share them.
  */
 import { Icon } from "@iconify/vue";
 import { DASHBOARD_URL, EMERGENCY_NUMBERS, FAQS, type Tone } from "~/utils/landingContent";
+import { SPONSORS, SPONSOR_INFO_PATH, SPONSOR_PLACEHOLDER_SLOTS } from "~/utils/sponsors";
 
 definePageMeta({ layout: false });
 
-const title = "ButuhBantuan — Peta bantuan darurat warga Indonesia";
+const title = "ButuhBantuan · Peta bantuan darurat warga Indonesia";
 const description =
   "Cari ambulans, damkar, SAR, PMI, PSC 119, dan rumah sakit terdekat. Lapor dalam 30 detik, pantau petugas sampai tiba, dan kelola unit darurat dari satu dashboard.";
 
@@ -64,7 +66,7 @@ const features: { title: string; subtitle: string; tone: Tone }[] = [
   },
   {
     title: "Kabar di setiap tahap",
-    subtitle: "Laporan diterima, petugas berangkat, tiba, selesai — kamu tidak perlu menebak-nebak.",
+    subtitle: "Laporan diterima, petugas berangkat, tiba, sampai selesai. Kamu tidak perlu menebak-nebak.",
     tone: "amber",
   },
   {
@@ -132,24 +134,24 @@ const dashboardFeatures: {
 }[] = [
   {
     icon: "lucide:clipboard-list",
-    pillLabel: "Order masuk",
-    overline: "Semua laporan di satu tempat",
+    pillLabel: "Pesanan masuk",
+    overline: "Semua laporan di satu papan",
     title: "Laporan warga langsung jadi tiket yang siap dikerjakan",
     description:
-      "Setiap laporan masuk ke papan tiket, diurutkan dari yang paling gawat. Ada hitung mundur di tiap tiket — kalau petugas belum merespons, laporannya otomatis dioper ke unit lain.",
+      "Lihat laporan yang masuk dalam tiga tampilan: peta sebaran, tabel, dan papan kanban. Ada batas waktu respons di tiap tiket, jadi kalau petugas belum menerima, laporannya otomatis dioper ke unit lain.",
     tone: "red",
     subs: [
-      { icon: "lucide:layout-grid", title: "Papan 4 kolom", description: "Baru, menuju lokasi, di lokasi, selesai." },
-      { icon: "lucide:alarm-clock", title: "Pengingat waktu respons", description: "Hitung mundur supaya tidak ada laporan yang terlewat." },
+      { icon: "lucide:map", title: "Peta sebaran", description: "Marker tiap laporan plus heatmap titik rawan." },
+      { icon: "lucide:layout-grid", title: "Tabel dan kanban", description: "Seret kartu untuk memajukan status." },
     ],
   },
   {
     icon: "lucide:map",
-    pillLabel: "Peta langsung",
+    pillLabel: "Peta ops",
     overline: "Semua petugas dalam satu peta",
     title: "Lihat posisi petugas dan tiket yang sedang berjalan",
     description:
-      "Peta real-time berisi posisi unit di lapangan, tiket aktif, dan area yang paling sering minta bantuan. Ketuk penanda untuk melihat detailnya.",
+      "Peta wilayah berisi posisi unit di lapangan, tiket aktif, dan area yang paling sering minta bantuan. Ketuk penanda untuk melihat detail unit maupun laporannya.",
     tone: "sky",
     subs: [
       { icon: "lucide:navigation", title: "Posisi petugas", description: "Diperbarui berkala selama shift berjalan." },
@@ -158,28 +160,28 @@ const dashboardFeatures: {
   },
   {
     icon: "lucide:bar-chart-3",
-    pillLabel: "Kinerja",
+    pillLabel: "Statistik",
     overline: "Angka yang membantu keputusan",
-    title: "Tahu seberapa cepat tim merespons — dan apa kata warga",
+    title: "Tahu seberapa cepat tim merespons dan apa kata warga",
     description:
-      "Lihat rata-rata waktu respons, beban tiap unit, dan penilaian warga untuk setiap petugas. Rekapnya bisa diunduh untuk laporan bulanan.",
+      "Tren tiket, waktu respons, waktu tiba, sampai tingkat pembatalan dalam 7, 30, atau 90 hari terakhir. Ringkasannya bisa dibagikan ke warga atau mitra.",
     tone: "green",
     subs: [
-      { icon: "lucide:trophy", title: "Peringkat mingguan", description: "Unit tercepat dan paling disukai warga minggu ini." },
-      { icon: "lucide:download", title: "Unduh rekap", description: "File CSV siap dikirim ke atasan atau dinas." },
+      { icon: "lucide:trending-up", title: "Tren harian", description: "Naik turun jumlah tiket sepanjang periode." },
+      { icon: "lucide:pie-chart", title: "Status tiket", description: "Selesai, berjalan, dan dibatalkan." },
     ],
   },
   {
     icon: "lucide:clipboard-check",
-    pillLabel: "Cek armada",
+    pillLabel: "Kelengkapan ambulans",
     overline: "Ambulans selalu siap jalan",
-    title: "Pastikan alat, obat, dan kru selalu lengkap",
+    title: "Checklist alat mengikuti Pedoman Teknis Kemenkes",
     description:
-      "Checklist rutin untuk setiap ambulans. Langsung kelihatan mana yang sudah lengkap dan mana yang perlu dilengkapi, dengan riwayat pengecekan yang tersimpan rapi.",
+      "Tandai tiap alat Ada, Tidak, atau Belum dicek, lengkap dengan foto kondisinya. Persentase kesiapan langsung terhitung untuk tiap tipe ambulans.",
     tone: "amber",
     subs: [
-      { icon: "lucide:shield-check", title: "Tanda terverifikasi", description: "Muncul setelah hasil pengecekan divalidasi." },
-      { icon: "lucide:history", title: "Riwayat pengecekan", description: "Lengkap dengan foto di setiap item." },
+      { icon: "mynaui:ambulance-solid", title: "Per tipe ambulans", description: "Transport darat, gawat darurat, roda dua." },
+      { icon: "lucide:camera", title: "Bukti foto", description: "Tiap item bisa dilampiri foto kondisinya." },
     ],
   },
   {
@@ -188,11 +190,24 @@ const dashboardFeatures: {
     overline: "Rujukan IGD terdekat",
     title: "Data rumah sakit yang selalu diperbarui",
     description:
-      "Data RS diambil dari SATUSEHAT Kemenkes dan OpenStreetMap, dirapikan dari duplikat, lalu dipakai untuk menyarankan tujuan rujukan terdekat.",
+      "Data RS diambil dari SATUSEHAT Kemenkes dan OpenStreetMap, dirapikan dari duplikat, lalu dipakai untuk menyarankan tujuan rujukan terdekat beserta kontak IGD-nya.",
     tone: "rose",
     subs: [
       { icon: "lucide:refresh-cw", title: "Sinkron SATUSEHAT", description: "Diperbarui berkala dari data Kemenkes." },
       { icon: "lucide:phone", title: "Kontak IGD", description: "Nomor IGD beserta status buka atau tutup." },
+    ],
+  },
+  {
+    icon: "lucide:message-circle-heart",
+    pillLabel: "Feedback",
+    overline: "Suara warga sampai ke unit",
+    title: "Penilaian warga masuk langsung ke arsip unit",
+    description:
+      "Setiap laporan yang selesai bisa dinilai warga. Semua masukan terkumpul di satu arsip, lengkap dengan komentar dan kanal asalnya.",
+    tone: "sky",
+    subs: [
+      { icon: "lucide:thumbs-up", title: "Membantu atau tidak", description: "Ringkasan persentase dari semua penilaian." },
+      { icon: "lucide:quote", title: "Komentar warga", description: "Catatan asli dari pelapor, apa adanya." },
     ],
   },
 ];
@@ -246,6 +261,25 @@ onBeforeUnmount(() => {
   navSuppressed.value = false;
 });
 
+// ── Install to home screen ──────────────────────────────────────────────────
+const installSteps: { title: string; body: string; tone: Tone }[] = [
+  {
+    title: "Buka dari browser",
+    body: "Kunjungi butuhbantuan.space lewat Chrome di Android atau Safari di iPhone. Tidak perlu unduh dari Play Store atau App Store.",
+    tone: "sky",
+  },
+  {
+    title: "Ketuk menu bagikan atau titik tiga",
+    body: "Di Chrome, ketuk titik tiga di pojok kanan atas. Di Safari, ketuk ikon bagikan di bagian bawah layar.",
+    tone: "amber",
+  },
+  {
+    title: "Pilih “Tambahkan ke layar utama”",
+    body: "Ikon ButuhBantuan langsung muncul di layar utama, siap dibuka kapan saja seperti aplikasi biasa.",
+    tone: "green",
+  },
+];
+
 // ── Coverage ───────────────────────────────────────────────────────────────
 const stats: { value: string; label: string; note: string; tone: Tone }[] = [
   { value: "15+", label: "Provinsi", note: "Dari Sumatera sampai Papua.", tone: "red" },
@@ -253,6 +287,11 @@ const stats: { value: string; label: string; note: string; tone: Tone }[] = [
   { value: "250+", label: "Unit terhubung", note: "Dari instansi resmi sampai relawan.", tone: "sky" },
   { value: "2 mnt", label: "Batas tunggu respons", note: "Lewat dari itu, laporan dioper ke unit lain.", tone: "green" },
 ];
+
+// ── Sponsors ───────────────────────────────────────────────────────────────
+const sortedSponsors = computed(() =>
+  [...SPONSORS].sort((a, b) => Number(b.tier === "utama") - Number(a.tier === "utama")),
+);
 
 // ── FAQ ────────────────────────────────────────────────────────────────────
 const faqs = FAQS.filter((f) => f.featured);
@@ -308,7 +347,7 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
         <div class="flex flex-col items-center gap-4 border-y border-[var(--lp-line)] py-6 text-center">
           <p class="text-[13.5px] text-[var(--lp-muted)]">
             <span class="font-semibold text-[var(--lp-ink)]">Kondisi gawat?</span>
-            Jangan tunggu — telepon langsung:
+            Jangan tunggu, telepon langsung:
           </p>
           <div class="flex flex-wrap justify-center gap-2" data-stagger>
             <a
@@ -389,14 +428,11 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
               </div>
             </div>
 
-            <!-- Right: phone on a stage tinted with the active step's tone -->
+            <!-- Right: phone on a pad tinted with the active step's tone -->
             <div class="phone-stage relative flex items-center justify-center">
-              <div
-                aria-hidden="true"
-                class="phone-stage-bg absolute inset-0 hidden rounded-[40px] lg:block"
-                :class="`lp-tone-${features[activeFeature]!.tone}`"
-              />
-              <div class="phone-scale relative">
+              <div class="phone-scale relative" :class="`lp-tone-${features[activeFeature]!.tone}`">
+                <div aria-hidden="true" class="phone-pad" />
+                <div aria-hidden="true" class="phone-glow" />
                 <div class="relative rounded-[48px] bg-[#1c1917] p-[7px] shadow-[0_40px_80px_-30px_rgba(28,25,23,0.55),inset_0_0_0_1px_rgba(255,255,255,0.08)]">
                   <div class="absolute left-1/2 top-[15px] z-20 h-[24px] w-[92px] -translate-x-1/2 rounded-full bg-[#1c1917]" />
                   <div class="relative h-[560px] w-[268px] overflow-hidden rounded-[41px] bg-white">
@@ -439,7 +475,7 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
           <div data-reveal style="--d: 100ms">
             <p class="lp-lead max-w-[46ch]">
               Terima laporan, pantau petugas di peta, dan lihat kinerja tim dari
-              satu layar — tanpa harus berkutat dengan spreadsheet.
+              satu layar, tanpa harus berkutat dengan spreadsheet.
             </p>
             <a :href="DASHBOARD_URL" class="lp-link mt-5">
               Masuk dashboard
@@ -551,7 +587,7 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
             <h2 class="lp-h2 mt-4 max-w-[17ch]">Karena di saat darurat, tiap menit berharga.</h2>
           </div>
           <p class="lp-lead max-w-[46ch]" data-reveal style="--d: 100ms">
-            Mencari unit, melapor, memantau petugas, sampai mengoper laporan —
+            Mencari unit, melapor, memantau petugas, sampai mengoper laporan,
             semuanya jalan di satu alur, jadi tidak ada waktu yang terbuang.
           </p>
         </div>
@@ -694,6 +730,40 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
       </div>
     </section>
 
+    <!-- ================= INSTALL TO HOME SCREEN ================= -->
+    <section class="bg-[var(--lp-surface)] py-24 lg:py-32">
+      <div class="lp-container">
+        <div class="max-w-[640px]" data-reveal>
+          <span class="lp-eyebrow">Tanpa app store</span>
+          <h2 class="lp-h2 mt-4">Add to Home Screen, biar makin cepat dibuka.</h2>
+          <p class="lp-lead mt-5 max-w-[48ch]">
+            Cuma butuh beberapa detik. Sekali dipasang, ikonnya muncul seperti
+            aplikasi biasa, dan nomor darurat tetap bisa diakses saat offline.
+          </p>
+        </div>
+
+        <ol class="relative mt-14 grid gap-4 md:grid-cols-3">
+          <li
+            v-for="(s, i) in installSteps"
+            :key="s.title"
+            class="install-card relative flex flex-col rounded-[24px] bg-white p-3 shadow-[0_0_0_1px_rgba(28,25,23,0.05)]"
+            :class="`lp-tone-${s.tone}`"
+            data-reveal="card"
+            :style="{ '--d': `${i * 90}ms` }"
+          >
+            <InstallMock :variant="i" />
+            <div class="flex flex-1 flex-col p-4 pt-5">
+              <div class="flex items-center gap-2.5">
+                <span class="install-step">{{ i + 1 }}</span>
+                <h3 class="text-[16.5px] font-semibold tracking-[-0.015em]">{{ s.title }}</h3>
+              </div>
+              <p class="mt-2.5 text-[14px] leading-[1.6] text-[var(--lp-muted)]">{{ s.body }}</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
     <!-- ================= COVERAGE ================= -->
     <section id="cakupan" class="pb-24 lg:pb-36">
       <div class="lp-container">
@@ -740,6 +810,56 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
             </span>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- ================= SPONSORS ================= -->
+    <section class="border-t border-[var(--lp-line)] py-24 lg:py-32">
+      <div class="lp-container">
+        <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end lg:gap-16">
+          <div data-reveal>
+            <span class="lp-eyebrow">Didukung oleh</span>
+            <h2 class="lp-h2 mt-4 max-w-[18ch]">Bisa gratis untuk warga, berkat mereka.</h2>
+          </div>
+          <div data-reveal style="--d: 100ms">
+            <p class="lp-lead max-w-[46ch]">
+              Pendanaan infrastruktur layanan, termasuk server, peta, dan sistem notifikasi, berasal dari sponsor dan mitra kerja sama, bukan dari masyarakat yang membutuhkan bantuan.
+            </p>
+            <NuxtLink :to="SPONSOR_INFO_PATH" class="lp-link mt-5">
+              Jadi sponsor
+              <Icon icon="lucide:arrow-right" class="lp-btn-arrow text-[16px]" />
+            </NuxtLink>
+          </div>
+        </div>
+
+        <ul class="mt-12 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" data-stagger>
+          <template v-if="sortedSponsors.length">
+            <li
+              v-for="s in sortedSponsors"
+              :key="s.name"
+              class="sponsor-slot flex h-20 items-center justify-center rounded-2xl bg-[var(--lp-surface)] p-4"
+            >
+              <component
+                :is="s.href ? 'a' : 'span'"
+                :href="s.href"
+                :target="s.href ? '_blank' : undefined"
+                :rel="s.href ? 'noopener noreferrer sponsored' : undefined"
+                class="flex h-full w-full items-center justify-center"
+              >
+                <img :src="s.logo" :alt="s.name" class="sponsor-logo" loading="lazy" decoding="async" />
+              </component>
+            </li>
+          </template>
+          <template v-else>
+            <li
+              v-for="i in SPONSOR_PLACEHOLDER_SLOTS"
+              :key="i"
+              class="sponsor-slot flex h-20 items-center justify-center rounded-2xl border border-dashed border-[var(--lp-line)] text-[12px] font-medium text-[var(--lp-faint)]"
+            >
+              Logo sponsor
+            </li>
+          </template>
+        </ul>
       </div>
     </section>
 
@@ -845,11 +965,30 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
     height: auto;
   }
 }
-.phone-stage-bg {
+/* Tinted pad sized off the phone itself, so the tint always hugs the device
+   instead of stretching across the whole column. */
+.phone-pad {
+  position: absolute;
+  inset: -30px -52px;
+  border-radius: 52px;
   background-color: var(--tone-soft);
-  background-image: radial-gradient(rgba(28, 25, 23, 0.08) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(28, 25, 23, 0.07) 1px, transparent 1px);
   background-size: 18px 18px;
   transition: background-color 0.6s var(--lp-ease);
+}
+.phone-glow {
+  position: absolute;
+  inset: -30px -52px;
+  border-radius: 52px;
+  background: radial-gradient(ellipse 60% 45% at 50% 8%, var(--tone), transparent 70%);
+  opacity: 0.16;
+  transition: background 0.6s var(--lp-ease);
+}
+@media (max-width: 1023px) {
+  .phone-pad,
+  .phone-glow {
+    display: none;
+  }
 }
 
 /* Scale the 574px-tall phone to fit short viewports; negative margins give
@@ -880,19 +1019,25 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
   }
 }
 
-.phone-fade-enter-active,
+/* Screens cross-fade: the incoming one takes slightly longer than the
+   outgoing one so there is never a blank frame between steps. */
+.phone-fade-enter-active {
+  transition:
+    opacity 0.55s var(--lp-ease),
+    transform 0.55s var(--lp-ease);
+}
 .phone-fade-leave-active {
   transition:
-    opacity 0.45s var(--lp-ease),
-    transform 0.45s var(--lp-ease);
+    opacity 0.35s var(--lp-ease),
+    transform 0.35s var(--lp-ease);
 }
 .phone-fade-enter-from {
   opacity: 0;
-  transform: translateY(14px);
+  transform: translateY(18px) scale(0.98);
 }
 .phone-fade-leave-to {
   opacity: 0;
-  transform: translateY(-14px);
+  transform: translateY(-10px) scale(0.99);
 }
 
 .caption-enter-active,
@@ -1024,5 +1169,40 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
   to {
     stroke-dashoffset: 276.5;
   }
+}
+
+/* ── Install steps ─────────────────────────────────────────────────────── */
+.install-step {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--tone-soft);
+  color: var(--tone);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Sponsors ──────────────────────────────────────────────────────────── */
+.sponsor-slot {
+  transition: background-color 0.25s var(--lp-ease);
+}
+.sponsor-logo {
+  max-height: 32px;
+  max-width: 100%;
+  object-fit: contain;
+  filter: grayscale(1);
+  opacity: 0.65;
+  transition:
+    filter 0.2s ease,
+    opacity 0.2s ease;
+}
+.sponsor-slot:hover .sponsor-logo {
+  filter: none;
+  opacity: 1;
 }
 </style>

@@ -46,8 +46,8 @@ const columns = [
             <span class="text-[17px] font-bold tracking-[-0.03em]">butuhbantuan</span>
           </NuxtLink>
           <p class="lp-body mt-5 max-w-[34ch]">
-            Platform darurat sipil Indonesia. Gratis, terbuka, dan dibangun
-            bersama komunitas.
+            Emergency assistant untuk warga Indonesia. Gratis, terbuka, dan
+            dibangun bersama komunitas.
           </p>
           <div class="mt-7 flex flex-wrap gap-2">
             <a

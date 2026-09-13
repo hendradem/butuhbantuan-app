@@ -83,7 +83,7 @@ function validate() {
   errors.message = !msg
     ? "Tulis pesan yang ingin disampaikan."
     : msg.length < 15
-      ? "Pesan terlalu singkat — ceritakan sedikit lebih detail."
+      ? "Pesan terlalu singkat, ceritakan sedikit lebih detail."
       : undefined;
   return !errors.name && !errors.message;
 }
@@ -209,7 +209,7 @@ const packages: Package[] = [
 
 const promises = [
   "Sponsor tidak memengaruhi urutan unit yang disarankan ke warga.",
-  "Tidak ada iklan di alur darurat — logo hanya tampil di menu, halaman dukungan, dan website.",
+  "Tidak ada iklan di alur darurat. Logo hanya tampil di menu, halaman dukungan, dan website.",
   "Data warga tidak pernah dibagikan ke sponsor.",
 ];
 
@@ -234,7 +234,7 @@ function startPartnership(pkg: Package) {
             <h2 class="lp-h2 mt-4 max-w-[16ch]">Bantu layanan ini tetap gratis untuk semua orang.</h2>
           </div>
           <p class="lp-lead max-w-[46ch]" data-reveal style="--d: 100ms">
-            ButuhBantuan gratis untuk warga — tapi server, peta, dan notifikasi
+            ButuhBantuan gratis untuk warga, tapi server, peta, dan notifikasi
             tetap ada biayanya. Lewat kerja sama, perusahaan, komunitas, dan
             instansi bisa ikut menanggungnya.
           </p>

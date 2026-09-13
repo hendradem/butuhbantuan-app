@@ -89,7 +89,7 @@ onBeforeUnmount(() => {
           : 'shadow-[0_0_0_1px_rgba(28,25,23,0.06)]'
       "
     >
-      <NuxtLink to="/landing" class="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-3" aria-label="ButuhBantuan — beranda">
+      <NuxtLink to="/landing" class="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-3" aria-label="Kembali ke beranda ButuhBantuan">
         <span class="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--lp-accent)] shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]">
           <Icon icon="mynaui:ambulance-solid" class="text-[17px] text-white" />
         </span>
