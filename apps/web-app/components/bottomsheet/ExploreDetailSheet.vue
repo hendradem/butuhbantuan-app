@@ -60,42 +60,12 @@ const onlyComplete = ref(false);
 const filterOpen = ref(false);
 const filterMenuRef = ref<HTMLElement | null>(null);
 
-// ── Scroll-revealed search + quick filters ──────────────────────────────────
-// Hidden while at the top of the list (the header alone is enough there);
-// once the user scrolls the list, a compact search box + one-tap filter
-// chips slide in so they don't have to scroll back up to refine results.
+// ── Search + quick filters ──────────────────────────────────────────────────
+// Shown once the sheet is raised to its tall snap — that's when the list is
+// long enough to be worth narrowing down. At the default height the header
+// alone keeps the map visible.
 const searchQuery = ref("");
-const listScrolled = ref(false);
-const SCROLL_REVEAL_THRESHOLD = 8;
-
-function onListScroll(e: Event) {
-  // One-way latch, not a live toggle: filtering the list (search/chips) can
-  // shrink it enough that the browser snaps scrollTop back to 0 on its own,
-  // which must not yank the search box away while someone's mid-search.
-  if ((e.target as HTMLElement).scrollTop > SCROLL_REVEAL_THRESHOLD) {
-    listScrolled.value = true;
-  }
-}
-
-// CoreSheet puts the real `overflow-y: auto` (and so the actual `scroll`
-// events) on its own wrapper one level above this component's content div —
-// not on scrollContainer itself — so the listener has to attach there
-// directly rather than through a template `@scroll`. Watched (not just
-// onMounted) because this component renders once at the app root and
-// scrollContainer's parent may not exist yet the first time onMounted runs.
-let scrollParent: HTMLElement | null = null;
-watch(
-  scrollContainer,
-  (el) => {
-    scrollParent?.removeEventListener("scroll", onListScroll);
-    scrollParent = el?.parentElement ?? null;
-    scrollParent?.addEventListener("scroll", onListScroll, { passive: true });
-  },
-  { immediate: true },
-);
-onUnmounted(() => {
-  scrollParent?.removeEventListener("scroll", onListScroll);
-});
+const showQuickFilters = computed(() => currentSnapIdx.value === SNAP_TALL);
 
 const showServiceFilter = computed(() => {
   const name = String(sheetData.value?.emergencyType?.name || "").toLowerCase();
@@ -175,7 +145,6 @@ watch(
       filterOpen.value = false;
       currentSnapIdx.value = SNAP_DEFAULT;
       baseZoom = null;
-      listScrolled.value = false;
       searchQuery.value = "";
       return;
     }
@@ -192,9 +161,6 @@ function onSnapChange(idx: number) {
     fitMapForSheet(0.75, -2);
   } else {
     fitMapForSheet(0.5, 0);
-    // Collapsed back down — the list isn't scrollable here anyway, so start
-    // the search/quick-filter reveal fresh next time it's expanded.
-    listScrolled.value = false;
   }
 }
 
@@ -631,54 +597,56 @@ function chipClass(active: boolean) {
         </div>
         </div>
 
-        <!-- Scroll-revealed: search + one-tap filter chips. The funnel button
+        <!-- Raised sheet: search + one-tap filter chips. The funnel button
              above still opens the full dropdown for sort/24h/compliance. -->
         <Transition name="quick-filter">
-          <div v-if="listScrolled" class="px-4 pb-2.5 pt-1">
-            <div class="relative">
+          <div v-if="showQuickFilters" class="pb-2">
+            <div class="relative px-4">
               <Icon
                 icon="lucide:search"
-                class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[15px]"
+                class="pointer-events-none absolute left-7 top-1/2 -translate-y-1/2 text-[15px]"
                 style="color: var(--bb-text-tertiary)"
               />
               <input
                 v-model="searchQuery"
                 type="search"
                 inputmode="search"
-                placeholder="Cari nama unit atau organisasi"
-                class="w-full rounded-full border border-neutral-200 bg-neutral-50 py-2 pl-9 pr-3 text-[13px] text-neutral-800 outline-none transition-colors focus:border-neutral-300 focus:bg-white"
+                placeholder="Cari unit"
+                class="bb-quick-search"
               />
             </div>
 
-            <div class="mt-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+            <!-- Wraps instead of scrolling: a horizontal scroller clipped
+                 chips mid-word at the sheet edge. -->
+            <div class="mt-1.5 flex flex-wrap items-center gap-x-1 gap-y-1 px-4">
               <template v-if="showServiceFilter">
                 <button
                   v-for="opt in [
-                    { id: 'all', label: 'Semua layanan' },
+                    { id: 'all', label: 'Semua' },
                     { id: 'emergency', label: 'Darurat' },
                     { id: 'transport', label: 'Transport' },
                   ]"
                   :key="`svc-${opt.id}`"
                   type="button"
-                  :class="[chipClass(serviceMode === opt.id), 'shrink-0']"
+                  class="bb-quick-chip"
+                  :class="serviceMode === opt.id && 'bb-quick-chip--on'"
                   @click="serviceMode = opt.id as ServiceMode"
                 >
                   {{ opt.label }}
                 </button>
-                <span class="h-4 w-px shrink-0 bg-neutral-200" />
               </template>
 
               <button
                 v-for="opt in [
-                  { id: 'all', label: 'Semua mitra' },
                   { id: 'psc', label: 'Resmi' },
                   { id: 'verified', label: 'Swasta' },
                   { id: 'community', label: 'Komunitas' },
                 ]"
                 :key="`tier-${opt.id}`"
                 type="button"
-                :class="[chipClass(tierFilter === opt.id), 'shrink-0']"
-                @click="tierFilter = opt.id as TierFilter"
+                class="bb-quick-chip"
+                :class="tierFilter === opt.id && 'bb-quick-chip--on'"
+                @click="tierFilter = tierFilter === opt.id ? 'all' : (opt.id as TierFilter)"
               >
                 {{ opt.label }}
               </button>
@@ -744,5 +712,44 @@ function chipClass(active: boolean) {
 .quick-filter-leave-to {
   opacity: 0;
   transform: translateY(-6px);
+}
+
+/* iOS-style search field: filled, borderless, compact. */
+.bb-quick-search {
+  width: 100%;
+  height: 34px;
+  padding: 0 12px 0 32px;
+  border: none;
+  border-radius: 10px;
+  background: #f1f3f4;
+  font-size: 14px;
+  color: #202124;
+  outline: none;
+}
+.bb-quick-search::placeholder {
+  color: #9aa0a6;
+}
+.bb-quick-search::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+/* Filter chips: plain text until selected, then a soft filled pill. */
+.bb-quick-chip {
+  flex: none;
+  padding: 5px 11px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: #5f6368;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.bb-quick-chip--on {
+  background: #f1f3f4;
+  font-weight: 600;
+  color: #202124;
 }
 </style>
