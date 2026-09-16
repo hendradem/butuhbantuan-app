@@ -83,14 +83,14 @@ type EmergencyEntity struct {
 	IsDispatcher         bool                `gorm:"type:tinyint(1);default:0;index"`
 	IsProvinceDispatcher bool                `gorm:"type:tinyint(1);default:0"`
 	// DashboardAccess: false → WA + magic-link ops (no unit login). Default true.
-	DashboardAccess  bool           `gorm:"column:dashboard_access;type:tinyint(1);not null;default:1;index"`
-	DeclaredCategory string         `gorm:"type:varchar(50);index"`
-	ComplianceJSON              string `gorm:"type:longtext"`
-	IncidentReportTemplateJSON  string `gorm:"type:longtext"`
-	HospitalMasterID            *uint  `gorm:"index"` // link ke master RS bila diimpor
-	CreatedAt        time.Time      `gorm:"autoCreateTime"`
-	UpdatedAt        time.Time      `gorm:"autoUpdateTime"`
-	DeletedAt        gorm.DeletedAt `gorm:"index"`
+	DashboardAccess            bool           `gorm:"column:dashboard_access;type:tinyint(1);not null;default:1;index"`
+	DeclaredCategory           string         `gorm:"type:varchar(50);index"`
+	ComplianceJSON             string         `gorm:"type:longtext"`
+	IncidentReportTemplateJSON string         `gorm:"type:longtext"`
+	HospitalMasterID           *uint          `gorm:"index"` // link ke master RS bila diimpor
+	CreatedAt                  time.Time      `gorm:"autoCreateTime"`
+	UpdatedAt                  time.Time      `gorm:"autoUpdateTime"`
+	DeletedAt                  gorm.DeletedAt `gorm:"index"`
 }
 
 func (e *EmergencyEntity) BeforeCreate(_ *gorm.DB) error {
@@ -138,6 +138,37 @@ func (e *FeedbackEntity) BeforeCreate(_ *gorm.DB) error {
 	return nil
 }
 
+// PartnerRequestEntity is an inbound "daftar jadi mitra" submission. Only the
+// columns the dashboard list filters on are denormalised; the submitted unit
+// itself lives in PayloadJSON so the form can grow without a migration.
+type PartnerRequestEntity struct {
+	ID               uint      `gorm:"primaryKey"`
+	UUID             uuid.UUID `gorm:"type:char(36);uniqueIndex;not null"`
+	Status           string    `gorm:"type:varchar(20);not null;default:'pending';index"`
+	Name             string    `gorm:"type:varchar(255);not null;index"`
+	OrganizationName string    `gorm:"type:varchar(255)"`
+	EmergencyTypeID  uint      `gorm:"index"`
+	ProvinceID       string    `gorm:"type:varchar(10);index"`
+	RegencyID        string    `gorm:"type:varchar(10);index"`
+	ContactPhone     string    `gorm:"type:varchar(50);index"`
+	ContactWhatsapp  string    `gorm:"type:varchar(50)"`
+	ContactEmail     string    `gorm:"type:varchar(255)"`
+	PayloadJSON      string    `gorm:"type:longtext;not null"`
+	ReviewNote       string    `gorm:"type:text"`
+	ReviewedAt       *time.Time
+	ReviewedBy       string    `gorm:"type:varchar(100)"`
+	EmergencyUUID    string    `gorm:"type:char(36);index"`
+	CreatedAt        time.Time `gorm:"autoCreateTime"`
+	UpdatedAt        time.Time `gorm:"autoUpdateTime"`
+}
+
+func (e *PartnerRequestEntity) BeforeCreate(_ *gorm.DB) error {
+	if e.UUID == uuid.Nil {
+		e.UUID = uuid.New()
+	}
+	return nil
+}
+
 // HospitalMasterEntity caches RS directory rows synced per kabupaten (SATUSEHAT MSI / stub).
 type HospitalMasterEntity struct {
 	ID                    uint      `gorm:"primaryKey"`
@@ -170,11 +201,11 @@ func (e *HospitalMasterEntity) BeforeCreate(_ *gorm.DB) error {
 }
 
 type OrderTicketEntity struct {
-	ID                uint       `gorm:"primaryKey"`
-	UUID              uuid.UUID  `gorm:"type:char(36);uniqueIndex;not null"`
-	TicketNumber      string     `gorm:"type:varchar(30);uniqueIndex;not null"`
-	EmergencyUUID     string     `gorm:"type:char(36);index"`
-	UnitName          string     `gorm:"type:varchar(255)"`
+	ID            uint      `gorm:"primaryKey"`
+	UUID          uuid.UUID `gorm:"type:char(36);uniqueIndex;not null"`
+	TicketNumber  string    `gorm:"type:varchar(30);uniqueIndex;not null"`
+	EmergencyUUID string    `gorm:"type:char(36);index"`
+	UnitName      string    `gorm:"type:varchar(255)"`
 	// PreviousUnitName: last unit before the most recent reassign, for showing
 	// dispatch trail in list views without joining events.
 	PreviousUnitName  string     `gorm:"type:varchar(255)"`
@@ -202,14 +233,14 @@ type OrderTicketEntity struct {
 	EscalationHotline string     `gorm:"type:varchar(50)"`
 	EscalationLabel   string     `gorm:"type:varchar(255)"`
 	// Live responder tracking (magic link from posko → HP petugas).
-	TrackToken         string `gorm:"type:char(36);index"`
+	TrackToken string `gorm:"type:char(36);index"`
 	// PublicToken is the citizen e-ticket share link (/ticket/{token}) — unrelated to track_token.
-	PublicToken        string `gorm:"type:char(36);uniqueIndex"`
-	TrackEnabledAt     *time.Time
-	TrackExpiresAt     *time.Time `gorm:"index"`
+	PublicToken    string `gorm:"type:char(36);uniqueIndex"`
+	TrackEnabledAt *time.Time
+	TrackExpiresAt *time.Time `gorm:"index"`
 	// Community relay claim window.
-	ClaimToken     string     `gorm:"type:char(36);index"`
-	ClaimExpiresAt *time.Time `gorm:"index"`
+	ClaimToken         string     `gorm:"type:char(36);index"`
+	ClaimExpiresAt     *time.Time `gorm:"index"`
 	ResponderLat       float64    `gorm:"type:double;default:0"`
 	ResponderLng       float64    `gorm:"type:double;default:0"`
 	ResponderUpdatedAt *time.Time

@@ -54,6 +54,19 @@ type FeedbackUseCase interface {
 	GetByUnit(emergencyUUID string) ([]domain.Feedback, error)
 }
 
+// PartnerRequestUseCase is the interface handlers use for inbound partner
+// ("daftar jadi mitra") submissions and their admin review.
+type PartnerRequestUseCase interface {
+	Submit(p domain.PartnerRequest) (*domain.PartnerRequest, error)
+	GetAll(status string) ([]domain.PartnerRequest, error)
+	GetByID(id string) (*domain.PartnerRequest, error)
+	MarkContacted(id, reviewedBy string) (*domain.PartnerRequest, error)
+	// Approve creates the Emergency unit from the submitted payload and returns
+	// it. The unit starts inactive until an admin sets its credentials.
+	Approve(id, reviewedBy string) (*domain.Emergency, error)
+	Reject(id, reviewedBy, note string) (*domain.PartnerRequest, error)
+}
+
 // OrderUseCase is the interface handlers use for order/ticket operations.
 type OrderUseCase interface {
 	Create(o domain.OrderTicket) (*domain.OrderTicket, error)

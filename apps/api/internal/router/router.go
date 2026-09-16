@@ -18,6 +18,7 @@ func Register(
 	emergencyTypeSvc service.EmergencyTypeUseCase,
 	regionSvc service.RegionUseCase,
 	feedbackSvc service.FeedbackUseCase,
+	partnerRequestSvc service.PartnerRequestUseCase,
 	orderSvc service.OrderUseCase,
 	unitAuthSvc service.UnitAuthUseCase,
 	sosSvc service.SOSUseCase,
@@ -40,6 +41,7 @@ func Register(
 	geocoding := handler.NewGeocodingHandler(cfg, emergencySvc)
 	authH := handler.NewAuthHandler(cfg)
 	feedbackH := handler.NewFeedbackHandler(feedbackSvc).WithOrders(orderSvc)
+	partnerRequestH := handler.NewPartnerRequestHandler(partnerRequestSvc)
 	orderH := handler.NewOrderHandler(orderSvc, emergencySvc, cfg).WithDispatch(dispatchSvc).WithWilayah(wilayah).WithWaDispatch(service.NewWaDispatchResolver(unitCredRepo))
 	if assessmentSvc != nil {
 		orderH = orderH.WithAssessment(assessmentSvc)
@@ -82,6 +84,9 @@ func Register(
 	limitUnitLogin := middleware.RateLimit(20, time.Minute)
 	limitAdminLogin := middleware.RateLimit(30, time.Minute)
 	limitPublicUnit := middleware.RateLimit(60, time.Minute)
+	// "Daftar jadi mitra" is a rare, human-filled form — far tighter than the
+	// repeating citizen flows above.
+	limitPartnerRequest := middleware.RateLimit(5, time.Hour)
 
 	v1 := app.Group("/api/v1")
 	v1.Get("/health", handler.Health)
@@ -148,6 +153,11 @@ func Register(
 
 	pub := v1.Group("/public", limitPublicUnit)
 	pub.Get("/units/:uuid/stats", publicUnitH.GetStats)
+
+	// Public partner registration (the /daftar-unit form). Admin review lives
+	// under /admin/partner-requests below.
+	pr := v1.Group("/partner-request")
+	pr.Post("/", limitPartnerRequest, partnerRequestH.Create)
 
 	ord := v1.Group("/order")
 	ord.Post("/", limitOrder, orderH.Create)
@@ -241,6 +251,11 @@ func Register(
 	admin.Get("/units/:uuid/credentials", adminAuth, unitH.GetCredential)
 	admin.Post("/units/:uuid/credentials", adminAuth, unitH.SetCredentials)
 	admin.Delete("/units/:uuid/credentials", adminAuth, unitH.DeleteCredentials)
+	admin.Get("/partner-requests", adminAuth, partnerRequestH.Index)
+	admin.Get("/partner-requests/:id", adminAuth, partnerRequestH.Show)
+	admin.Post("/partner-requests/:id/contacted", adminAuth, partnerRequestH.MarkContacted)
+	admin.Post("/partner-requests/:id/approve", adminAuth, partnerRequestH.Approve)
+	admin.Post("/partner-requests/:id/reject", adminAuth, partnerRequestH.Reject)
 	admin.Get("/orders", adminAuth, unitH.GetAllOrders)
 	admin.Get("/orders/by-ticket/:number", adminAuth, unitH.AdminGetOrderByTicketNumber)
 	admin.Post("/orders", adminAuth, orderH.CreateManual)

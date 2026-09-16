@@ -62,6 +62,16 @@ type FeedbackRepository interface {
 	FindByUnit(emergencyUUID string) ([]domain.Feedback, error)
 }
 
+// PartnerRequestRepository stores inbound "daftar jadi mitra" submissions.
+type PartnerRequestRepository interface {
+	Create(p domain.PartnerRequest) (*domain.PartnerRequest, error)
+	// FindAll returns newest first; an empty status returns every row.
+	FindAll(status string) ([]domain.PartnerRequest, error)
+	FindByID(id string) (*domain.PartnerRequest, error)
+	// Review records the admin decision. emergencyUUID is set only on approval.
+	Review(id, status, note, reviewedBy, emergencyUUID string) (*domain.PartnerRequest, error)
+}
+
 type OrderRepository interface {
 	Create(o domain.OrderTicket) (*domain.OrderTicket, error)
 	FindByID(id string) (*domain.OrderTicket, error)

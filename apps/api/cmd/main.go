@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/butuhbantuan/api/internal/domain"
+	"github.com/butuhbantuan/api/internal/repository"
 	jsonrepo "github.com/butuhbantuan/api/internal/repository/json"
 	mysqlrepo "github.com/butuhbantuan/api/internal/repository/mysql"
-	"github.com/butuhbantuan/api/internal/repository"
 	"github.com/butuhbantuan/api/internal/router"
 	"github.com/butuhbantuan/api/internal/service"
 	"github.com/butuhbantuan/api/internal/service/hospitalprovider"
@@ -36,20 +36,21 @@ func main() {
 	cfg := config.Load()
 
 	var (
-		emergencyRepo repository.EmergencyRepository
-		typeRepo      repository.EmergencyTypeRepository
-		regionRepo    repository.RegionRepository
-		feedbackRepo  repository.FeedbackRepository
-		orderRepo     repository.OrderRepository
-		unitCredRepo  repository.UnitCredentialRepository
-		sosRepo       repository.SOSRepository
-		pushRepo      repository.PushRepository
-		analyticsRepo repository.AnalyticsRepository
-		attemptRepo   repository.DispatchAttemptRepository
-		eventRepo     repository.OrderEventRepository
-		tileRepo       repository.MapTileUsageRepository
-		assessmentRepo repository.AssessmentRepository
-		db             *gorm.DB
+		emergencyRepo      repository.EmergencyRepository
+		typeRepo           repository.EmergencyTypeRepository
+		regionRepo         repository.RegionRepository
+		feedbackRepo       repository.FeedbackRepository
+		orderRepo          repository.OrderRepository
+		unitCredRepo       repository.UnitCredentialRepository
+		sosRepo            repository.SOSRepository
+		pushRepo           repository.PushRepository
+		analyticsRepo      repository.AnalyticsRepository
+		attemptRepo        repository.DispatchAttemptRepository
+		eventRepo          repository.OrderEventRepository
+		tileRepo           repository.MapTileUsageRepository
+		assessmentRepo     repository.AssessmentRepository
+		partnerRequestRepo repository.PartnerRequestRepository
+		db                 *gorm.DB
 	)
 
 	switch cfg.Storage {
@@ -73,6 +74,7 @@ func main() {
 		mysqlEvent := mysqlrepo.NewOrderEventRepo(db)
 		mysqlTiles := mysqlrepo.NewMapTileUsageRepo(db)
 		mysqlAssessment := mysqlrepo.NewAssessmentRepo(db)
+		mysqlPartnerRequest := mysqlrepo.NewPartnerRequestRepo(db)
 
 		emergencyRepo = mysqlEmergency
 		typeRepo = mysqlType
@@ -86,6 +88,7 @@ func main() {
 		attemptRepo = mysqlAttempt
 		eventRepo = mysqlEvent
 		tileRepo = mysqlTiles
+		partnerRequestRepo = mysqlPartnerRequest
 
 		if *seedWilayah {
 			if err := seedNationalWilayah(mysqlEmergency); err != nil {
@@ -141,6 +144,15 @@ func main() {
 		feedbackSvc = service.NewFeedbackService(feedbackRepo)
 	} else {
 		feedbackSvc = service.NewNoopFeedbackService()
+	}
+
+	// Partner ("daftar jadi mitra") requests. Approval needs the emergency repo
+	// too, so it can turn a request into a real unit.
+	var partnerRequestSvc service.PartnerRequestUseCase
+	if partnerRequestRepo != nil {
+		partnerRequestSvc = service.NewPartnerRequestService(partnerRequestRepo, emergencyRepo)
+	} else {
+		partnerRequestSvc = service.NewNoopPartnerRequestService()
 	}
 	var analyticsSvc service.AnalyticsUseCase
 	if analyticsRepo != nil {
@@ -259,7 +271,7 @@ func main() {
 		ticketLookupSvc = service.NewTicketLookupService(orderRepo, nil)
 	}
 
-	router.Register(app, emergencySvc, emergencySvc, regionSvc, feedbackSvc, orderSvc, unitAuthSvc, sosSvc, pushSvc, analyticsSvc, dispatchSvc, unitCredRepo, mapTilesSvc, wilayahResolver, hospitalSvc, assessmentSvc, complianceSvc, ticketLookupSvc, cfg, eventHub)
+	router.Register(app, emergencySvc, emergencySvc, regionSvc, feedbackSvc, partnerRequestSvc, orderSvc, unitAuthSvc, sosSvc, pushSvc, analyticsSvc, dispatchSvc, unitCredRepo, mapTilesSvc, wilayahResolver, hospitalSvc, assessmentSvc, complianceSvc, ticketLookupSvc, cfg, eventHub)
 
 	// Graceful shutdown on SIGINT / SIGTERM
 	quit := make(chan os.Signal, 1)
