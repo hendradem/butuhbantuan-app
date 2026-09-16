@@ -11,7 +11,14 @@
  * and /support share them.
  */
 import { Icon } from "@iconify/vue";
-import { DASHBOARD_URL, EMERGENCY_NUMBERS, FAQS, type Tone } from "~/utils/landingContent";
+import {
+  DASHBOARD_URL,
+  EMERGENCY_NUMBERS,
+  FAQS,
+  HOW_IT_WORKS,
+  TESTIMONIALS,
+  type Tone,
+} from "~/utils/landingContent";
 import { SPONSORS, SPONSOR_INFO_PATH, SPONSOR_PLACEHOLDER_SLOTS } from "~/utils/sponsors";
 
 definePageMeta({ layout: false });
@@ -70,21 +77,100 @@ const features: { title: string; subtitle: string; tone: Tone }[] = [
     tone: "amber",
   },
   {
-    title: "Nomor IGD 24 jam",
-    subtitle: "Kontak IGD rumah sakit terdekat, tinggal ketuk untuk menelepon.",
-    tone: "green",
-  },
-  {
     title: "Beri nilai petugas",
     subtitle: "Setelah selesai, beri bintang dan catatan. Masukanmu dibaca langsung oleh koordinator unit.",
     tone: "amber",
   },
 ];
 
+/**
+ * Chips that float beside the phone, one set per step, so the stage says
+ * something specific at each beat instead of only changing colour. Positions
+ * are picked per screen to sit over sparse parts of it — the map area, the gap
+ * between cards — rather than across a line of text.
+ */
+const stepChips: { icon: string; label: string; pos: string; tint: string }[][] = [
+  [
+    { icon: "mynaui:ambulance-solid", label: "1,2 km", pos: "-left-12 top-[30%]", tint: "bg-[#fce4f0] text-[#8b5cf6]" },
+    { icon: "lucide:hospital", label: "IGD buka", pos: "-right-12 bottom-[30%]", tint: "bg-[#e6f0fb] text-[#4a90e2]" },
+  ],
+  [
+    { icon: "lucide:map-pin", label: "Lokasi terkunci", pos: "-right-12 top-[11%]", tint: "bg-emerald-50 text-emerald-700" },
+    { icon: "lucide:camera", label: "Foto siap", pos: "-left-12 bottom-[13%]", tint: "bg-[#fce4f0] text-[#8b5cf6]" },
+  ],
+  [
+    { icon: "lucide:clock", label: "4 mnt", pos: "-right-12 top-[40%]", tint: "bg-emerald-50 text-emerald-700" },
+    { icon: "lucide:route", label: "Rute aktif", pos: "-left-12 bottom-[28%]", tint: "bg-[#e6f0fb] text-[#4a90e2]" },
+  ],
+  [
+    { icon: "lucide:bell-ring", label: "Petugas tiba", pos: "-left-12 top-[19%]", tint: "bg-amber-50 text-amber-700" },
+    { icon: "lucide:link-2", label: "Link dibagikan", pos: "-right-12 bottom-[26%]", tint: "bg-[#fce4f0] text-[#8b5cf6]" },
+  ],
+  [
+    { icon: "lucide:star", label: "5 bintang", pos: "-right-12 top-[26%]", tint: "bg-amber-50 text-amber-700" },
+    { icon: "lucide:message-square", label: "Catatan dikirim", pos: "-left-12 bottom-[10%]", tint: "bg-[#fce8f3] text-[#db2777]" },
+  ],
+];
+
 const showcaseRef = ref<HTMLElement | null>(null);
 const activeFeature = ref(0);
-const stepProgress = ref(0);
 let scrollRaf = 0;
+
+// The phone also plays the flow on its own, like a looping demo, so a visitor
+// who never scrolls still sees all six steps. Scrolling takes precedence: it
+// sets the step and restarts the timer, which then resumes from wherever the
+// reader left it.
+const STEP_MS = 4200;
+let stepTimer: ReturnType<typeof setInterval> | null = null;
+let showcaseVisible = false;
+let showcaseIO: IntersectionObserver | null = null;
+
+/** Bumped whenever the beat restarts, so the auto-advance bar replays. */
+const stepTick = ref(0);
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function stopStepLoop() {
+  if (stepTimer !== null) {
+    clearInterval(stepTimer);
+    stepTimer = null;
+  }
+}
+
+function startStepLoop() {
+  stopStepLoop();
+  if (!showcaseVisible || prefersReducedMotion()) return;
+  stepTimer = setInterval(() => {
+    activeFeature.value = (activeFeature.value + 1) % features.length;
+    stepTick.value += 1;
+  }, STEP_MS);
+}
+
+// ── Hero prototype ─────────────────────────────────────────────────────────
+// The same self-playing demo, on the phone at the top of the page: it is the
+// first thing a visitor sees, so it should not sit frozen on step one.
+const HERO_STEP_MS = 3600;
+const heroStageRef = ref<HTMLElement | null>(null);
+const heroScreen = ref(0);
+let heroTimer: ReturnType<typeof setInterval> | null = null;
+let heroIO: IntersectionObserver | null = null;
+
+function stopHeroLoop() {
+  if (heroTimer !== null) {
+    clearInterval(heroTimer);
+    heroTimer = null;
+  }
+}
+
+function startHeroLoop() {
+  stopHeroLoop();
+  if (prefersReducedMotion()) return;
+  heroTimer = setInterval(() => {
+    heroScreen.value = (heroScreen.value + 1) % features.length;
+  }, HERO_STEP_MS);
+}
 
 function readActiveFromScroll() {
   const el = showcaseRef.value;
@@ -95,8 +181,10 @@ function readActiveFromScroll() {
   const progress = Math.max(0, Math.min(0.9999, -rect.top / range));
   const exact = progress * features.length;
   const idx = Math.min(features.length - 1, Math.floor(exact));
-  if (activeFeature.value !== idx) activeFeature.value = idx;
-  stepProgress.value = exact - idx;
+  if (activeFeature.value !== idx) {
+    activeFeature.value = idx;
+    startStepLoop();
+  }
 }
 
 function onScroll() {
@@ -114,12 +202,6 @@ function scrollToFeature(i: number) {
   const range = el.offsetHeight - window.innerHeight;
   const top = el.getBoundingClientRect().top + window.scrollY + ((i + 0.15) / features.length) * range;
   window.scrollTo({ top, behavior: "smooth" });
-}
-
-function segmentFill(i: number) {
-  if (i < activeFeature.value) return 1;
-  if (i > activeFeature.value) return 0;
-  return Math.max(0.04, stepProgress.value);
 }
 
 // ── Unit dashboard (sticky pills + sticky browser + scroll spy) ────────────
@@ -232,6 +314,27 @@ onMounted(() => {
   readActiveFromScroll();
   updateNavSuppression();
 
+  // Only play the phone while the walkthrough is actually on screen.
+  showcaseIO = new IntersectionObserver(
+    ([entry]) => {
+      showcaseVisible = !!entry?.isIntersecting;
+      if (showcaseVisible) startStepLoop();
+      else stopStepLoop();
+    },
+    { threshold: 0.15 },
+  );
+  if (showcaseRef.value) showcaseIO.observe(showcaseRef.value);
+
+  // Same for the hero phone: play only while it is on screen.
+  heroIO = new IntersectionObserver(
+    ([entry]) => {
+      if (entry?.isIntersecting) startHeroLoop();
+      else stopHeroLoop();
+    },
+    { threshold: 0.2 },
+  );
+  if (heroStageRef.value) heroIO.observe(heroStageRef.value);
+
   dashboardIO = new IntersectionObserver(
     (entries) => {
       let bestIdx = activeDashboard.value;
@@ -256,6 +359,12 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("scroll", onScroll);
   if (scrollRaf) cancelAnimationFrame(scrollRaf);
+  stopStepLoop();
+  showcaseIO?.disconnect();
+  showcaseIO = null;
+  stopHeroLoop();
+  heroIO?.disconnect();
+  heroIO = null;
   dashboardIO?.disconnect();
   dashboardIO = null;
   navSuppressed.value = false;
@@ -281,11 +390,11 @@ const installSteps: { title: string; body: string; tone: Tone }[] = [
 ];
 
 // ── Coverage ───────────────────────────────────────────────────────────────
-const stats: { value: string; label: string; note: string; tone: Tone }[] = [
-  { value: "15+", label: "Provinsi", note: "Dari Sumatera sampai Papua.", tone: "red" },
-  { value: "120+", label: "Kabupaten & kota", note: "Seluruh Jawa, plus kota-kota utama di luar Jawa.", tone: "amber" },
-  { value: "250+", label: "Unit terhubung", note: "Dari instansi resmi sampai relawan.", tone: "sky" },
-  { value: "2 mnt", label: "Batas tunggu respons", note: "Lewat dari itu, laporan dioper ke unit lain.", tone: "green" },
+const stats: { value: string; label: string; note: string; tone: Tone; icon: string }[] = [
+  { value: "15+", label: "Provinsi", note: "Dari Sumatera sampai Papua.", tone: "teal", icon: "lucide:map" },
+  { value: "120+", label: "Kabupaten & kota", note: "Seluruh Jawa, plus kota-kota utama di luar Jawa.", tone: "sky", icon: "lucide:building-2" },
+  { value: "250+", label: "Unit terhubung", note: "Dari instansi resmi sampai relawan.", tone: "violet", icon: "mynaui:ambulance-solid" },
+  { value: "2 mnt", label: "Batas tunggu respons", note: "Lewat dari itu, laporan dioper ke unit lain.", tone: "amber", icon: "lucide:timer" },
 ];
 
 // ── Sponsors ───────────────────────────────────────────────────────────────
@@ -306,44 +415,63 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
 <template>
   <LandingShell>
     <!-- ================= HERO ================= -->
-    <section class="relative pb-16 pt-32 sm:pt-40">
-      <div aria-hidden="true" class="hero-backdrop pointer-events-none absolute inset-x-0 top-0 h-[720px]" />
+    <section class="relative overflow-hidden pb-16 pt-24 sm:pt-28">
+      <div aria-hidden="true" class="hero-backdrop pointer-events-none absolute inset-x-0 top-0 h-[880px]" />
 
-      <div class="lp-container relative text-center">
-        <a href="#cakupan" class="lp-chip transition-colors hover:bg-[var(--lp-surface)]" data-reveal>
-          <span class="lp-live-dot" />
-          Aktif di 15+ provinsi
-          <Icon icon="lucide:arrow-right" class="text-[14px] text-[var(--lp-faint)]" />
-        </a>
+      <div class="lp-container relative">
+        <div class="grid items-center gap-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+          <div class="text-center lg:text-left">
+            <a href="#cakupan" class="lp-chip transition-colors hover:bg-[var(--lp-surface)]" data-reveal>
+              <span class="lp-live-dot" />
+              Aktif di 15+ provinsi
+              <Icon icon="lucide:arrow-right" class="text-[14px] text-[var(--lp-faint)]" />
+            </a>
 
-        <h1 class="lp-display mx-auto mt-7 max-w-[18ch]" data-reveal style="--d: 80ms">
-          Bantuan darurat terdekat,<br class="hidden sm:block" /> <span class="text-[var(--lp-accent)]">dalam genggaman.</span>
-        </h1>
+            <h1 class="lp-display lp-display--compact mx-auto mt-6 max-w-[20ch] lg:mx-0" data-reveal style="--d: 80ms">
+              Bantuan darurat terdekat,<br class="hidden sm:block" /> <span class="text-[var(--lp-accent)]">dalam genggaman.</span>
+            </h1>
 
-        <p class="lp-lead mx-auto mt-6 max-w-[54ch]" data-reveal style="--d: 160ms">
-          Cari ambulans, damkar, tim SAR, PMI, sampai rumah sakit terdekat
-          langsung dari HP. Lapor dalam 30 detik, lalu pantau petugasnya sampai
-          tiba.
-        </p>
+            <p class="lp-lead mx-auto mt-6 max-w-[54ch] lg:mx-0" data-reveal style="--d: 160ms">
+              Cari ambulans, damkar, tim SAR, PMI, sampai rumah sakit terdekat
+              langsung dari HP. Lapor dalam 30 detik, lalu pantau petugasnya sampai
+              tiba.
+            </p>
 
-        <div class="mt-9 flex flex-wrap items-center justify-center gap-3" data-reveal style="--d: 240ms">
-          <NuxtLink to="/" class="lp-btn lp-btn--accent">
-            Buka aplikasi
-            <Icon icon="lucide:arrow-right" class="lp-btn-arrow text-[16px]" />
-          </NuxtLink>
-          <a href="#fitur" class="lp-btn lp-btn--ghost">Lihat cara kerjanya</a>
+            <div class="mt-9 flex flex-wrap items-center justify-center gap-3 lg:justify-start" data-reveal style="--d: 240ms">
+              <NuxtLink to="/" class="lp-btn lp-btn--accent">
+                Buka aplikasi
+                <Icon icon="lucide:arrow-right" class="lp-btn-arrow text-[16px]" />
+              </NuxtLink>
+              <a href="#fitur" class="lp-btn lp-btn--ghost">Lihat cara kerjanya</a>
+            </div>
+
+            <ul class="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[13.5px] text-[var(--lp-muted)] lg:justify-start" data-reveal style="--d: 320ms">
+              <li v-for="t in ['Gratis', 'Tanpa daftar akun', 'Data tersimpan di Indonesia']" :key="t" class="flex items-center gap-1.5">
+                <Icon icon="lucide:check" class="text-[15px] text-emerald-600" />
+                {{ t }}
+              </li>
+            </ul>
+          </div>
+
+          <!-- Product: the map screen a warga actually opens, then the flow
+               plays itself on through the rest of the steps. -->
+          <div ref="heroStageRef" class="hero-stage relative" data-reveal style="--d: 200ms">
+            <div class="phone-scale relative lp-tone-sky">
+              <div aria-hidden="true" class="hero-pad" />
+              <LandingPhone>
+                <Transition name="phone-fade">
+                  <div :key="heroScreen" class="absolute inset-0">
+                    <LandingPhoneScreens :screen="heroScreen" />
+                  </div>
+                </Transition>
+              </LandingPhone>
+            </div>
+          </div>
         </div>
-
-        <ul class="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[13.5px] text-[var(--lp-muted)]" data-reveal style="--d: 320ms">
-          <li v-for="t in ['Gratis', 'Tanpa daftar akun', 'Data tersimpan di Indonesia']" :key="t" class="flex items-center gap-1.5">
-            <Icon icon="lucide:check" class="text-[15px] text-emerald-600" />
-            {{ t }}
-          </li>
-        </ul>
       </div>
 
       <!-- Emergency numbers strip -->
-      <div class="lp-container relative mt-20" data-reveal style="--d: 400ms">
+      <div class="lp-container relative mt-10" data-reveal style="--d: 400ms">
         <div class="flex flex-col items-center gap-4 border-y border-[var(--lp-line)] py-6 text-center">
           <p class="text-[13.5px] text-[var(--lp-muted)]">
             <span class="font-semibold text-[var(--lp-ink)]">Kondisi gawat?</span>
@@ -368,46 +496,51 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
     </section>
 
     <!-- ================= CITIZEN WALKTHROUGH (sticky phone) ================= -->
-    <section id="fitur" ref="showcaseRef" class="relative" style="height: 520vh">
+    <section id="fitur" ref="showcaseRef" class="relative" style="height: 440vh">
       <div class="sticky top-0 flex h-[100dvh] items-center">
         <div class="lp-container">
-          <div class="grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-20">
-            <!-- Left: step list (desktop) -->
+          <div class="grid items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-14">
+            <!-- Left: the steps, the active one taking the floor -->
             <div class="hidden lg:block">
               <span class="lp-eyebrow">Untuk warga</span>
               <h2 class="lp-h2 mt-4 max-w-[14ch]">Dari lapor sampai petugas tiba.</h2>
 
-              <ol class="mt-10 min-h-[372px]">
-                <li v-for="(f, i) in features" :key="f.title" class="relative" :class="`lp-tone-${f.tone}`">
-                  <span class="absolute bottom-1 left-0 top-1 w-[2px] overflow-hidden rounded-full bg-[var(--lp-line)]" aria-hidden="true">
-                    <span
-                      class="block h-full w-full origin-top bg-[var(--tone)] transition-transform duration-150"
-                      :style="{ transform: `scaleY(${segmentFill(i)})` }"
-                    />
-                  </span>
+              <ol class="mt-8 space-y-1" :style="{ '--step-ms': `${STEP_MS}ms` }">
+                <li v-for="(f, i) in features" :key="f.title" :class="`lp-tone-${f.tone}`">
                   <button
                     type="button"
-                    class="group flex w-full items-start gap-4 py-3 pl-6 text-left"
+                    class="grid w-full grid-cols-[68px_1fr] items-start gap-4 rounded-[22px] px-4 py-3 text-left transition-colors duration-300"
+                    :class="activeFeature === i ? 'lp-tint' : 'hover:bg-[var(--lp-surface)]'"
                     :aria-current="activeFeature === i ? 'step' : undefined"
                     @click="scrollToFeature(i)"
                   >
                     <span
-                      class="lp-mono mt-[3px] text-[12px] transition-colors duration-300"
-                      :class="activeFeature === i ? 'text-[var(--tone)]' : 'text-[var(--lp-faint)]'"
+                      class="lp-mono text-[36px] font-bold leading-[0.9] tracking-[-0.05em] transition-colors duration-300"
+                      :class="activeFeature === i ? 'text-[var(--tone)]' : 'text-[var(--lp-faint)] opacity-50'"
                     >
                       0{{ i + 1 }}
                     </span>
-                    <span class="min-w-0 flex-1">
+                    <span class="min-w-0 pt-1">
                       <span
-                        class="block text-[17px] font-semibold tracking-[-0.02em] transition-colors duration-300"
-                        :class="activeFeature === i ? 'text-[var(--lp-ink)]' : 'text-[var(--lp-faint)] group-hover:text-[var(--lp-muted)]'"
+                        class="block text-[16.5px] font-semibold tracking-[-0.02em] transition-colors duration-300"
+                        :class="activeFeature === i ? 'text-[var(--lp-ink)]' : 'text-[var(--lp-muted)]'"
                       >
                         {{ f.title }}
                       </span>
-                      <span class="lp-acc-body" :class="activeFeature === i && 'lp-acc-body--open'">
-                        <span class="block overflow-hidden">
-                          <span class="lp-body block max-w-[40ch] pt-1.5">{{ f.subtitle }}</span>
-                        </span>
+                      <!-- Reserved two lines, so switching steps never shifts the list -->
+                      <span
+                        v-if="activeFeature === i"
+                        class="mt-1.5 block min-h-[42px] text-[14px] leading-[1.55] text-[var(--lp-ink-2)]"
+                      >
+                        {{ f.subtitle }}
+                      </span>
+                      <!-- The beat, made visible. Restarts when the beat does. -->
+                      <span
+                        v-if="activeFeature === i"
+                        class="mt-2.5 block h-[3px] w-full overflow-hidden rounded-full bg-[var(--tone-line)]"
+                        aria-hidden="true"
+                      >
+                        <span :key="stepTick" class="lp-beat block h-full w-full origin-left rounded-full bg-[var(--tone)]" />
                       </span>
                     </span>
                   </button>
@@ -417,7 +550,7 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
 
             <!-- Mobile caption -->
             <div class="text-center lg:hidden">
-              <span class="lp-eyebrow">Langkah 0{{ activeFeature + 1 }} dari 06</span>
+              <span class="lp-eyebrow">Langkah 0{{ activeFeature + 1 }} dari 0{{ features.length }}</span>
               <div class="relative mt-3 h-[88px]">
                 <Transition name="caption">
                   <div :key="activeFeature" class="absolute inset-x-0 top-0">
@@ -428,25 +561,43 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
               </div>
             </div>
 
-            <!-- Right: phone on a pad tinted with the active step's tone -->
+            <!-- Right: the phone on a stage that takes the step's colour -->
             <div class="phone-stage relative flex items-center justify-center">
-              <div class="phone-scale relative" :class="`lp-tone-${features[activeFeature]!.tone}`">
-                <div aria-hidden="true" class="phone-pad" />
-                <div aria-hidden="true" class="phone-glow" />
-                <div class="relative rounded-[48px] bg-[#1c1917] p-[7px] shadow-[0_40px_80px_-30px_rgba(28,25,23,0.55),inset_0_0_0_1px_rgba(255,255,255,0.08)]">
-                  <div class="absolute left-1/2 top-[15px] z-20 h-[24px] w-[92px] -translate-x-1/2 rounded-full bg-[#1c1917]" />
-                  <div class="relative h-[560px] w-[268px] overflow-hidden rounded-[41px] bg-white">
-                    <Transition name="phone-fade">
-                      <div :key="activeFeature" class="absolute inset-0">
-                        <LandingPhoneScreens :screen="activeFeature" />
-                      </div>
-                    </Transition>
-                  </div>
-                </div>
+              <div
+                class="phone-stage-panel"
+                :class="`lp-tone-${features[activeFeature]!.tone}`"
+                aria-hidden="true"
+              >
+                <span class="phone-stage-grid absolute inset-0" />
+                <span class="phone-stage-wash absolute inset-0" />
+              </div>
+
+              <div class="phone-scale relative z-10" :class="`lp-tone-${features[activeFeature]!.tone}`">
+                <LandingPhone>
+                  <Transition name="phone-fade">
+                    <div :key="activeFeature" class="absolute inset-0">
+                      <LandingPhoneScreens :screen="activeFeature" />
+                    </div>
+                  </Transition>
+                </LandingPhone>
+
+                <!-- Ornaments: what just happened, beside the device -->
+                <span
+                  v-for="(c, ci) in stepChips[activeFeature]"
+                  :key="`${stepTick}-${ci}`"
+                  class="lp-float absolute z-20 flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-[0_0_0_1px_rgba(28,25,23,0.05),0_14px_26px_-14px_rgba(28,25,23,0.5)]"
+                  :class="c.pos"
+                  :style="{ '--d': `${ci * 140}ms` }"
+                >
+                  <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full" :class="c.tint">
+                    <Icon :icon="c.icon" class="text-[13px]" />
+                  </span>
+                  <span class="whitespace-nowrap text-[12px] font-semibold">{{ c.label }}</span>
+                </span>
               </div>
 
               <!-- Mobile step dots -->
-              <div class="absolute -bottom-7 left-1/2 flex -translate-x-1/2 gap-1.5 lg:hidden" aria-hidden="true">
+              <div class="absolute -bottom-7 left-1/2 z-10 flex -translate-x-1/2 gap-1.5 lg:hidden" aria-hidden="true">
                 <span
                   v-for="(f, i) in features"
                   :key="i"
@@ -460,6 +611,40 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
       </div>
     </section>
 
+    <!-- ================= CARA KERJA ================= -->
+    <section class="py-24 lg:py-32">
+      <div class="lp-container">
+        <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end lg:gap-16">
+          <div class="lp-tone-sky" data-reveal>
+            <span class="lp-eyebrow">Cara kerja</span>
+            <h2 class="lp-h2 mt-4 max-w-[17ch]">Tiga langkah dari lapor sampai petugas tiba.</h2>
+          </div>
+          <p class="lp-lead max-w-[46ch]" data-reveal style="--d: 100ms">
+            Tidak ada langkah yang harus kamu tebak. Setiap tahap punya kabar,
+            jadi kamu tahu bantuan sedang dalam perjalanan.
+          </p>
+        </div>
+
+        <ol class="how-steps relative mt-14 grid gap-4 sm:grid-cols-3">
+          <li
+            v-for="(s, i) in HOW_IT_WORKS"
+            :key="s.title"
+            class="lp-tint flex flex-col rounded-[24px] p-6 sm:p-7"
+            :class="`lp-tone-${s.tone}`"
+            data-reveal
+            :style="{ '--d': `${i * 90}ms` }"
+          >
+            <div class="flex items-center justify-between">
+              <span class="lp-well"><Icon :icon="s.icon" class="text-[20px]" /></span>
+              <span class="lp-mono text-[12px] text-[var(--tone)]">0{{ i + 1 }}</span>
+            </div>
+            <h3 class="mt-7 text-[17px] font-semibold tracking-[-0.015em]">{{ s.title }}</h3>
+            <p class="lp-body mt-2">{{ s.body }}</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
     <!-- ================= UNIT DASHBOARD (sticky browser) ================= -->
     <section
       id="dashboard"
@@ -468,7 +653,7 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
     >
       <div class="lp-container">
         <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end lg:gap-16">
-          <div data-reveal>
+          <div class="lp-tone-green" data-reveal>
             <span class="lp-eyebrow">Untuk unit emergency</span>
             <h2 class="lp-h2 mt-4 max-w-[18ch]">Satu dashboard untuk seluruh kerja unit kamu.</h2>
           </div>
@@ -477,10 +662,16 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
               Terima laporan, pantau petugas di peta, dan lihat kinerja tim dari
               satu layar, tanpa harus berkutat dengan spreadsheet.
             </p>
-            <a :href="DASHBOARD_URL" class="lp-link mt-5">
-              Masuk dashboard
-              <Icon icon="lucide:arrow-up-right" class="lp-btn-arrow text-[16px]" />
-            </a>
+            <div class="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
+              <NuxtLink to="/daftar-unit" class="lp-btn lp-btn--accent">
+                Daftarkan unit kamu
+                <Icon icon="lucide:arrow-right" class="lp-btn-arrow text-[16px]" />
+              </NuxtLink>
+              <a :href="DASHBOARD_URL" class="lp-link text-[14px]">
+                Masuk dashboard
+                <Icon icon="lucide:arrow-up-right" class="lp-btn-arrow text-[15px]" />
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -581,159 +772,147 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
     <!-- ================= BENTO ================= -->
     <section class="lp-section">
       <div class="lp-container">
-        <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end lg:gap-16">
-          <div data-reveal>
-            <span class="lp-eyebrow">Kenapa ButuhBantuan</span>
-            <h2 class="lp-h2 mt-4 max-w-[17ch]">Karena di saat darurat, tiap menit berharga.</h2>
+        <div class="grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-end lg:gap-16">
+          <div class="lp-tone-teal" data-reveal>
+            <span class="lp-pill">
+              Kenapa ButuhBantuan
+              <Icon icon="lucide:arrow-right" class="text-[14px]" />
+            </span>
+            <h2 class="lp-h2 mt-5 max-w-[17ch]">Karena di saat darurat, tiap menit berharga.</h2>
           </div>
           <p class="lp-lead max-w-[46ch]" data-reveal style="--d: 100ms">
-            Mencari unit, melapor, memantau petugas, sampai mengoper laporan,
+            Mencari unit, melapor, memantau petugas, sampai menilai pelayanannya —
             semuanya jalan di satu alur, jadi tidak ada waktu yang terbuang.
           </p>
         </div>
 
-        <div class="mt-14 grid gap-4 lg:grid-cols-6">
-          <!-- A: one map -->
-          <article class="lp-feature lp-tone-sky relative min-h-[460px] lg:col-span-4" data-reveal="card">
-            <span class="lp-feature-icon"><Icon icon="lucide:map" class="text-[20px]" /></span>
-            <h3 class="lp-feature-head max-w-[24ch]">
-              <span>Satu peta</span> untuk semua unit di sekitarmu.
-            </h3>
-            <ul class="lp-feature-list">
-              <li><Icon icon="lucide:layers" class="text-[17px]" /> Ambulans, damkar, SAR, PMI, PSC 119, rumah sakit</li>
-              <li><Icon icon="lucide:gauge" class="text-[17px]" /> Jarak dan perkiraan tiba tiap unit</li>
-              <li><Icon icon="lucide:hand" class="text-[17px]" /> Minta bantuan tanpa pindah halaman</li>
-            </ul>
-            <NuxtLink to="/" class="lp-feature-link">
-              Coba sekarang
-              <Icon icon="lucide:chevron-right" class="text-[15px]" />
-            </NuxtLink>
-            <div class="lp-feature-preview">
-              <div class="mb-5 flex flex-wrap gap-1.5">
-                <span
-                  v-for="(c, ci) in unitFilters"
-                  :key="c"
-                  class="rounded-full px-3 py-1.5 text-[12.5px] font-medium"
-                  :class="ci === 0 ? 'bg-[var(--tone)] text-white' : 'bg-white text-[var(--lp-muted)]'"
-                >
-                  {{ c }}
-                </span>
+        <div class="mt-14 grid gap-6 lg:grid-cols-6">
+          <!-- A: one map for every unit -->
+          <article class="lp-card-soft lp-tone-teal lg:col-span-4" data-reveal="card">
+            <div class="lp-card-top">
+              <div class="flex items-start gap-3">
+                <Icon icon="lucide:map" class="mt-0.5 shrink-0 text-[20px] text-[var(--tone)]" />
+                <h3 class="lp-card-title max-w-[26ch]">Satu peta untuk semua unit di sekitarmu</h3>
               </div>
+              <span class="lp-card-arrow" aria-hidden="true"><Icon icon="lucide:arrow-right" class="text-[15px]" /></span>
             </div>
-            <div class="lp-panel -mb-16 divide-y divide-[var(--lp-line)] sm:mr-16" data-stagger>
-              <div
-                v-for="u in [
-                  { name: 'PSC 119 Sleman', kind: 'Ambulans', dist: '1,2 km', eta: '3 mnt', icon: 'mynaui:ambulance-solid', tone: 'red' },
-                  { name: 'Damkar Yogyakarta', kind: 'Pemadam', dist: '2,8 km', eta: '7 mnt', icon: 'lucide:flame', tone: 'amber' },
-                  { name: 'PMI Kota Yogyakarta', kind: 'PMI', dist: '3,4 km', eta: '9 mnt', icon: 'lucide:heart-pulse', tone: 'rose' },
-                ]"
-                :key="u.name"
-                class="flex items-center gap-3 px-4 py-3.5"
-                :class="`lp-tone-${u.tone}`"
-              >
-                <span class="lp-well h-9 w-9 rounded-xl"><Icon :icon="u.icon" class="text-[16px]" /></span>
-                <div class="min-w-0 flex-1">
-                  <div class="truncate text-[14px] font-semibold">{{ u.name }}</div>
-                  <div class="text-[12px] text-[var(--lp-muted)]">{{ u.kind }} · {{ u.dist }}</div>
-                </div>
-                <span class="lp-mono rounded-full bg-emerald-50 px-2.5 py-1 text-[11.5px] font-medium text-emerald-700">{{ u.eta }}</span>
-              </div>
-            </div>
+            <p class="lp-card-sub">
+              Ambulans, damkar, SAR, PMI, PSC 119, sampai rumah sakit — diurutkan dari
+              yang paling dekat, lengkap dengan perkiraan tibanya.
+            </p>
+            <div class="lp-card-mock"><AppScreenMock variant="units" /></div>
           </article>
 
-          <!-- B: report from the card -->
-          <article class="lp-feature lp-tone-red min-h-[460px] lg:col-span-2" data-reveal="card" style="--d: 80ms">
-            <span class="lp-feature-icon"><Icon icon="lucide:file-plus-2" class="text-[20px]" /></span>
-            <h3 class="lp-feature-head max-w-[18ch]">
-              <span>Lapor</span> langsung dari kartu unit.
-            </h3>
-            <ul class="lp-feature-list">
-              <li><Icon icon="lucide:map-pin" class="text-[17px]" /> Lokasi terisi sendiri</li>
-              <li><Icon icon="lucide:camera" class="text-[17px]" /> Foto langsung dari kamera</li>
-              <li><Icon icon="lucide:send" class="text-[17px]" /> Terkirim ke unit terdekat</li>
-            </ul>
-            <div class="lp-feature-preview">
-              <div class="lp-panel p-4">
-                <div class="flex items-center justify-between">
-                  <span class="lp-mono text-[11.5px] text-[var(--lp-muted)]">TKT-2591</span>
-                  <span class="rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">Gawat</span>
-                </div>
-                <div class="mt-2 text-[15px] font-semibold">Sesak napas · anak 6 th</div>
-                <div class="mt-1 flex items-center gap-1.5 text-[12.5px] text-[var(--lp-muted)]">
-                  <Icon icon="lucide:map-pin" class="text-[13px]" />
-                  Ngaglik, Sleman
-                </div>
+          <!-- B: report without an account -->
+          <article class="lp-card-soft lp-tone-red lg:col-span-2" data-reveal="card" style="--d: 80ms">
+            <div class="lp-card-top">
+              <div class="flex items-start gap-3">
+                <Icon icon="lucide:file-plus-2" class="mt-0.5 shrink-0 text-[20px] text-[var(--tone)]" />
+                <h3 class="lp-card-title max-w-[18ch]">Lapor tanpa bikin akun</h3>
               </div>
-              <div class="mt-2 flex items-center gap-2 rounded-2xl bg-white/70 px-4 py-3 text-[12.5px] text-[var(--lp-muted)]">
-                <Icon icon="lucide:corner-down-right" class="text-[14px] text-[var(--tone)]" />
-                Dikirim ke <span class="font-semibold text-[var(--lp-ink)]">PSC 119 Sleman</span>
-              </div>
+              <span class="lp-card-arrow" aria-hidden="true"><Icon icon="lucide:arrow-right" class="text-[15px]" /></span>
             </div>
+            <p class="lp-card-sub">
+              Lokasi dan foto terisi sendiri. Satu ketukan, laporan langsung sampai ke
+              unit terdekat.
+            </p>
+            <div class="lp-card-mock"><AppScreenMock variant="trip" /></div>
           </article>
 
-          <!-- C: automatic hand-off -->
-          <article class="lp-feature lp-tone-amber min-h-[380px] lg:col-span-2" data-reveal="card">
-            <span class="lp-feature-icon"><Icon icon="lucide:timer" class="text-[20px]" /></span>
-            <h3 class="lp-feature-head max-w-[18ch]">
-              <span>Belum dijawab?</span> Langsung dioper.
-            </h3>
-            <ul class="lp-feature-list">
-              <li><Icon icon="lucide:alarm-clock" class="text-[17px]" /> Batas tunggu 2 menit</li>
-              <li><Icon icon="lucide:repeat" class="text-[17px]" /> Diteruskan ke unit berikutnya</li>
-            </ul>
-            <div class="lp-feature-preview flex items-center gap-5">
-              <div class="relative h-[104px] w-[104px] shrink-0">
-                <svg viewBox="0 0 100 100" class="h-full w-full -rotate-90" aria-hidden="true">
-                  <circle cx="50" cy="50" r="44" fill="none" stroke="#fff" stroke-width="6" />
-                  <circle cx="50" cy="50" r="44" fill="none" stroke="var(--tone)" stroke-width="6" stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="41" class="sla-ring" />
-                </svg>
-                <span class="lp-mono absolute inset-0 flex items-center justify-center text-[19px] font-medium">1:47</span>
+          <!-- C: triage -->
+          <article class="lp-card-soft lp-tone-amber lg:col-span-2" data-reveal="card">
+            <div class="lp-card-top">
+              <div class="flex items-start gap-3">
+                <Icon icon="lucide:clipboard-list" class="mt-0.5 shrink-0 text-[20px] text-[var(--tone)]" />
+                <h3 class="lp-card-title max-w-[18ch]">Pertanyaan yang mengarahkan</h3>
               </div>
-              <div class="min-w-0 text-[13px] leading-[1.6] text-[var(--lp-muted)]">
-                <div class="font-semibold text-[var(--lp-ink)]">PSC 119 Sleman</div>
-                belum merespons
-                <div class="mt-2 flex items-center gap-1.5 font-medium text-[var(--tone)]">
-                  <Icon icon="lucide:arrow-right" class="text-[14px]" />
-                  PSC 119 Bantul
-                </div>
-              </div>
+              <span class="lp-card-arrow" aria-hidden="true"><Icon icon="lucide:arrow-right" class="text-[15px]" /></span>
             </div>
+            <p class="lp-card-sub">
+              Beberapa pertanyaan singkat membantu petugas menyiapkan tindakan sebelum
+              tiba di lokasi.
+            </p>
+            <div class="lp-card-mock"><AppScreenMock variant="triage" /></div>
           </article>
 
-          <!-- D: PWA, no account -->
-          <article class="lp-feature lp-tone-green relative min-h-[380px] lg:col-span-4" data-reveal="card" style="--d: 80ms">
-            <div class="grid h-full gap-8 sm:grid-cols-[1fr_auto] sm:items-end">
-              <div class="max-w-[36ch] self-start">
-                <span class="lp-feature-icon"><Icon icon="lucide:smartphone" class="text-[20px]" /></span>
-                <h3 class="lp-feature-head max-w-[20ch]">
-                  <span>Tanpa install,</span> tanpa akun.
-                </h3>
-                <ul class="lp-feature-list">
-                  <li><Icon icon="lucide:globe" class="text-[17px]" /> Cukup buka dari browser</li>
-                  <li><Icon icon="lucide:home" class="text-[17px]" /> Bisa ditambah ke layar utama</li>
-                  <li><Icon icon="lucide:wifi-off" class="text-[17px]" /> Nomor darurat tetap ada saat offline</li>
-                </ul>
-                <div class="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[13px]">
-                  <Icon icon="lucide:lock" class="text-[12px] text-[var(--tone)]" />
-                  <span class="text-[var(--lp-ink)]">butuhbantuan.space</span>
-                </div>
+          <!-- D: search and categories -->
+          <article class="lp-card-soft lp-tone-violet lg:col-span-2" data-reveal="card" style="--d: 80ms">
+            <div class="lp-card-top">
+              <div class="flex items-start gap-3">
+                <Icon icon="lucide:search" class="mt-0.5 shrink-0 text-[20px] text-[var(--tone)]" />
+                <h3 class="lp-card-title max-w-[18ch]">Cari lokasi, bukan alamat panjang</h3>
               </div>
-              <div class="grid w-fit grid-cols-4 gap-3 self-end rounded-[28px] bg-white/70 p-4 sm:-mb-2" aria-hidden="true">
-                <span v-for="n in 7" :key="n" class="h-12 w-12 rounded-[14px] bg-[var(--tone-soft)]" />
-                <span class="relative flex h-12 w-12 items-center justify-center rounded-[14px] bg-[var(--lp-accent)] shadow-[0_8px_18px_-6px_rgba(220,38,38,0.6)]">
-                  <Icon icon="mynaui:ambulance-solid" class="text-[22px] text-white" />
-                </span>
-              </div>
+              <span class="lp-card-arrow" aria-hidden="true"><Icon icon="lucide:arrow-right" class="text-[15px]" /></span>
             </div>
+            <p class="lp-card-sub">
+              Ketik nama jalan atau pakai lokasi sekarang, lalu pilih layanan yang kamu
+              butuhkan langsung dari peta.
+            </p>
+            <div class="lp-card-mock"><AppScreenMock variant="dock" /></div>
+          </article>
+
+          <!-- E: rating -->
+          <article class="lp-card-soft lp-tone-rose lg:col-span-2" data-reveal="card" style="--d: 160ms">
+            <div class="lp-card-top">
+              <div class="flex items-start gap-3">
+                <Icon icon="lucide:star" class="mt-0.5 shrink-0 text-[20px] text-[var(--tone)]" />
+                <h3 class="lp-card-title max-w-[18ch]">Nilai setelah selesai</h3>
+              </div>
+              <span class="lp-card-arrow" aria-hidden="true"><Icon icon="lucide:arrow-right" class="text-[15px]" /></span>
+            </div>
+            <p class="lp-card-sub">
+              Masukanmu dibaca langsung oleh koordinator unit, supaya kualitas layanan
+              terjaga.
+            </p>
+            <div class="lp-card-mock"><AppScreenMock variant="rating" /></div>
           </article>
         </div>
+      </div>
+    </section>
+
+    <!-- ================= TESTIMONI ================= -->
+    <section v-if="TESTIMONIALS.length" class="lp-band lp-tone-amber py-24 lg:py-32">
+      <div class="lp-container">
+        <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end lg:gap-16">
+          <div class="lp-tone-amber" data-reveal>
+            <span class="lp-eyebrow">Kata warga</span>
+            <h2 class="lp-h2 mt-4 max-w-[18ch]">Dipakai di menit-menit yang paling penting.</h2>
+          </div>
+          <p class="lp-lead max-w-[46ch]" data-reveal style="--d: 100ms">
+            Dari laporan pertama sampai penilaian terakhir, ini yang warga
+            rasakan saat memakai ButuhBantuan.
+          </p>
+        </div>
+
+        <ul class="mt-14 grid gap-4 lg:grid-cols-3" data-stagger>
+          <li
+            v-for="t in TESTIMONIALS"
+            :key="t.name"
+            class="flex flex-col rounded-[26px] bg-white p-7 shadow-[0_0_0_1px_rgba(28,25,23,0.06),0_18px_36px_-26px_rgba(28,25,23,0.3)]"
+            :class="`lp-tone-${t.tone}`"
+          >
+            <Icon icon="lucide:quote" class="text-[22px] text-[var(--tone)]" />
+            <p class="mt-5 text-[16px] font-medium leading-[1.6] tracking-[-0.01em] text-[var(--lp-ink-2)]">
+              {{ t.quote }}
+            </p>
+            <div class="mt-auto flex items-center gap-3 pt-7">
+              <span class="lp-mono flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--tone-soft)] text-[14px] font-semibold text-[var(--tone)]">
+                {{ t.initials }}
+              </span>
+              <span class="min-w-0">
+                <span class="block text-[14.5px] font-semibold">{{ t.name }}</span>
+                <span class="block text-[13px] text-[var(--lp-muted)]">{{ t.city }}</span>
+              </span>
+            </div>
+          </li>
+        </ul>
       </div>
     </section>
 
     <!-- ================= INSTALL TO HOME SCREEN ================= -->
     <section class="bg-[var(--lp-surface)] py-24 lg:py-32">
       <div class="lp-container">
-        <div class="max-w-[640px]" data-reveal>
+        <div class="lp-tone-sky max-w-[640px]" data-reveal>
           <span class="lp-eyebrow">Tanpa app store</span>
           <h2 class="lp-h2 mt-4">Add to Home Screen, biar makin cepat dibuka.</h2>
           <p class="lp-lead mt-5 max-w-[48ch]">
@@ -746,7 +925,7 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
           <li
             v-for="(s, i) in installSteps"
             :key="s.title"
-            class="install-card relative flex flex-col rounded-[24px] bg-white p-3 shadow-[0_0_0_1px_rgba(28,25,23,0.05)]"
+            class="install-card lp-tint relative flex flex-col rounded-[24px] p-3 shadow-[0_0_0_1px_rgba(28,25,23,0.05)]"
             :class="`lp-tone-${s.tone}`"
             data-reveal="card"
             :style="{ '--d': `${i * 90}ms` }"
@@ -765,10 +944,10 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
     </section>
 
     <!-- ================= COVERAGE ================= -->
-    <section id="cakupan" class="pb-24 lg:pb-36">
+    <section id="cakupan" class="lp-band lp-tone-teal py-24 lg:py-32">
       <div class="lp-container">
-        <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end lg:gap-16">
-          <div data-reveal>
+        <div class="grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-end lg:gap-16">
+          <div class="lp-tone-teal" data-reveal>
             <span class="lp-eyebrow">Cakupan</span>
             <h2 class="lp-h2 mt-4 max-w-[16ch]">Sudah ada di kota kamu.</h2>
           </div>
@@ -778,38 +957,48 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
           </p>
         </div>
 
-        <dl class="mt-14 grid grid-cols-2 gap-y-8 border-t border-[var(--lp-line)] pt-8 lg:grid-cols-4">
+        <div class="mt-12 grid grid-cols-2 gap-4 lg:grid-cols-4">
           <div
             v-for="(s, i) in stats"
             :key="s.label"
-            class="flex flex-col pr-6 lg:border-l lg:border-[var(--lp-line)] lg:pl-6 lg:first:border-l-0 lg:first:pl-0"
+            class="lp-card-soft"
             :class="`lp-tone-${s.tone}`"
-            data-reveal
+            data-reveal="card"
             :style="{ '--d': `${i * 70}ms` }"
           >
-            <dd class="order-first text-[40px] font-bold leading-none tracking-[-0.04em] text-[var(--tone)] sm:text-[48px]" style="font-variant-numeric: tabular-nums">{{ s.value }}</dd>
-            <dt class="mt-3 text-[14px] font-semibold">{{ s.label }}</dt>
-            <p class="mt-1 text-[13px] leading-[1.5] text-[var(--lp-muted)]">{{ s.note }}</p>
-          </div>
-        </dl>
-
-        <div class="lp-card relative isolate mt-12 p-2 sm:p-3" data-reveal>
-          <CoverageMap />
-          <div class="absolute bottom-6 left-6 z-[500] hidden flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl bg-white/90 px-4 py-3 text-[12.5px] text-[var(--lp-ink-2)] shadow-[0_0_0_1px_rgba(28,25,23,0.06)] backdrop-blur sm:flex">
-            <span class="flex items-center gap-2">
-              <span class="h-3 w-3 rounded-[3px] border border-red-500/50 bg-red-500/20" />
-              Cakupan Jawa
+            <span class="flex h-9 w-9 items-center justify-center rounded-full bg-white/75 text-[var(--tone)]">
+              <Icon :icon="s.icon" class="text-[17px]" />
             </span>
-            <span class="flex items-center gap-2">
-              <span class="h-2.5 w-2.5 rounded-full bg-[#DC2626] ring-2 ring-white" />
-              Kota utama
-            </span>
-            <span class="flex items-center gap-2">
-              <span class="h-2 w-2 rounded-full bg-[#1c1917] ring-2 ring-white" />
-              Kab/kota di Jawa
-            </span>
+            <p
+              class="mt-6 text-[36px] font-bold leading-none tracking-[-0.04em] text-[var(--tone)] sm:text-[42px]"
+              style="font-variant-numeric: tabular-nums"
+            >
+              {{ s.value }}
+            </p>
+            <p class="mt-2.5 text-[14.5px] font-semibold">{{ s.label }}</p>
+            <p class="mt-1 text-[13px] leading-[1.5] text-[var(--lp-ink-2)]">{{ s.note }}</p>
           </div>
         </div>
+
+        <figure
+          class="mt-6 rounded-[30px] bg-white p-2.5 shadow-[0_0_0_1px_rgba(28,25,23,0.05),0_30px_60px_-40px_rgba(28,25,23,0.45)] sm:p-3"
+          data-reveal
+        >
+          <CoverageMap />
+          <figcaption class="flex flex-wrap items-center gap-x-5 gap-y-2 px-2.5 py-3.5 text-[12.5px] text-[var(--lp-ink-2)]">
+            <span class="flex items-center gap-2">
+              <span class="h-2.5 w-2.5 rounded-full bg-[#0d9488] ring-2 ring-white" />
+              Kota terjangkau
+            </span>
+            <span class="flex items-center gap-2">
+              <span class="h-3.5 w-3.5 rounded-full bg-[#0d9488]/20" />
+              Wilayah padat layanan
+            </span>
+            <span class="ml-auto hidden text-[var(--lp-muted)] sm:block">
+              Bertambah seiring unit mitra baru terverifikasi.
+            </span>
+          </figcaption>
+        </figure>
       </div>
     </section>
 
@@ -817,7 +1006,7 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
     <section class="border-t border-[var(--lp-line)] py-24 lg:py-32">
       <div class="lp-container">
         <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end lg:gap-16">
-          <div data-reveal>
+          <div class="lp-tone-rose" data-reveal>
             <span class="lp-eyebrow">Didukung oleh</span>
             <h2 class="lp-h2 mt-4 max-w-[18ch]">Bisa gratis untuk warga, berkat mereka.</h2>
           </div>
@@ -930,7 +1119,7 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
                 Buka aplikasi
                 <Icon icon="lucide:arrow-right" class="lp-btn-arrow text-[16px]" />
               </NuxtLink>
-              <NuxtLink to="/support?topik=unit#kontak" class="lp-btn lp-btn--outline-light">Daftarkan unit kamu</NuxtLink>
+              <NuxtLink to="/daftar-unit" class="lp-btn lp-btn--outline-light">Daftarkan unit kamu</NuxtLink>
             </div>
           </div>
         </div>
@@ -940,20 +1129,68 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
 </template>
 
 <style scoped>
-/* Hero: faint dot grid that fades out, with a whisper of brand red. */
+/* Hero: a soft mesh of the service-family colours over a faint dot grid, so the
+   first screen carries colour without a saturated block. The wash sits left,
+   where the copy is; the phone on the right keeps the cooler tone. */
 .hero-backdrop {
   background-image:
-    radial-gradient(ellipse 60% 45% at 50% 0%, rgba(220, 38, 38, 0.08), transparent 70%),
-    radial-gradient(ellipse 30% 30% at 85% 25%, rgba(2, 132, 199, 0.06), transparent 70%),
-    radial-gradient(ellipse 30% 30% at 12% 35%, rgba(217, 119, 6, 0.06), transparent 70%),
+    radial-gradient(ellipse 52% 42% at 24% 6%, rgba(220, 38, 38, 0.11), transparent 72%),
+    radial-gradient(ellipse 34% 32% at 80% 16%, rgba(2, 132, 199, 0.1), transparent 72%),
+    radial-gradient(ellipse 30% 28% at 6% 34%, rgba(217, 119, 6, 0.09), transparent 72%),
+    radial-gradient(ellipse 28% 26% at 60% 48%, rgba(5, 150, 105, 0.07), transparent 74%),
     radial-gradient(rgba(28, 25, 23, 0.1) 1px, transparent 1px);
   background-size:
     100% 100%,
     100% 100%,
     100% 100%,
+    100% 100%,
     22px 22px;
-  mask-image: radial-gradient(ellipse 70% 60% at 50% 20%, #000 30%, transparent 75%);
-  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 20%, #000 30%, transparent 75%);
+  mask-image: radial-gradient(ellipse 74% 62% at 46% 20%, #000 28%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 74% 62% at 46% 20%, #000 28%, transparent 78%);
+}
+
+/* Hero product stage: a tinted pad hugging the device, so the phone reads as a
+   product shot rather than an icon floating on white. */
+.hero-pad {
+  position: absolute;
+  inset: -34px -56px;
+  border-radius: 60px;
+  background-color: #fff;
+  background-image:
+    radial-gradient(ellipse 70% 60% at 50% 12%, var(--tone-soft), transparent 72%),
+    radial-gradient(rgba(28, 25, 23, 0.07) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    18px 18px;
+  box-shadow: inset 0 0 0 1px rgba(28, 25, 23, 0.05);
+}
+@media (max-width: 1023px) {
+  .hero-pad {
+    inset: -22px -30px;
+    border-radius: 44px;
+  }
+}
+
+/* Dashed connector between the three steps. It is painted behind the cards, so
+   it only shows in the gaps between them and reads as one flow. */
+.how-steps::before {
+  content: "";
+  position: absolute;
+  top: 46px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-image: repeating-linear-gradient(90deg, var(--lp-line) 0 6px, transparent 6px 14px);
+}
+@media (min-width: 640px) {
+  .how-steps::before {
+    top: 50px;
+  }
+}
+@media (max-width: 639px) {
+  .how-steps::before {
+    display: none;
+  }
 }
 
 /* ── Walkthrough phone ─────────────────────────────────────────────────── */
@@ -965,29 +1202,73 @@ const unitFilters = ["Semua", "Ambulans", "Damkar", "SAR", "PMI", "RS"];
     height: auto;
   }
 }
-/* Tinted pad sized off the phone itself, so the tint always hugs the device
-   instead of stretching across the whole column. */
-.phone-pad {
-  position: absolute;
-  inset: -30px -52px;
-  border-radius: 52px;
-  background-color: var(--tone-soft);
-  background-image: radial-gradient(rgba(28, 25, 23, 0.07) 1px, transparent 1px);
-  background-size: 18px 18px;
-  transition: background-color 0.6s var(--lp-ease);
+
+/* The hero's column is only as tall as the device itself. The walkthrough needs
+   a fixed-height stage because it is sticky and centres within it; in the hero
+   that extra height pushed the emergency-numbers strip below the fold. */
+.hero-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.phone-glow {
+/* The stage the phone stands on: one tinted panel per step, with a dot grid and
+   a colour wash, so the device sits in a scene instead of floating on the page.
+   It bleeds past the column so the phone reads as placed on it, not inside it. */
+.phone-stage-panel {
   position: absolute;
-  inset: -30px -52px;
-  border-radius: 52px;
-  background: radial-gradient(ellipse 60% 45% at 50% 8%, var(--tone), transparent 70%);
-  opacity: 0.16;
-  transition: background 0.6s var(--lp-ease);
+  inset: -24px;
+  border-radius: 40px;
+  background-color: var(--tone-soft, var(--lp-surface));
+  box-shadow: inset 0 0 0 1px var(--tone-line, var(--lp-line));
+  transition:
+    background-color 0.6s var(--lp-ease),
+    box-shadow 0.6s var(--lp-ease);
 }
 @media (max-width: 1023px) {
-  .phone-pad,
-  .phone-glow {
-    display: none;
+  .phone-stage-panel {
+    inset: -16px -10px;
+    border-radius: 32px;
+  }
+}
+
+.phone-stage-grid {
+  border-radius: inherit;
+  background-image: radial-gradient(rgba(28, 25, 23, 0.08) 1px, transparent 1px);
+  background-size: 20px 20px;
+  mask-image: radial-gradient(ellipse 72% 68% at 50% 50%, #000 32%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 72% 68% at 50% 50%, #000 32%, transparent 80%);
+}
+
+.phone-stage-wash {
+  border-radius: inherit;
+  background: radial-gradient(ellipse 58% 44% at 50% 10%, var(--tone, var(--lp-accent)), transparent 72%);
+  opacity: 0.18;
+  transition: background 0.6s var(--lp-ease);
+}
+
+/* The auto-advance bar: fills over one beat and restarts when the beat does, so
+   the loop reads as a deliberate demo rather than random movement. */
+.lp-beat {
+  animation: lp-beat var(--step-ms, 4200ms) linear both;
+}
+@keyframes lp-beat {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Chips that float beside the device as each step comes up. */
+.lp-float {
+  animation: lp-float 0.5s var(--lp-ease) both;
+  animation-delay: var(--d, 0ms);
+}
+@keyframes lp-float {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
   }
 }
 

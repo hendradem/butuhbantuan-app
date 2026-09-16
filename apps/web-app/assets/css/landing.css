@@ -19,17 +19,42 @@
   --lp-accent-ink: #b91c1c;
   --lp-accent-soft: #fef2f2;
   /* Supporting tones, one per service family (ambulans, damkar, SAR, RS…).
-     Apply with .lp-tone-* and read var(--tone) / var(--tone-soft). */
+     Apply with .lp-tone-* and read var(--tone) / var(--tone-soft).
+     Each family carries four steps so a card can be built from one tone alone:
+       --tone         accent (icons, links, active states)
+       --tone-soft    the card / band surface
+       --tone-line    hairline border on that surface
+       --tone-strong  a firmer fill for small chips and buttons
+     The surfaces are deliberately pastel rather than near-white: a page of
+     #fef2f2-level tints reads as grey, which is what these replaced. */
   --lp-red: #dc2626;
-  --lp-red-soft: #fef2f2;
+  --lp-red-soft: #fde8e8;
+  --lp-red-line: #f8d0d0;
+  --lp-red-strong: #fbd5d5;
   --lp-amber: #d97706;
-  --lp-amber-soft: #fff7e8;
+  --lp-amber-soft: #fdf1d6;
+  --lp-amber-line: #f7e0ab;
+  --lp-amber-strong: #fbe3b4;
+  --lp-teal: #0d9488;
+  --lp-teal-soft: #d9f2ec;
+  --lp-teal-line: #b3e5da;
+  --lp-teal-strong: #c3ebe1;
   --lp-sky: #0284c7;
-  --lp-sky-soft: #eef7fd;
+  --lp-sky-soft: #dceffc;
+  --lp-sky-line: #b8dff8;
+  --lp-sky-strong: #c8e7fa;
   --lp-green: #059669;
-  --lp-green-soft: #ebf8f2;
-  --lp-rose: #e11d48;
-  --lp-rose-soft: #fff0f3;
+  --lp-green-soft: #d9f4e3;
+  --lp-green-line: #b3e8c8;
+  --lp-green-strong: #c4eecd;
+  --lp-rose: #db2777;
+  --lp-rose-soft: #fce4f0;
+  --lp-rose-line: #f8c8e0;
+  --lp-rose-strong: #fad4e7;
+  --lp-violet: #7c3aed;
+  --lp-violet-soft: #ebe5fd;
+  --lp-violet-line: #d9cffb;
+  --lp-violet-strong: #ded4fc;
   --lp-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --lp-font: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --lp-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -139,12 +164,14 @@
   text-transform: uppercase;
   color: var(--lp-muted);
 }
+/* The dot follows the section's tone, so a page can change colour as it
+   scrolls without a second class on the eyebrow itself. */
 :where(.lp-eyebrow)::before {
   content: "";
   width: 6px;
   height: 6px;
   border-radius: 2px;
-  background: var(--lp-accent);
+  background: var(--tone, var(--lp-accent));
 }
 
 .lp .lp-display {
@@ -153,6 +180,13 @@
   letter-spacing: -0.045em;
   font-weight: 700;
   text-wrap: balance;
+}
+
+/* Landing hero only. That page puts an emergency-numbers strip directly under
+   the hero, and at the full display size it always fell below the fold — the
+   one piece of the page a visitor in trouble actually needs. */
+.lp .lp-display--compact {
+  font-size: clamp(2.15rem, 5vw, 3.9rem);
 }
 
 .lp .lp-h2 {
@@ -307,6 +341,14 @@
   background: var(--lp-surface);
 }
 
+/* Same surface as .lp-card, deliberately inert. A form section (or a result
+   panel) that lifts and shadows on hover reads as clickable, so those use this
+   instead — see the hover rule further down. */
+:where(.lp-card-static) {
+  border-radius: 28px;
+  background: var(--lp-surface);
+}
+
 :where(.lp-panel) {
   border-radius: 20px;
   background: #fff;
@@ -334,6 +376,31 @@
 :where(.lp-dots) {
   background-image: radial-gradient(rgba(28, 25, 23, 0.09) 1px, transparent 1px);
   background-size: 18px 18px;
+}
+
+/* Section backdrop: the section's own tone as a soft wash, over the same faint
+   dot grid the hero uses, faded out at the edges so the colour never ends on a
+   hard seam. Pair with a .lp-tone-* class for the colour. */
+:where(.lp-band) {
+  position: relative;
+  isolation: isolate;
+}
+:where(.lp-band)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(ellipse 65% 60% at 15% 0%, var(--tone-soft, var(--lp-surface)), transparent 70%),
+    radial-gradient(ellipse 55% 55% at 88% 25%, var(--tone-soft, var(--lp-surface)), transparent 72%),
+    radial-gradient(rgba(28, 25, 23, 0.06) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    100% 100%,
+    22px 22px;
+  mask-image: radial-gradient(ellipse 78% 75% at 50% 35%, #000 30%, transparent 88%);
+  -webkit-mask-image: radial-gradient(ellipse 78% 75% at 50% 35%, #000 30%, transparent 88%);
 }
 
 :where(.lp-live-dot) {
@@ -381,22 +448,44 @@
 .lp-tone-red {
   --tone: var(--lp-red);
   --tone-soft: var(--lp-red-soft);
+  --tone-line: var(--lp-red-line);
+  --tone-strong: var(--lp-red-strong);
 }
 .lp-tone-amber {
   --tone: var(--lp-amber);
   --tone-soft: var(--lp-amber-soft);
+  --tone-line: var(--lp-amber-line);
+  --tone-strong: var(--lp-amber-strong);
+}
+.lp-tone-teal {
+  --tone: var(--lp-teal);
+  --tone-soft: var(--lp-teal-soft);
+  --tone-line: var(--lp-teal-line);
+  --tone-strong: var(--lp-teal-strong);
 }
 .lp-tone-sky {
   --tone: var(--lp-sky);
   --tone-soft: var(--lp-sky-soft);
+  --tone-line: var(--lp-sky-line);
+  --tone-strong: var(--lp-sky-strong);
 }
 .lp-tone-green {
   --tone: var(--lp-green);
   --tone-soft: var(--lp-green-soft);
+  --tone-line: var(--lp-green-line);
+  --tone-strong: var(--lp-green-strong);
 }
 .lp-tone-rose {
   --tone: var(--lp-rose);
   --tone-soft: var(--lp-rose-soft);
+  --tone-line: var(--lp-rose-line);
+  --tone-strong: var(--lp-rose-strong);
+}
+.lp-tone-violet {
+  --tone: var(--lp-violet);
+  --tone-soft: var(--lp-violet-soft);
+  --tone-line: var(--lp-violet-line);
+  --tone-strong: var(--lp-violet-strong);
 }
 
 /* Tinted icon well: soft tone background, tone-coloured glyph. */
@@ -421,110 +510,111 @@
   background: var(--tone-soft, var(--lp-surface));
 }
 
-/* ── Feature card ──────────────────────────────────────────────────────────
-   Quiet neutral surface, a white circular icon, and a headline whose opening
-   phrase carries the tone colour while the statement itself stays black — the
-   colour names the feature, the black says what it does. */
+/* ── Colour card ───────────────────────────────────────────────────────────
+   The product-marketing card: one tone owns the whole surface, a bare icon and
+   a filled arrow sit on the top row, and a white mock of the real UI floats
+   inside. Feature grids are built from this shape.
 
-:where(.lp-feature) {
+   The step up from a neutral card is deliberate — a grid of near-white
+   surfaces reads as one grey block no matter how many accents sit on top. */
+
+:where(.lp-card-soft) {
   position: relative;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 28px;
-  background: var(--lp-surface);
-  padding: 28px;
+  border-radius: 26px;
+  padding: 26px;
+  background: var(--tone-soft, var(--lp-surface));
 }
 @media (min-width: 640px) {
-  :where(.lp-feature) {
-    padding: 34px;
+  :where(.lp-card-soft) {
+    padding: 30px;
   }
 }
 
-.lp .lp-feature-icon {
+.lp-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.lp-card-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+@media (min-width: 640px) {
+  .lp-card-title {
+    font-size: 1.3rem;
+  }
+}
+
+.lp-card-sub {
+  margin: 8px 0 0;
+  max-width: 46ch;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--lp-ink-2);
+  text-wrap: pretty;
+}
+
+/* The filled arrow in a card's top-right corner. */
+.lp-card-arrow {
   display: inline-flex;
-  width: 46px;
-  height: 46px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
+  width: 30px;
+  height: 30px;
   border-radius: 999px;
-  background: #fff;
-  color: var(--tone, var(--lp-accent));
-  --tw-shadow: 0 1px 2px rgba(28, 25, 23, 0.06), 0 6px 16px -8px rgba(28, 25, 23, 0.18);
-  box-shadow: var(--tw-shadow);
-}
-
-.lp .lp-feature-head {
-  margin-top: 26px;
-  font-size: clamp(1.4rem, 2.4vw, 1.75rem);
-  font-weight: 700;
-  line-height: 1.22;
-  letter-spacing: -0.025em;
-  text-wrap: balance;
-}
-.lp .lp-feature-head > span {
-  color: var(--tone, var(--lp-accent));
-}
-
-.lp .lp-feature-list {
-  margin: 22px 0 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 12px;
-}
-.lp .lp-feature-list li {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: var(--lp-ink-2);
-}
-.lp .lp-feature-list li svg {
-  flex-shrink: 0;
-  color: var(--tone, var(--lp-accent));
-}
-
-.lp-feature-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  margin-top: 26px;
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: #fff;
-  color: var(--lp-ink);
-  font-size: 14px;
-  font-weight: 600;
-  --tw-shadow: 0 1px 2px rgba(28, 25, 23, 0.06), 0 4px 12px -6px rgba(28, 25, 23, 0.2);
-  box-shadow: var(--tw-shadow);
-  transition:
-    transform 0.24s var(--lp-ease),
-    box-shadow 0.24s var(--lp-ease);
-}
-.lp-feature-link:hover {
-  transform: translateY(-1px);
-  --tw-shadow: 0 2px 4px rgba(28, 25, 23, 0.08), 0 10px 20px -8px rgba(28, 25, 23, 0.26);
-  box-shadow: var(--tw-shadow);
-}
-.lp-feature-link:active {
-  transform: translateY(0);
-}
-/* The arrow leans out on hover, so the pill reads as "there is more here". */
-.lp-feature-link svg {
+  background: var(--tone-strong, #fff);
+  color: var(--tone, var(--lp-ink));
   transition: transform 0.24s var(--lp-ease);
 }
-.lp-feature-link:hover svg {
-  transform: translateX(3px);
+:where(.lp-card-soft):hover .lp-card-arrow {
+  transform: translateX(2px);
 }
 
-/* Preview sits flush to the bottom edge, cropped by the card. */
-.lp .lp-feature-preview {
+/* The UI mock takes whatever height the card has left and bleeds to its bottom
+   edge, so the panel reads as cropped by the card. That is also what keeps a
+   row even: a short mock stretches to match the tallest card beside it instead
+   of leaving a hole under the copy. */
+.lp-card-mock {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
   margin-top: auto;
-  padding-top: 30px;
+  margin-bottom: -26px;
+  padding-top: 26px;
+}
+@media (min-width: 640px) {
+  .lp-card-mock {
+    margin-bottom: -30px;
+  }
+}
+.lp-card-mock > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Pill that introduces a section, in that section's own tone. */
+:where(.lp-pill) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding-inline: 14px 12px;
+  border-radius: 999px;
+  background: var(--tone-soft, var(--lp-surface));
+  color: var(--tone, var(--lp-ink));
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--tone-line, var(--lp-line));
 }
 
 /* ── Accordion (FAQ) ───────────────────────────────────────────────────── */
@@ -589,34 +679,34 @@
    card would stay raised after a tap. */
 
 @media (hover: hover) {
-  :where(.lp-card, .lp-feature) {
+  :where(.lp-card) {
     transition:
       transform 0.42s var(--lp-ease),
       box-shadow 0.42s var(--lp-ease);
   }
-  :where(.lp-card, .lp-feature):hover {
+  :where(.lp-card):hover {
     transform: translateY(-4px);
     --tw-shadow: 0 2px 6px rgba(28, 25, 23, 0.05), 0 26px 44px -24px rgba(28, 25, 23, 0.3);
     box-shadow: var(--tw-shadow);
   }
   /* Rows and panels inside a hovered card lift a touch more. */
-  :where(.lp-card, .lp-feature) :where(.lp-panel) {
+  :where(.lp-card) :where(.lp-panel) {
     transition: transform 0.42s var(--lp-ease);
   }
-  :where(.lp-card, .lp-feature):hover :where(.lp-panel) {
+  :where(.lp-card):hover :where(.lp-panel) {
     transform: translateY(-3px);
   }
 }
 
-/* The icon tips forward as its card is hovered. */
+/* The icon well tips forward as its card is hovered. Colour cards are left
+   alone: their arrow already signals the hover, and a filled pastel surface
+   moving under the pointer is the thing form sections were complained about. */
 @media (hover: hover) {
-  .lp .lp-feature-icon,
   :where(.lp-well) {
     transition:
       transform 0.42s var(--lp-ease),
       background-color 0.24s var(--lp-ease);
   }
-  .lp .lp-feature:hover .lp-feature-icon,
   :where(.lp-card):hover :where(.lp-well) {
     transform: rotate(-6deg) scale(1.06);
   }

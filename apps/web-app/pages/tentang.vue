@@ -127,7 +127,7 @@ const partners: {
     title: "Unit emergency",
     body: "Ambulans, PSC 119, damkar, SAR, PMI, dan relawan. Terima laporan, atur tim, lihat kinerja.",
     tone: "red",
-    cta: { label: "Daftarkan unit", to: "/support?topik=unit#kontak" },
+    cta: { label: "Daftarkan unit", to: "/daftar-unit" },
   },
   {
     icon: "lucide:landmark",
@@ -177,7 +177,7 @@ const partners: {
     <!-- ================= WHY ================= -->
     <section class="lp-section border-t border-[var(--lp-line)]">
       <div class="lp-container grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
-        <div class="lg:sticky lg:top-28 lg:self-start" data-reveal>
+        <div class="lp-tone-amber lg:sticky lg:top-28 lg:self-start" data-reveal>
           <span class="lp-eyebrow">Kenapa kami ada</span>
           <h2 class="lp-h2 mt-4 max-w-[16ch]">Saat darurat, menit terbuang untuk mencari.</h2>
         </div>
@@ -240,7 +240,7 @@ const partners: {
     <section class="lp-section">
       <div class="lp-container">
         <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end lg:gap-16">
-          <div data-reveal>
+          <div class="lp-tone-green" data-reveal>
             <span class="lp-eyebrow">Prinsip kami</span>
             <h2 class="lp-h2 mt-4 max-w-[15ch]">Hal-hal yang tidak akan kami tawar.</h2>
           </div>
@@ -297,7 +297,7 @@ const partners: {
     </section>
 
     <!-- ================= NUMBERS ================= -->
-    <section class="border-y border-[var(--lp-line)]">
+    <section class="lp-band lp-tone-sky border-y border-[var(--lp-line)]">
       <div class="lp-container">
         <dl class="grid grid-cols-2 lg:grid-cols-4">
           <div
@@ -320,7 +320,7 @@ const partners: {
     <!-- ================= PARTNERS ================= -->
     <section class="lp-section">
       <div class="lp-container grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
-        <div class="lg:sticky lg:top-28 lg:self-start" data-reveal>
+        <div class="lp-tone-sky lg:sticky lg:top-28 lg:self-start" data-reveal>
           <span class="lp-eyebrow">Bekerja bersama</span>
           <h2 class="lp-h2 mt-4 max-w-[14ch]">Jaring bantuan dibangun bersama.</h2>
           <p class="lp-body mt-5 max-w-[40ch] text-[16px]">

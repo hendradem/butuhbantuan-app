@@ -229,7 +229,7 @@ function startPartnership(pkg: Package) {
     <section id="kerja-sama" class="pb-24 pt-36 sm:pt-44 lg:pb-32">
       <div class="lp-container">
         <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end lg:gap-16">
-          <div data-reveal>
+          <div class="lp-tone-sky" data-reveal>
             <span class="lp-eyebrow">Kerja sama</span>
             <h2 class="lp-h2 mt-4 max-w-[16ch]">Bantu layanan ini tetap gratis untuk semua orang.</h2>
           </div>
@@ -312,7 +312,7 @@ function startPartnership(pkg: Package) {
     <section id="faq" class="border-t border-[var(--lp-line)] py-24 lg:py-32">
       <span id="privasi" aria-hidden="true" />
       <div class="lp-container grid gap-12 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20">
-        <div class="lg:sticky lg:top-28 lg:self-start">
+        <div class="lp-tone-rose lg:sticky lg:top-28 lg:self-start">
           <span class="lp-eyebrow">FAQ</span>
           <h2 class="lp-h2 mt-4 max-w-[12ch]">Pertanyaan umum.</h2>
 
@@ -394,7 +394,7 @@ function startPartnership(pkg: Package) {
     <!-- ================= CONTACT ================= -->
     <section id="kontak" class="bg-[var(--lp-surface)] py-24 lg:py-32">
       <div class="lp-container grid gap-12 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20">
-        <div data-reveal>
+        <div class="lp-tone-amber" data-reveal>
           <span class="lp-eyebrow">Kontak</span>
           <h2 class="lp-h2 mt-4 max-w-[12ch]">Hubungi tim kami.</h2>
           <p class="lp-body mt-5 max-w-[40ch] text-[16px]">

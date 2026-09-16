@@ -8,7 +8,7 @@ export const SUPPORT_EMAIL = "hello@butuhbantuan.space";
 export const DASHBOARD_URL = "https://dashboard.butuhbantuan.space";
 
 /** Supporting colour families defined in assets/css/landing.css (.lp-tone-*). */
-export type Tone = "red" | "amber" | "sky" | "green" | "rose";
+export type Tone = "red" | "amber" | "sky" | "green" | "rose" | "teal" | "violet";
 
 export type EmergencyNumber = { number: string; label: string; icon: string; tone: Tone };
 
@@ -97,5 +97,72 @@ export const FAQS: Faq[] = [
     q: "Siapa yang bisa melihat laporan saya?",
     a: "Laporan diteruskan ke unit yang ditugaskan dan koordinator wilayahnya. Nomor HP kamu dipakai untuk menghubungi dan verifikasi tiket, bukan untuk promosi.",
     category: "privasi",
+  },
+];
+
+/** A numbered step with its own tone, for "how it works" style sections. */
+export type Step = { icon: string; title: string; body: string; tone: Tone };
+
+/** The citizen flow, in the order a warga actually lives it. */
+export const HOW_IT_WORKS: Step[] = [
+  {
+    icon: "lucide:file-plus-2",
+    title: "Lapor dalam 30 detik",
+    body: "Pilih layanan yang kamu butuhkan. Lokasi dan foto terisi sendiri, dan kamu tidak perlu membuat akun.",
+    tone: "sky",
+  },
+  {
+    icon: "lucide:radar",
+    title: "Unit terdekat menerima",
+    body: "Sistem mengurutkan unit di sekitarmu, lalu mengirim laporan ke yang paling dekat dan sedang siaga.",
+    tone: "amber",
+  },
+  {
+    icon: "lucide:navigation",
+    title: "Pantau sampai tiba",
+    body: "Posisi petugas terlihat langsung di peta, lengkap dengan perkiraan tiba. Setelah selesai, beri penilaian.",
+    tone: "green",
+  },
+];
+
+export type Testimonial = {
+  quote: string;
+  name: string;
+  city: string;
+  initials: string;
+  tone: Tone;
+};
+
+/**
+ * ⚠️ PLACEHOLDER — bukan kesaksian orang nyata.
+ *
+ * Ganti ketiga entri di bawah dengan kutipan asli yang sudah kamu punya izin
+ * menayangkannya, sebelum halaman ini dipakai publik. Kalau belum ada kutipan
+ * asli, kosongkan array ini; section-nya otomatis tidak dirender.
+ */
+export const TESTIMONIALS: Testimonial[] = [
+  {
+    quote:
+      "Laporan saya langsung masuk ke PSC 119 terdekat. Dari lapor sampai petugas datang cuma belasan menit, dan saya bisa lihat posisinya terus di peta.",
+    name: "Rani",
+    city: "Sleman, DIY",
+    initials: "R",
+    tone: "rose",
+  },
+  {
+    quote:
+      "Anak saya sesak napas tengah malam. Karena tidak perlu bikin akun, saya bisa langsung minta bantuan tanpa mikir apa-apa lagi.",
+    name: "Bayu",
+    city: "Bandung, Jawa Barat",
+    initials: "B",
+    tone: "sky",
+  },
+  {
+    quote:
+      "Sebagai relawan, laporan masuk rapi ke dashboard. Waktu saya sedang tidak bisa menerima, order otomatis dioper ke unit lain.",
+    name: "Anto",
+    city: "Unit relawan, Surabaya",
+    initials: "A",
+    tone: "green",
   },
 ];

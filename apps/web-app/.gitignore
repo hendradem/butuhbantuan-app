@@ -1,4 +1,7 @@
 .nuxt/
 .output/
+# `nuxt generate` also drops a `dist` symlink to .output/public, which is the
+# path the VPS deploy expects — keep it out of git.
+dist
 node_modules/
 .env

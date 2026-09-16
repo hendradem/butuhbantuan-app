@@ -28,7 +28,7 @@ const columns = [
     links: [
       { label: "Masuk dashboard", href: DASHBOARD_URL },
       { label: "Fitur dashboard", to: "/landing#dashboard" },
-      { label: "Daftarkan unit", to: "/support?topik=unit#kontak" },
+      { label: "Daftarkan unit", to: "/daftar-unit" },
     ],
   },
 ] as const;
