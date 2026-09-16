@@ -4,20 +4,16 @@ import { appToast } from "~/utils/appToast";
 import { formatDistance } from "~/utils/geo";
 import { displayEtaMinutes } from "~/utils/rankUnits";
 import {
-  ROUTE_LINE_CASING_WEIGHT,
-  ROUTE_LINE_COLOR,
   ROUTE_LINE_COLOR_FAR,
   ROUTE_LINE_COLOR_MID,
   ROUTE_LINE_COLOR_NEAR,
-  ROUTE_LINE_WEIGHT,
   routeAdviceFromTravel,
-  routeLineCasingColor,
-  routeLineColorFromTravel,
 } from "~/utils/routeAdvice";
 import {
   classicMarkerClass,
   effectiveTileStyle,
   emergencyPinIconHtml,
+  pinMarkerModifier,
   unitChipIconHtml,
   getMapAppearance,
   tileAttribution,
@@ -50,7 +46,6 @@ let markers: Marker[] = [];
 const markersById = new Map<string, Marker>();
 /** emergency id → type name for rebuilding icons. */
 const markerMetaById = new Map<string, { typeName: string; item: any }>();
-let activeEmergencyId = "";
 /**
  * Units the explore list is currently showing — the map keeps only these on
  * screen while it is open. null = no restriction (list closed).
@@ -68,6 +63,31 @@ let topUnitIds: string[] = [];
 const matrixLines = new Map<string, { line: Polyline; dot: CircleMarker }>();
 /** Units currently wearing a chip instead of a pin, so swaps happen once. */
 const chipMarkerIds = new Set<string>();
+/**
+ * id → the stand-in standing at the edge for an off-screen unit, with the tone
+ * and bearing it was last drawn at. Panning moves these dots without changing
+ * either, so holding them here keeps the per-frame pass down to the positions.
+ */
+type EdgeEntry = {
+  marker: Marker;
+  tone: string;
+  angle: number;
+  offset: number;
+  label: string;
+};
+const edgeMarkers = new Map<string, EdgeEntry>();
+/** Coalesces the edge pass to one run per frame while the map moves. */
+let edgeUpdateFrame: number | null = null;
+/** Leader routes still drawing — the arrival flourish waits for all of them. */
+const pendingArrivals = new Set<string>();
+/**
+ * Per-unit draw generation. A route redrawn mid-reveal (the pin moved, a newer
+ * fetch landed) invalidates the reveal in flight, so it can't finish by writing
+ * the geometry it started with over the one that replaced it.
+ */
+const drawTokens = new Map<string, number>();
+/** Id the selected route uses in that map — it isn't one of the list's units. */
+const SELECTED_ROUTE_ID = "selected-route";
 /** A connector's road geometry, plus the drive time it stands for. */
 type ConnectorRoute = { latlngs: [number, number][]; durationSec: number };
 /**
@@ -92,7 +112,7 @@ const CONNECTOR_KEY_DECIMALS = 3;
 let currentLocationMarker: Marker | null = null;
 let accuracyCircle: any = null;
 let routeLine: Polyline | null = null;
-let routeCasing: Polyline | null = null;
+let routeDot: CircleMarker | null = null;
 let routeEtaMarker: Marker | null = null;
 let gpsWatchId: number | null = null;
 let routeRenderToken = 0;
@@ -108,9 +128,6 @@ let needsEmergencyReframe = false;
 let onColorModeChange: ((e: Event) => void) | null = null;
 /** Default map view — neighborhood scale (~4–6 km) when emergencies are nearby. */
 const DEFAULT_ZOOM = 14;
-/** "Already default" band — pan only when nearby markers exist. */
-const OVERVIEW_MIN_ZOOM = 13;
-const OVERVIEW_MAX_ZOOM = 15;
 /** Half-span ≈ zoom-14 viewport (~3.3 km). Markers inside = stay at DEFAULT_ZOOM. */
 const NEARBY_HALF_DEG = 0.03;
 /** Cap how far we zoom out to reveal distant markers (~13 km half). */
@@ -148,6 +165,34 @@ const MATRIX_DOT_RING = 2;
 const CHIP_SIDES = ["up", "right", "left", "down"] as const;
 /** Clear space kept between two chips, in pixels. */
 const CHIP_GAP = 6;
+/**
+ * Off-screen units get a stand-in on the edge of the visible strip: a dot in
+ * the unit's tone with a chevron pointing the way it went. Tapping it brings
+ * the real marker back into view.
+ */
+const EDGE_KEEP_CLEAR_PX = 28;
+/** How far a stand-in is nudged along the rim looking for a free slot. */
+const EDGE_SPREAD_PX = 8;
+const EDGE_SPREAD_STEPS = 40;
+/**
+ * The shape a stand-in takes: the same icon-and-ETA a leading unit's chip
+ * carries, sized here without the name. Only the units the list leads with get
+ * one — a dot for every other unit out of frame was more clutter than it was
+ * worth, and the list below already accounts for them.
+ */
+const EDGE_CHIP = { half: { w: 40, h: 16 }, chevronGap: 7 };
+/**
+ * How far a unit's own marker reaches from its anchor. A stand-in is only for a
+ * unit the map cannot show at all: the moment any of the marker — or the chip
+ * hanging over it — crosses the rim, the real thing is the better answer, and
+ * keeping both is what made them overlap.
+ */
+const MARKER_REACH = {
+  chip: { left: 40, right: 40, up: 54, down: 4 },
+  pin: { left: 16, right: 16, up: 36, down: 4 },
+};
+/** Above pins and route lines, under the chip of the unit in focus. */
+const EDGE_MARKER_Z = 700;
 /** zIndexOffset for a leading unit's chip — above plain pins, under the active one. */
 const TOP_MARKER_Z = 400;
 /**
@@ -271,6 +316,18 @@ onMounted(async () => {
     applyZoomOverlayState(z);
     // Zooming out pulls the units together in pixel terms while their chips
     // keep their size, so they may need re-hanging.
+    placeUnitChips();
+  });
+
+  // Keep the stand-ins for off-screen units on the edge of what is visible.
+  // `move` alone would miss a zoom, `zoom` alone would miss a pan.
+  map!.on("move zoom resize", () => {
+    scheduleEdgeUpdate(L);
+  });
+
+  // A pan can leave a chip hanging over the rim; picking its side again is
+  // cheap, and only worth doing once the view has settled.
+  map!.on("moveend", () => {
     placeUnitChips();
   });
   applyZoomOverlayState(map!.getZoom());
@@ -435,6 +492,7 @@ onMounted(async () => {
       shownUnitIds = next;
       visibleUnitIdSet = ids ? new Set(next) : null;
       applyMarkerListFilter();
+      scheduleEdgeUpdate(L);
       // Opening the list, or a new filter: say it, once. Closing doesn't —
       // the map is already handing itself back.
       if (changed && next.length) popUnitMarkers();
@@ -452,7 +510,7 @@ onMounted(async () => {
       const changed = next.join() !== topUnitIds.join();
       topUnitIds = next;
 
-      applyTopUnitMarkers(L);
+      applyUnitChips(L);
       applyMatrixLines(L);
       placeUnitChips();
 
@@ -505,7 +563,6 @@ onMounted(async () => {
       } else {
         clearRouteOverlays();
       }
-      applyMutedMarkers();
     },
     { immediate: true },
   );
@@ -537,7 +594,7 @@ onMounted(async () => {
     },
   );
 
-  // Card/list or map select → enlarge + re-animate that pin
+  // Card/list or map select → that unit becomes the only marker in play
   watch(
     () =>
       [
@@ -546,8 +603,10 @@ onMounted(async () => {
       ] as const,
     ([open, id]) => {
       const nextId = open && id != null ? String(id) : "";
-      setActiveEmergencyMarker(L, nextId);
-      applyMutedMarkers();
+      focusEmergencyMarker(nextId);
+      applyUnitChips(L);
+      applyMarkerListFilter();
+      scheduleEdgeUpdate(L);
     },
   );
 });
@@ -561,6 +620,9 @@ onUnmounted(() => {
   // These overlays belong to this map instance; a remount builds its own.
   matrixLines.clear();
   chipMarkerIds.clear();
+  edgeMarkers.clear();
+  pendingArrivals.clear();
+  if (edgeUpdateFrame !== null) cancelAnimationFrame(edgeUpdateFrame);
   clearTimeout(listFitTimer);
   clearTimeout(routeLoaderTimer);
 });
@@ -587,16 +649,17 @@ function placeManualPin(L: any, lat: number, lng: number, skipReset = false) {
   }
 }
 
-/** Force smart default view after locate / map click / search. */
+/**
+ * Force the standard neighbourhood view after locate / map click / pin drag.
+ * A moved location always gets the standard scale back — the old "keep whatever
+ * zoom you were at if it was close enough" left the map looking untouched after
+ * a tap or a drag, which reads as the change not having taken.
+ */
 function resetToDefaultView(L: any, lat: number, lng: number) {
   if (!map) return;
 
-  const nearby = nearbyEmergencyPoints(lat, lng);
-  const z = map.getZoom();
-  const inDefaultBand = z >= OVERVIEW_MIN_ZOOM && z <= OVERVIEW_MAX_ZOOM;
-
-  // Already at default scale AND nearby services exist → just pan
-  if (inDefaultBand && nearby.length > 0) {
+  // Already there: panning is the whole job, and it saves a zoom animation.
+  if (map.getZoom() === DEFAULT_ZOOM) {
     map.panTo([lat, lng], { animate: true });
     locationOverviewFramed = true;
     needsEmergencyReframe = true; // re-check after fresh emergency fetch
@@ -629,9 +692,9 @@ function nearbyEmergencyPoints(lat: number, lng: number): [number, number][] {
 
 /**
  * Smart default view:
- * - Emergencies near the pin → zoom 14 (screenshot scale)
+ * - Emergencies near the pin → the standard scale, whatever the map was at
  * - None nearby but some farther → zoom out just enough so markers are visible
- * - No emergency data at all → zoom 14 centered on pin
+ * - No emergency data at all → the standard scale, centered on the pin
  */
 function frameLocationOverview(L: any, lat: number, lng: number) {
   if (!map) return;
@@ -639,12 +702,7 @@ function frameLocationOverview(L: any, lat: number, lng: number) {
 
   const nearby = nearbyEmergencyPoints(lat, lng);
   if (nearby.length > 0) {
-    const z = map.getZoom();
-    if (z >= OVERVIEW_MIN_ZOOM && z <= OVERVIEW_MAX_ZOOM) {
-      map.panTo([lat, lng], { animate: true });
-    } else {
-      map.setView([lat, lng], DEFAULT_ZOOM, { animate: true });
-    }
+    map.setView([lat, lng], DEFAULT_ZOOM, { animate: true });
     return;
   }
 
@@ -730,6 +788,9 @@ function renderCurrentLocation(
       }, 100);
 
       placeManualPin(L, ll.lat, ll.lng);
+      // The drawn route still points at where the pin used to be: drop it, and
+      // draw the new one for whatever unit is still selected.
+      refreshRouteForPin(L);
       toast.loading("Memperbarui lokasi pin...");
       void loadEmergencyData(ll.lat, ll.lng, {
         keepLoadingMessage: "Memperbarui lokasi pin...",
@@ -773,16 +834,15 @@ function renderCurrentLocation(
 function unitPinIcon(
   L: any,
   typeName: string,
-  opts: { enter?: boolean; delayMs?: number; active?: boolean; muted?: boolean },
+  opts: { enter?: boolean; delayMs?: number } = {},
 ) {
-  const active = !!opts.active;
   if (mapAppearance.markers === "pin") {
-    return buildServicePinIcon(L, typeName, { ...opts, active });
+    return buildServicePinIcon(L, typeName, opts);
   }
   return L.divIcon({
-    className: `${classicMarkerClass(typeName)} bb-unit-marker${opts.muted && !active ? " bb-marker--muted" : ""}`,
-    iconSize: active ? [32, 32] : [25, 25],
-    iconAnchor: active ? [16, 16] : [12, 12],
+    className: `${classicMarkerClass(typeName)} bb-unit-marker`,
+    iconSize: [25, 25],
+    iconAnchor: [12, 12],
   });
 }
 
@@ -795,12 +855,10 @@ function renderMarkers(L: any, data: any[]) {
   chipMarkerIds.clear();
   if (!map) return;
 
+  // Every unit starts as a plain pin: whichever of them are leading the list —
+  // or is the unit the detail sheet has open — get their chip from
+  // applyUnitChips, which is the only thing that decides a marker's look.
   let pinIndex = 0;
-  const selectedId =
-    detailSheet.isOpen && detailSheet.detailSheetData?.emergency?.emergencyData?.id != null
-      ? String(detailSheet.detailSheetData.emergency.emergencyData.id)
-      : activeEmergencyId;
-  const muteOthers = Boolean(selectedId && routeIsDrawn());
 
   data.forEach((item: any) => {
     const e = item.emergencyData;
@@ -808,22 +866,15 @@ function renderMarkers(L: any, data: any[]) {
 
     const id = String(e.id ?? "");
     const typeName = e.emergency_type?.name || "";
-    const isActive = !!id && id === selectedId;
-    const muted = muteOthers && !isActive;
 
     const icon = unitPinIcon(L, typeName, {
       enter: true,
       delayMs: Math.min(pinIndex * 45, 360),
-      active: isActive,
-      muted,
     });
 
     pinIndex += 1;
 
-    const marker = L.marker([+e.coordinates[1], +e.coordinates[0]], {
-      icon,
-      zIndexOffset: isActive ? 800 : muted ? -200 : 0,
-    })
+    const marker = L.marker([+e.coordinates[1], +e.coordinates[0]], { icon })
       .addTo(map!)
       .on("click", (ev: any) => {
         L.DomEvent.stopPropagation(ev);
@@ -834,11 +885,9 @@ function renderMarkers(L: any, data: any[]) {
     if (id) {
       markersById.set(id, marker);
       markerMetaById.set(id, { typeName, item });
-      setMarkerHidden(marker, markerHiddenByList(id));
+      setMarkerHidden(marker, markerHidden(id));
     }
   });
-
-  activeEmergencyId = selectedId;
 
   // After services load, widen once so several markers are visible with the blue pin
   if (
@@ -854,19 +903,31 @@ function renderMarkers(L: any, data: any[]) {
 
   // Fresh coordinates and fresh elements — re-apply the list's lead styling,
   // then re-route the connectors onto the new pins.
-  applyTopUnitMarkers(L);
+  applyUnitChips(L);
   applyMatrixLines(L);
   placeUnitChips();
+  scheduleEdgeUpdate(L);
 }
 
-function routeIsDrawn(): boolean {
-  return Boolean(leafletStore.routeEndPoint?.lat && leafletStore.routeEndPoint?.lng);
+/** The unit the detail sheet has open, if any. */
+function openDetailUnitId(): string {
+  const id = detailSheet.detailSheetData?.emergency?.emergencyData?.id;
+  return detailSheet.isOpen && id != null ? String(id) : "";
 }
 
-/** True when the explore list has ruled this unit out. Units without an id
- *  can't be matched against the list, so they stay visible. */
-function markerHiddenByList(id: string): boolean {
-  return Boolean(id) && visibleUnitIdSet !== null && !visibleUnitIdSet.has(id);
+/**
+ * True when the map should not show this unit. The detail view is about a
+ * single unit and its route, so everything else steps aside; without one open,
+ * it is the explore list that decides. Units without an id can't be matched
+ * against either, so they stay visible.
+ */
+function markerHidden(id: string): boolean {
+  if (!id) return false;
+
+  const focused = openDetailUnitId();
+  if (focused) return id !== focused;
+
+  return visibleUnitIdSet !== null && !visibleUnitIdSet.has(id);
 }
 
 function setMarkerHidden(marker: Marker, hidden: boolean) {
@@ -875,8 +936,28 @@ function setMarkerHidden(marker: Marker, hidden: boolean) {
 
 function applyMarkerListFilter() {
   for (const [id, marker] of markersById) {
-    setMarkerHidden(marker, markerHiddenByList(id));
+    setMarkerHidden(marker, markerHidden(id));
   }
+}
+
+/**
+ * Replay a marker animation on a set of units. Removing the class, forcing one
+ * reflow, then adding it back is the only way CSS offers to replay an
+ * animation that is already sitting on the element.
+ */
+function replayMarkerAnimation(ids: Iterable<string>, className: string) {
+  const els: HTMLElement[] = [];
+  for (const id of ids) {
+    const el = markersById.get(id)?.getElement?.();
+    if (el) els.push(el as HTMLElement);
+  }
+  if (!els.length) return;
+
+  for (const el of els) el.classList.remove(className);
+  // One reflow for the whole batch: without it the browser coalesces the
+  // remove and the add, and an animation that never left can't restart.
+  void els[0]!.offsetWidth;
+  for (const el of els) el.classList.add(className);
 }
 
 /**
@@ -885,18 +966,17 @@ function applyMarkerListFilter() {
  * things silently behind the sheet.
  */
 function popUnitMarkers() {
-  const els: HTMLElement[] = [];
-  for (const marker of markersById.values()) {
-    const el = marker.getElement?.();
-    if (el) els.push(el as HTMLElement);
-  }
-  if (!els.length) return;
+  replayMarkerAnimation(markersById.keys(), "bb-unit-pop");
+}
 
-  for (const el of els) el.classList.remove("bb-unit-pop");
-  // One reflow for the whole batch. Without it the browser coalesces the remove
-  // and the add, and an animation that never left can't restart.
-  void els[0]!.offsetWidth;
-  for (const el of els) el.classList.add("bb-unit-pop");
+/**
+ * The leader routes have reached the pin: let the units that drew them land,
+ * the way Apple Maps settles a route under its markers. Held back until the
+ * last of the three arrives, so they land together rather than in sequence.
+ */
+function celebrateArrival() {
+  if (!topUnitIds.length) return;
+  replayMarkerAnimation(topUnitIds, "bb-unit-arrive");
 }
 
 /** Name a unit is listed under. */
@@ -947,26 +1027,38 @@ function fillChip(marker: Marker, id: string) {
   const minutes = chipEtaMinutes(id);
   const eta = el.querySelector(".bb-unit-chip__eta") as HTMLElement | null;
   if (eta) {
-    const label = minutes == null ? "" : `${minutes} min`;
+    const label = etaLabelFor(minutes);
     if (eta.textContent !== label) eta.textContent = label;
     eta.style.color = connectorColor(minutes);
   }
 }
 
+/** Units that wear a chip: the list's leaders, plus the unit a detail sheet
+ *  has open — the marker the detail view is actually about. */
+function chipWantedIds(): Set<string> {
+  const ids = new Set(topUnitIds);
+  const focused = openDetailUnitId();
+  if (focused) ids.add(focused);
+  return ids;
+}
+
 /**
- * The units the list leads with wear a chip — icon, name and ETA on the marker
- * itself — instead of a pin with two badges scattered around it.
+ * Give every unit the marker its role calls for. Leading units, and the one the
+ * detail sheet has open, wear a chip — icon, name and ETA on the marker itself
+ * — instead of a pin with badges scattered around the map.
  *
  * The icon is swapped rather than a class toggled: a chip and a pin are
  * different shapes, not different sizes, so there is nothing to restyle.
  */
-function applyTopUnitMarkers(L: any) {
-  const top = new Set(topUnitIds);
+function applyUnitChips(L: any) {
+  const wanted = chipWantedIds();
+  const focused = openDetailUnitId();
+
   for (const [id, marker] of markersById) {
     const meta = markerMetaById.get(id);
     if (!meta) continue;
 
-    const wantsChip = top.has(id);
+    const wantsChip = wanted.has(id);
     const hasChip = chipMarkerIds.has(id);
     if (wantsChip !== hasChip) {
       marker.setIcon(
@@ -976,17 +1068,298 @@ function applyTopUnitMarkers(L: any) {
       );
       // setIcon hands back a fresh element, so the filter's hidden state on the
       // old one has to be re-applied.
-      setMarkerHidden(marker, markerHiddenByList(id));
+      setMarkerHidden(marker, markerHidden(id));
       if (wantsChip) chipMarkerIds.add(id);
       else chipMarkerIds.delete(id);
     }
 
-    if (!wantsChip) continue;
-    // Only ever lifted, never lowered: the offsets a drawn route hands out
-    // (muted/active) are none of this function's business.
-    marker.setZIndexOffset(TOP_MARKER_Z);
-    fillChip(marker, id);
+    if (wantsChip) {
+      marker.setZIndexOffset(id === focused ? 900 : TOP_MARKER_Z);
+      fillChip(marker, id);
+    }
   }
+}
+
+/**
+ * Bring the unit the detail sheet opened into view. Its marker is applyUnitChips'
+ * business — including the one it replaced, whose chip goes back to a pin.
+ */
+function focusEmergencyMarker(nextId: string) {
+  if (!nextId) return;
+  const marker = markersById.get(nextId);
+  if (marker) map?.panTo(marker.getLatLng(), { animate: true });
+}
+
+/**
+ * Units that get a stand-in when the map cannot show them: the ones the list
+ * leads with, or the single unit a detail sheet has open. Not every unit out
+ * of frame — a rim full of indicators was more noise than information, and the
+ * list underneath already accounts for the rest.
+ */
+function trackedUnitIds(): string[] {
+  const focused = openDetailUnitId();
+  if (focused) return topUnitIds.includes(focused) ? topUnitIds : [focused];
+  return topUnitIds;
+}
+
+/**
+ * The part of the map a stand-in may sit in: the container minus whatever the
+ * sheet covers, in Leaflet's own container point space — the space
+ * latLngToContainerPoint speaks. Callers inset it by what they need.
+ */
+function visibleStrip() {
+  if (!map) return null;
+  const size = map.getSize();
+  const left = 0;
+  const top = 0;
+  const right = size.x;
+  const bottom = Math.max(1, size.y - measureBottomSheetInset());
+  return { left, top, right, bottom, width: right - left, height: bottom - top };
+}
+
+/** Bring an off-screen unit's marker into the visible strip. */
+function panToUnit(id: string) {
+  if (!map) return;
+  const marker = markersById.get(id);
+  const strip = visibleStrip();
+  if (!marker || !strip) return;
+
+  // Pan so the unit lands in the middle of the strip, not the middle of the
+  // container — the sheet covers half of that.
+  const size = map.getSize();
+  const point = map.latLngToContainerPoint(marker.getLatLng());
+  const offset = {
+    x: size.x / 2 - (strip.left + strip.width / 2),
+    y: size.y / 2 - (strip.top + strip.height / 2),
+  };
+  map.panTo(map.containerPointToLatLng([point.x + offset.x, point.y + offset.y]));
+}
+
+/**
+ * Nearest free run on one rim axis: the spot the unit itself points at, else
+ * the closest one either side of it. Walking out in steps rather than shifting
+ * by a fixed guess is what keeps two stand-ins from simply touching — a chip
+ * is ~80px wide, wider than any single nudge would have cleared.
+ */
+function rimSlot(
+  target: number,
+  half: number,
+  min: number,
+  max: number,
+  taken: { lo: number; hi: number }[],
+): number {
+  const fits = (centre: number) => {
+    if (centre - half < min || centre + half > max) return false;
+    return !taken.some((t) => centre + half > t.lo - CHIP_GAP && centre - half < t.hi + CHIP_GAP);
+  };
+
+  if (fits(target)) return target;
+  for (let step = 1; step <= EDGE_SPREAD_STEPS; step++) {
+    const out = step * EDGE_SPREAD_PX;
+    if (fits(target + out)) return target + out;
+    if (fits(target - out)) return target - out;
+  }
+  return target;
+}
+
+/** The unit's service type, for a stand-in chip's icon well. */
+function unitTypeName(id: string): string {
+  return markerMetaById.get(id)?.typeName || "";
+}
+
+/** ETA copy, shared with the chip a unit wears when it is on screen. */
+function etaLabelFor(minutes: number | null): string {
+  return minutes == null ? "" : `${minutes} min`;
+}
+
+/**
+ * Stand-in icon: the same icon-and-ETA the unit's own chip carries, minus the
+ * name — that lives in the card right below it, so repeating it at the rim
+ * would be the only thing making the rim busy.
+ */
+function edgeIconFor(
+  L: any,
+  opts: { typeName: string; tone: string; label: string; angle: number; offset: number },
+) {
+  // Built with its bearing already applied, so the first paint is correct.
+  const chevron = `color:${opts.tone};transform:rotate(${opts.angle}deg) translateX(${opts.offset}px)`;
+  const chip =
+    `<span class="bb-unit-edge-chip bb-svc-pin--${pinMarkerModifier(opts.typeName)}">` +
+    `<span class="bb-unit-chip__icon bb-svc-pin__head"><span class="bb-svc-pin__icon bb-unit-chip__glyph"></span></span>` +
+    `<span class="bb-unit-edge-chip__eta" style="color:${opts.tone}">${opts.label}</span></span>`;
+  return L.divIcon({
+    className: "bb-unit-edge-wrap",
+    html: `<span class="bb-unit-edge"><span class="bb-unit-edge__chevron" style="${chevron}"></span>${chip}</span>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+}
+
+/** Drop every stand-in — the list closed, or nothing is off-screen any more. */
+function clearEdgeMarkers() {
+  for (const entry of edgeMarkers.values()) entry.marker.remove();
+  edgeMarkers.clear();
+}
+
+/**
+ * Park a dot on the edge of the visible strip for every unit that is not on
+ * screen, pointing the way it is. The map stops being a dead end: a clipped
+ * unit is still accounted for, and tapping its stand-in fetches it back.
+ *
+ * Runs as the map moves (once a frame), so the stand-ins slide along the edge
+ * rather than jumping when the pan ends.
+ */
+function updateEdgeIndicators(L: any) {
+  if (!map) return;
+
+  const strip = visibleStrip();
+  const wanted = new Set(trackedUnitIds().filter((id) => markersById.has(id)));
+
+  if (!strip || !wanted.size) {
+    clearEdgeMarkers();
+    return;
+  }
+
+  for (const [id, entry] of edgeMarkers) {
+    if (wanted.has(id)) continue;
+    entry.marker.remove();
+    edgeMarkers.delete(id);
+  }
+
+  const centre = {
+    x: strip.left + strip.width / 2,
+    y: strip.top + strip.height / 2,
+  };
+  // What is already parked on each rim: the packer works one axis at a time,
+  // which is all a rim is.
+  const taken = { horizontal: [] as { lo: number; hi: number }[], vertical: [] as { lo: number; hi: number }[] };
+
+  for (const id of wanted) {
+    const target = markersById.get(id);
+    const point = target ? map.latLngToContainerPoint(target.getLatLng()) : null;
+    if (!point) continue;
+
+    const dx = point.x - centre.x;
+    const dy = point.y - centre.y;
+    const bearing = Math.hypot(dx, dy) || 1;
+
+    const shape = EDGE_CHIP;
+    // How far the chip reaches along this bearing — one seen edge-on needs less
+    // room than one seen flat.
+    const reach =
+      (Math.abs(dx) / bearing) * shape.half.w + (Math.abs(dy) / bearing) * shape.half.h;
+    // Clear of the rim by enough that the chip *and* the chevron outside it
+    // stay fully on screen.
+    const pad = Math.max(EDGE_KEEP_CLEAR_PX, reach + shape.chevronGap + 6);
+
+    // Any sliver of the real marker showing (a chip hangs above its anchor, a
+    // pin sits on it) means the stand-in has nothing left to say.
+    const body = chipMarkerIds.has(id) ? MARKER_REACH.chip : MARKER_REACH.pin;
+    const peeking =
+      point.x + body.right > strip.left + 2 &&
+      point.x - body.left < strip.right - 2 &&
+      point.y - body.up < strip.bottom - 2 &&
+      point.y + body.down > strip.top + 2;
+
+    const existing = edgeMarkers.get(id);
+    if (peeking) {
+      if (existing) {
+        existing.marker.remove();
+        edgeMarkers.delete(id);
+      }
+      continue;
+    }
+
+    // Clamp onto that padded box, along the ray from the middle of the strip.
+    const tx =
+      dx > 0
+        ? (strip.right - pad - centre.x) / dx
+        : dx < 0
+          ? (strip.left + pad - centre.x) / dx
+          : Infinity;
+    const ty =
+      dy > 0
+        ? (strip.bottom - pad - centre.y) / dy
+        : dy < 0
+          ? (strip.top + pad - centre.y) / dy
+          : Infinity;
+    const t = Math.min(tx, ty);
+    if (!Number.isFinite(t) || t <= 0) continue;
+
+    const spot = { x: centre.x + dx * t, y: centre.y + dy * t };
+
+    // Two units pointing the same way land on the same spot: give this one the
+    // nearest free run along whichever rim it hit.
+    if (ty <= tx) {
+      spot.x = rimSlot(spot.x, shape.half.w, strip.left + pad, strip.right - pad, taken.horizontal);
+      taken.horizontal.push({ lo: spot.x - shape.half.w, hi: spot.x + shape.half.w });
+    } else {
+      spot.y = rimSlot(spot.y, shape.half.h, strip.top + pad, strip.bottom - pad, taken.vertical);
+      taken.vertical.push({ lo: spot.y - shape.half.h, hi: spot.y + shape.half.h });
+    }
+
+    const edge = map.containerPointToLatLng([spot.x, spot.y]);
+    const minutes = chipEtaMinutes(id);
+    const tone = connectorColor(minutes);
+    const angle = Math.round((Math.atan2(dy, dx) * 180) / Math.PI);
+    const label = etaLabelFor(minutes);
+    const offset = reach + shape.chevronGap;
+
+    let entry = existing;
+    if (!entry) {
+      const marker = (L.marker(edge, { zIndexOffset: EDGE_MARKER_Z, keyboard: false })
+        .addTo(map)
+        .on("click", (ev: any) => {
+          L.DomEvent.stopPropagation(ev);
+          panToUnit(id);
+        }) as Marker);
+      marker.setIcon(
+        edgeIconFor(L, { typeName: unitTypeName(id), tone, label, angle, offset }),
+      );
+      // A fresh icon already carries this state, so nothing is written twice.
+      entry = { marker, tone, angle, offset, label };
+      edgeMarkers.set(id, entry);
+      continue;
+    }
+
+    entry.marker.setLatLng(edge);
+
+    // Panning shifts these stand-ins without changing tone or bearing, so only
+    // the writes that actually differ happen — a pan costs one position.
+    const stale =
+      entry.tone !== tone ||
+      entry.label !== label ||
+      entry.angle !== angle ||
+      entry.offset !== offset;
+    if (stale) {
+      const root = entry.marker.getElement();
+      const chevron = root?.querySelector(".bb-unit-edge__chevron") as HTMLElement | null;
+      const eta = root?.querySelector(".bb-unit-edge-chip__eta") as HTMLElement | null;
+
+      if (eta) {
+        if (entry.tone !== tone) eta.style.color = tone;
+        if (entry.label !== label) eta.textContent = label;
+      }
+      if (chevron) {
+        if (entry.tone !== tone) chevron.style.color = tone;
+        if (entry.angle !== angle || entry.offset !== offset) {
+          chevron.style.transform = `rotate(${angle}deg) translateX(${offset}px)`;
+        }
+      }
+      entry.tone = tone;
+      entry.label = label;
+      entry.angle = angle;
+      entry.offset = offset;
+    }
+  }
+}
+
+function scheduleEdgeUpdate(L: any) {
+  if (edgeUpdateFrame !== null) return;
+  edgeUpdateFrame = requestAnimationFrame(() => {
+    edgeUpdateFrame = null;
+    updateEdgeIndicators(L);
+  });
 }
 
 /** Do two chip boxes need more room than they have? Anywhere but their centres. */
@@ -1018,17 +1391,34 @@ function chipBoxesClash(
   );
 }
 
+/** Would this chip sit wholly inside the strip, clear of its rim? */
+function boxInsideStrip(
+  box: { left: number; right: number; top: number; bottom: number },
+  strip: { left: number; right: number; top: number; bottom: number },
+): boolean {
+  const margin = 6;
+  return (
+    box.left >= strip.left + margin &&
+    box.right <= strip.right - margin &&
+    box.top >= strip.top + margin &&
+    box.bottom <= strip.bottom - margin
+  );
+}
+
 /**
  * Hang each chip off whichever side of its own point keeps it clear of the
  * chips already placed, in list order. Chips are wide and their units sit
  * close together, so without this the top three would sit on each other.
  *
- * Run after every draw and after a zoom: zooming out pulls the units together
- * in pixel terms while the chips keep their size.
+ * On-screen comes first: a chip whose default side would run past the rim takes
+ * another side instead of being clipped. Run after every draw, after a zoom
+ * (which pulls the units together in pixel terms while the chips keep their
+ * size) and after a pan.
  */
 function placeUnitChips() {
   if (!map || !topUnitIds.length) return;
 
+  const strip = visibleStrip();
   const placed: ReturnType<typeof chipBoxOf>[] = [];
   for (const id of topUnitIds) {
     const marker = markersById.get(id);
@@ -1045,14 +1435,25 @@ function placeUnitChips() {
 
     for (const side of CHIP_SIDES) {
       const box = chipBoxOf(centre, size, side);
-      if (!placed.some((other) => chipBoxesClash(box, other))) {
+      if (placed.some((other) => chipBoxesClash(box, other))) continue;
+      if (strip && !boxInsideStrip(box, strip)) continue;
+      chosen = side;
+      chosenBox = box;
+      break;
+    }
+
+    // Nowhere clear and wholly on screen: take the first side that at least
+    // avoids the other chips.
+    if (!chosen) {
+      for (const side of CHIP_SIDES) {
+        const box = chipBoxOf(centre, size, side);
+        if (placed.some((other) => chipBoxesClash(box, other))) continue;
         chosen = side;
         chosenBox = box;
         break;
       }
     }
 
-    // Nowhere clear: the first side is as good as any.
     for (const side of CHIP_SIDES) {
       el.classList.toggle(`bb-unit-chip-wrap--${side}`, side === (chosen ?? CHIP_SIDES[0]));
     }
@@ -1221,65 +1622,110 @@ function trackRouteLoad(delta: number) {
  * Reserved for a freshly fetched route: a cached one is already known, and
  * replaying this on every filter change would be noise.
  */
-function animateConnectorDraw(line: Polyline, latlngs: [number, number][]) {
-  if (latlngs.length < 2) return;
+function animateConnectorDraw(
+  line: Polyline,
+  latlngs: [number, number][],
+  id: string,
+  onArrived?: () => void,
+) {
+  const token = drawTokens.get(id) ?? 0;
+  if (latlngs.length < 2) {
+    onArrived?.();
+    return;
+  }
 
-  const DURATION_MS = 850;
+  const DURATION_MS = 1700;
   const started = performance.now();
 
   const step = (now: number) => {
-    // Gone — a closed list, or a newer route replaced it.
-    if (!map?.hasLayer(line)) return;
+    // Gone — a closed list, a newer route, or a redraw took this line over.
+    if (!map?.hasLayer(line) || (drawTokens.get(id) ?? 0) !== token) return;
 
     const t = Math.min(1, (now - started) / DURATION_MS);
-    const eased = 1 - (1 - t) ** 3;
+    // Ease in *and* out: the line gathers pace out of the unit and settles as
+    // it reaches the pin, rather than bolting and then crawling.
+    const eased = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
     const upto = Math.max(2, Math.round(eased * latlngs.length));
     line.setLatLngs(latlngs.slice(0, upto));
 
-    if (t < 1) requestAnimationFrame(step);
-    else line.setLatLngs(latlngs);
+    if (t < 1) {
+      requestAnimationFrame(step);
+      return;
+    }
+    line.setLatLngs(latlngs);
+    onArrived?.();
   };
 
   line.setLatLngs(latlngs.slice(0, 1));
   requestAnimationFrame(step);
 }
 
+/**
+ * The app's route stroke — one line, no casing, weight and tone shared by the
+ * selected route and the list's connectors so the two can't drift apart.
+ */
+function addRouteLine(
+  L: any,
+  latlngs: [number, number][],
+  color: string,
+  className: string,
+): Polyline {
+  const line = L.polyline(latlngs, {
+    interactive: false,
+    className,
+    color,
+    weight: MATRIX_LINE_WEIGHT,
+    opacity: 1,
+    lineCap: "round",
+    lineJoin: "round",
+  }).addTo(map);
+  // Keeps the stroke at one width while Leaflet scales its SVG through a
+  // zoom; without it the line thickens mid-animation and snaps back at the end.
+  line.getElement()?.setAttribute("vector-effect", "non-scaling-stroke");
+  return line;
+}
+
+/** End cap where a route leaves its unit. The far end is the user's own pin. */
+function addRouteDot(L: any, latlng: [number, number], color: string): CircleMarker {
+  const dot = L.circleMarker(latlng, {
+    className: "bb-matrix-dot",
+    radius: MATRIX_DOT_RADIUS,
+    color: "#ffffff",
+    weight: MATRIX_DOT_RING,
+    opacity: 1,
+    fillColor: color,
+    fillOpacity: 1,
+    interactive: false,
+  }).addTo(map);
+  dot.getElement()?.setAttribute("vector-effect", "non-scaling-stroke");
+  return dot;
+}
+
 /** Draw or refresh one connector from road geometry the map now has. */
 function drawConnector(L: any, id: string, route: ConnectorRoute, animate = false) {
   if (!map) return;
+
+  // Any draw hands this unit's line a new generation, so a reveal still in
+  // flight knows it has been overtaken — and drops out of the arrival batch,
+  // since an overtaken reveal never reports back.
+  drawTokens.set(id, (drawTokens.get(id) ?? 0) + 1);
+  pendingArrivals.delete(id);
 
   const color = connectorColor(chipEtaMinutes(id));
 
   let entry = matrixLines.get(id);
   if (!entry) {
-    const line = L.polyline(route.latlngs, {
-      interactive: false,
-      className: "bb-matrix-line",
-      color,
-      weight: MATRIX_LINE_WEIGHT,
-      opacity: 1,
-      lineCap: "round",
-      lineJoin: "round",
-    }).addTo(map);
-    // Keeps the stroke at one width while Leaflet scales its SVG through a
-    // zoom; without it the line thickens mid-animation and snaps back at the end.
-    line.getElement()?.setAttribute("vector-effect", "non-scaling-stroke");
-    // End cap, drawn where the route leaves the unit — the far end is already
-    // the user's own pin.
-    const dot = L.circleMarker(route.latlngs[0]!, {
-      className: "bb-matrix-dot",
-      radius: MATRIX_DOT_RADIUS,
-      color: "#ffffff",
-      weight: MATRIX_DOT_RING,
-      opacity: 1,
-      fillColor: color,
-      fillOpacity: 1,
-      interactive: false,
-    }).addTo(map);
-    dot.getElement()?.setAttribute("vector-effect", "non-scaling-stroke");
+    const line = addRouteLine(L, route.latlngs, color, "bb-matrix-line");
+    const dot = addRouteDot(L, route.latlngs[0]!, color);
     entry = { line, dot };
     matrixLines.set(id, entry);
-    if (animate) animateConnectorDraw(line, route.latlngs);
+    if (animate) {
+      pendingArrivals.add(id);
+      animateConnectorDraw(line, route.latlngs, id, () => {
+        pendingArrivals.delete(id);
+        if (!pendingArrivals.size) celebrateArrival();
+      });
+    }
   } else {
     entry.line.setLatLngs(route.latlngs);
     entry.line.setStyle({ color });
@@ -1316,7 +1762,7 @@ async function loadConnector(
     drawConnector(L, id, route, true);
     // A unit the matrix had no ETA for takes its drive time from here, so the
     // chip may still have text to gain.
-    applyTopUnitMarkers(L);
+    applyUnitChips(L);
     placeUnitChips();
   } finally {
     trackRouteLoad(-1);
@@ -1338,6 +1784,8 @@ function applyMatrixLines(L: any) {
       entry.dot.remove();
     }
     matrixLines.clear();
+    // Tokens stay: the selected route keeps its own generation across this.
+    pendingArrivals.clear();
     return;
   }
 
@@ -1369,188 +1817,25 @@ function applyMatrixLines(L: any) {
   placeUnitChips();
 }
 
-function applyMutedMarkers() {
-  const selectedId =
-    detailSheet.isOpen && detailSheet.detailSheetData?.emergency?.emergencyData?.id != null
-      ? String(detailSheet.detailSheetData.emergency.emergencyData.id)
-      : "";
-  const muteOthers = Boolean(selectedId && routeIsDrawn());
-  const usePin = mapAppearance.markers === "pin";
-
-  for (const [id, marker] of markersById) {
-    const muted = muteOthers && id !== selectedId;
-    const el = marker.getElement?.() ?? (marker as any)._icon;
-    if (usePin) {
-      const pin = el?.querySelector?.(".bb-svc-pin") as HTMLElement | null;
-      pin?.classList.toggle("bb-svc-pin--muted", muted);
-    } else if (el) {
-      el.classList.toggle("bb-marker--muted", muted);
-    }
-    if (id === selectedId) marker.setZIndexOffset(900);
-    else marker.setZIndexOffset(muted ? -200 : 0);
-  }
-}
-
 function buildServicePinIcon(
   L: any,
   typeName: string,
-  opts: { enter?: boolean; delayMs?: number; active?: boolean; muted?: boolean },
+  opts: { enter?: boolean; delayMs?: number },
 ) {
-  const active = !!opts.active;
   return L.divIcon({
     className: "bb-svc-pin-wrap bb-unit-marker",
     html: emergencyPinIconHtml(typeName, {
       enter: opts.enter,
       delayMs: opts.delayMs,
-      active,
-      muted: !!opts.muted && !active,
     }),
-    iconSize: active ? [48, 58] : [28, 34],
-    iconAnchor: active ? [24, 56] : [14, 32],
-    popupAnchor: active ? [0, -50] : [0, -28],
+    iconSize: [28, 34],
+    iconAnchor: [14, 32],
+    popupAnchor: [0, -28],
   });
-}
-
-function setActiveEmergencyMarker(L: any, nextId: string) {
-  if (mapAppearance.markers !== "pin") {
-    activeEmergencyId = nextId;
-    return;
-  }
-
-  const prevId = activeEmergencyId;
-  activeEmergencyId = nextId;
-  const mutePrev = Boolean(nextId && routeIsDrawn());
-
-  if (prevId && prevId !== nextId) {
-    const prev = markersById.get(prevId);
-    const meta = markerMetaById.get(prevId);
-    if (prev && meta) {
-      prev.setIcon(
-        buildServicePinIcon(L, meta.typeName, { active: false, muted: mutePrev }),
-      );
-      prev.setZIndexOffset(mutePrev ? -200 : 0);
-    }
-  }
-
-  if (!nextId) return;
-
-  const marker = markersById.get(nextId);
-  const meta = markerMetaById.get(nextId);
-  if (!marker || !meta) return;
-
-  // Force a fresh pop animation by swapping the icon DOM
-  marker.setIcon(
-    buildServicePinIcon(L, meta.typeName, { enter: true, active: true }),
-  );
-  marker.setZIndexOffset(900);
-
-  const ll = marker.getLatLng();
-  map?.panTo(ll, { animate: true });
 }
 
 function onMarkerClick(item: any) {
   openEmergencyDetail(item);
-}
-
-/** Draw polyline progressively (unit → user), smooth distance-based. */
-function animateRouteDraw(
-  L: any,
-  latlngs: [number, number][],
-  token: number,
-  lineColor = ROUTE_LINE_COLOR,
-): Promise<any> {
-  return new Promise((resolve) => {
-    if (!map || latlngs.length < 2) {
-      resolve(null);
-      return;
-    }
-
-    const cum: number[] = [0];
-    let pathLen = 0;
-    for (let i = 1; i < latlngs.length; i++) {
-      const a = latlngs[i - 1]!;
-      const b = latlngs[i]!;
-      pathLen += Math.hypot(b[0] - a[0], b[1] - a[1]);
-      cum.push(pathLen);
-    }
-    if (pathLen <= 0) {
-      pathLen = 1;
-    }
-
-    const shared = {
-      interactive: false,
-      lineCap: "round" as const,
-      lineJoin: "round" as const,
-      smoothFactor: 1.2,
-    };
-
-    const casing = L.polyline([latlngs[0]!], {
-      ...shared,
-      color: routeLineCasingColor(lineColor),
-      weight: ROUTE_LINE_CASING_WEIGHT,
-      opacity: 0.32,
-      className: "bb-route-casing",
-    }).addTo(map);
-
-    const line = L.polyline([latlngs[0]!], {
-      ...shared,
-      color: lineColor,
-      weight: ROUTE_LINE_WEIGHT,
-      opacity: 1,
-      className: "bb-route-line",
-    }).addTo(map);
-
-    routeCasing = casing;
-    routeLine = line;
-
-    // Slightly snappier than before; still readable on long routes
-    const durationMs = Math.min(2000, Math.max(1050, 900 + pathLen * 4200));
-    const started = performance.now();
-
-    const easeInOutCubic = (t: number) =>
-      t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
-
-    const sampleAt = (dist: number): [number, number][] => {
-      if (dist <= 0) return [latlngs[0]!];
-      if (dist >= pathLen) return latlngs.slice();
-
-      let i = 1;
-      while (i < cum.length && cum[i]! < dist) i++;
-      const i1 = Math.max(1, i);
-      const i0 = i1 - 1;
-      const d0 = cum[i0]!;
-      const d1 = cum[i1]!;
-      const seg = Math.max(1e-9, d1 - d0);
-      const u = (dist - d0) / seg;
-      const a = latlngs[i0]!;
-      const b = latlngs[i1]!;
-      const tip: [number, number] = [
-        a[0] + (b[0] - a[0]) * u,
-        a[1] + (b[1] - a[1]) * u,
-      ];
-      return latlngs.slice(0, i1).concat([tip]);
-    };
-
-    const tick = (now: number) => {
-      if (token !== routeRenderToken) {
-        resolve(line);
-        return;
-      }
-      const t = Math.min(1, (now - started) / durationMs);
-      const eased = easeInOutCubic(t);
-      const pts = sampleAt(eased * pathLen);
-      casing.setLatLngs(pts);
-      line.setLatLngs(pts);
-      if (t < 1) {
-        requestAnimationFrame(tick);
-      } else {
-        casing.setLatLngs(latlngs);
-        line.setLatLngs(latlngs);
-        resolve(line);
-      }
-    };
-    requestAnimationFrame(tick);
-  });
 }
 
 function applyZoomOverlayState(zoom: number) {
@@ -1564,9 +1849,9 @@ function clearRouteOverlays() {
     routeLine.remove();
     routeLine = null;
   }
-  if (routeCasing) {
-    routeCasing.remove();
-    routeCasing = null;
+  if (routeDot) {
+    routeDot.remove();
+    routeDot = null;
   }
   if (routeEtaMarker) {
     routeEtaMarker.remove();
@@ -1767,6 +2052,41 @@ function fitRouteInViewSoon(L: any, latlngs: [number, number][]) {
   window.setTimeout(() => fitRouteInView(L, latlngs), 220);
 }
 
+/**
+ * The pin moved, so the drawn route is stale: drop it now rather than leaving a
+ * line pointing at the old place, and redraw for whichever unit is still
+ * selected. Re-drawing also re-frames the route, which is what makes a location
+ * change look applied.
+ */
+function refreshRouteForPin(L: any) {
+  clearRouteOverlays();
+
+  const endPoint = leafletStore.routeEndPoint;
+  if (endPoint?.lat && endPoint?.lng) void renderRoute(L, endPoint);
+}
+
+/**
+ * Draw the selected unit's route. Deliberately the same stroke, tone and reveal
+ * the list's connectors use, so opening a unit reads as the map zooming in on
+ * one of them rather than switching to another visual language.
+ */
+function drawSelectedRoute(L: any, latlngs: [number, number][], durationSec: number) {
+  const minutes = Number.isFinite(durationSec)
+    ? Math.max(1, Math.round(durationSec / 60))
+    : null;
+  const color = connectorColor(minutes);
+
+  // The connectors' guard, under its own id: a redraw must not fight the
+  // reveal it replaced.
+  drawTokens.set(SELECTED_ROUTE_ID, (drawTokens.get(SELECTED_ROUTE_ID) ?? 0) + 1);
+
+  routeLine = addRouteLine(L, latlngs, color, "bb-route-line");
+  // Same end cap the list's connectors wear, so the selected route starts on
+  // its unit exactly like they do.
+  routeDot = addRouteDot(L, latlngs[0]!, color);
+  animateConnectorDraw(routeLine, latlngs, SELECTED_ROUTE_ID);
+}
+
 async function renderRoute(L: any, endPoint: { lat: number; lng: number }) {
   if (!map) return;
 
@@ -1803,14 +2123,8 @@ async function renderRoute(L: any, endPoint: { lat: number; lng: number }) {
         durationSec: Number(route?.duration),
         distanceM: Number(route?.distance),
       };
-      const color = routeLineColorFromTravel(etaOpts);
 
-      await animateRouteDraw(L, latlngs, token, color);
-      if (token !== routeRenderToken) {
-        toast.dismiss();
-        return;
-      }
-
+      drawSelectedRoute(L, latlngs, etaOpts.durationSec);
       leafletStore.setRouteTravel(etaOpts);
       showRouteEtaBubble(L, latlngs, etaOpts);
       // Single fit after route + ETA bubble are ready — no pre-draw fit to avoid double pan.
@@ -1840,14 +2154,8 @@ async function renderRoute(L: any, endPoint: { lat: number; lng: number }) {
     durationSec: approxSec,
     distanceM: approxM,
   };
-  const color = routeLineColorFromTravel(etaOpts);
 
-  await animateRouteDraw(L, fallback, token, color);
-  if (token !== routeRenderToken) {
-    toast.dismiss();
-    return;
-  }
-
+  drawSelectedRoute(L, fallback, etaOpts.durationSec);
   leafletStore.setRouteTravel(etaOpts);
   showRouteEtaBubble(L, fallback, etaOpts);
   fitRouteInViewSoon(L, fallback);

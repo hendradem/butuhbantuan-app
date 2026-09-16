@@ -329,10 +329,9 @@ html[data-ui-theme="soft"] h4 {
   cursor: pointer;
 }
 
-/* A raised sheet leaves only a sliver of map visible, but the marker pulses
-   keep animating behind it — constant compositing that competes with the
-   list scroll. Park them until the sheet comes back down. */
-.bb-map--sheet-max .bb-svc-pin__pulse,
+/* A raised sheet leaves only a sliver of map visible, but the user pin's rings
+   keep animating behind it — constant compositing that competes with the list
+   scroll. Park them until the sheet comes back down. */
 .bb-map--sheet-max .bb-user-pin__ring {
   animation-play-state: paused;
 }
@@ -345,17 +344,6 @@ html[data-ui-theme="soft"] h4 {
 }
 .scrollbar-none::-webkit-scrollbar {
   display: none;
-}
-
-/* Route focus — other units/hospitals recede so the active path stays readable */
-.ambulance-marker.bb-marker--muted,
-.fire-fighter-marker.bb-marker--muted,
-.hospital-marker.bb-marker--muted,
-.sar-marker.bb-marker--muted {
-  background-color: #9ca3af !important;
-  filter: grayscale(1);
-  opacity: 0.7;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
 }
 
 /* The explore list mirrors itself onto the map, so pins come and go as its
@@ -382,19 +370,40 @@ html[data-ui-theme="soft"] h4 {
 }
 
 /* The map's answer to a filter change, or to the connectors finishing their
-   fetch: one quick swell per unit. `scale` rather than `transform`, because
-   Leaflet writes a marker's transform and the pins' own drop-in animation owns
-   that property — the shape has to be animated on an axis of its own. The
-   legacy circle has no inner element to scale, so it sits this one out. */
+   fetch: the marker settles in, from slightly small to its own size. No
+   overshoot — a marker that grows past its size and springs back reads as a
+   bounce, and the arrivals are meant to look calm.
+ *
+ * `scale` rather than `transform`, because Leaflet writes a marker's transform
+ * and the pins' drop-in animation owns that property — the shape has to be
+ * animated on an axis of its own. The legacy circle has no inner element to
+ * scale, so it sits this one out. */
 @keyframes bb-unit-pop {
-  0% { scale: 0.88; }
-  55% { scale: 1.06; }
-  100% { scale: 1; }
+  from { scale: 0.94; opacity: 0.85; }
+  to { scale: 1; opacity: 1; }
 }
 
 .bb-unit-pop .bb-svc-pin,
 .bb-unit-pop .bb-unit-chip {
-  animation: bb-unit-pop 0.42s cubic-bezier(0.22, 1.3, 0.36, 1);
+  animation: bb-unit-pop 0.34s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+/* The moment a leader's route reaches the pin: the marker lands with a spring,
+   the way Apple Maps settles a route under the thing it points at. Bigger and
+   bouncier than the filter-change swell on purpose — it happens once, and it is
+   the only movement on screen at the time. Declared after .bb-unit-pop so it
+   wins while both are sitting on the same marker. */
+@keyframes bb-unit-arrive {
+  0% { scale: 1; }
+  30% { scale: 1.34; }
+  55% { scale: 0.94; }
+  75% { scale: 1.08; }
+  100% { scale: 1; }
+}
+
+.bb-unit-arrive .bb-unit-chip,
+.bb-unit-arrive .bb-svc-pin {
+  animation: bb-unit-arrive 0.9s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* The units the explore list leads with wear one chip each — icon, name and
@@ -480,9 +489,40 @@ html[data-ui-theme="soft"] h4 {
   border-right-width: 0;
 }
 
+/* Stand-in for a unit the list leads with, off the edge of the visible strip:
+   its icon and ETA, the same pair the chip carries when it is on screen. The
+   name stays in the card below — repeating it here is what would make the rim
+   busy, and there can be three of these at once. */
+.bb-unit-edge-chip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 3px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.26);
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  animation: bb-fade-in 0.18s ease;
+}
+
+.bb-unit-edge-chip__eta {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.bb-unit-edge-chip__eta:empty {
+  display: none;
+}
+
 /* The icon well borrows .bb-svc-pin__head / .bb-svc-pin__icon for its colour
    and service logo, and overrides only their teardrop shape. */
-.bb-unit-chip .bb-unit-chip__icon {
+.bb-unit-chip .bb-unit-chip__icon,
+.bb-unit-edge-chip .bb-unit-chip__icon {
   flex: none;
   width: 28px;
   height: 28px;
@@ -492,7 +532,8 @@ html[data-ui-theme="soft"] h4 {
   margin: 0;
 }
 
-.bb-unit-chip .bb-unit-chip__glyph {
+.bb-unit-chip .bb-unit-chip__glyph,
+.bb-unit-edge-chip .bb-unit-chip__glyph {
   width: 14px;
   height: 14px;
   transform: none;
@@ -525,6 +566,36 @@ html[data-ui-theme="soft"] h4 {
 
 .bb-unit-chip__eta:empty {
   display: none;
+}
+
+/* Stand-in for a unit the map cannot show: the unit's icon and ETA, parked on
+   the rim of the visible strip with a chevron outside it pointing the way the
+   unit went. Tapping it pans the map until the real marker is back. */
+.bb-unit-edge-wrap {
+  background: transparent !important;
+  border: none !important;
+  overflow: visible !important;
+}
+
+.bb-unit-edge {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+}
+
+.bb-unit-edge__chevron {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-left: 6px solid currentColor;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  cursor: pointer;
+  /* transform is written from the map: it carries the bearing to the unit. */
 }
 
 /* Connectors from the top of the explore list to the user pin: one thin blue
@@ -665,117 +736,19 @@ html[data-ui-theme="soft"] h4 {
   background-image: url('/assets/icons/sar-logo.svg');
 }
 
-.bb-svc-pin--muted {
-  opacity: 0.7;
-  filter: grayscale(1);
-}
-
-.bb-svc-pin--muted .bb-svc-pin__head {
-  background-color: #9ca3af !important;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
-}
-
-/* Apple Maps–style drop-in when markers (re)appear after location/data change */
+/* Markers (re)appearing after a location or data change settle in from just
+   above their point. Kept to one gentle move: the springy overshoot this used
+   to have read as a bounce rather than as markers arriving. */
 .bb-svc-pin--enter {
-  animation: bb-pin-drop 0.48s cubic-bezier(0.34, 1.45, 0.64, 1) both;
-}
-
-/* Selected / detail-card focus — larger pin + stronger pop */
-.bb-svc-pin--active {
-  width: 48px;
-  height: 58px;
-  z-index: 5;
-}
-
-.bb-svc-pin--active .bb-svc-pin__head {
-  width: 40px;
-  height: 40px;
-  border-width: 3px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    inset 0 -3px 5px rgba(0, 0, 0, 0.18),
-    0 6px 18px rgba(15, 23, 42, 0.45);
-}
-
-.bb-svc-pin--active .bb-svc-pin__icon {
-  width: 18px;
-  height: 18px;
-}
-
-.bb-svc-pin--active.bb-svc-pin--enter {
-  animation: bb-pin-pop 0.7s cubic-bezier(0.22, 1.4, 0.36, 1) both;
-}
-
-/* Selected emergency — soft pulse rings (same language as user location) */
-.bb-svc-pin__pulse {
-  position: absolute;
-  left: 50%;
-  top: 42%;
-  width: 22px;
-  height: 22px;
-  margin: -11px 0 0 -11px;
-  border-radius: 9999px;
-  border: 2px solid rgba(26, 28, 46, 0.28);
-  background: rgba(26, 28, 46, 0.08);
-  animation: bb-svc-pulse 2s ease-out infinite;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.bb-svc-pin__pulse--delay {
-  animation-delay: 1s;
-}
-
-.bb-svc-pin--active .bb-svc-pin__head {
-  position: relative;
-  z-index: 2;
-}
-
-@keyframes bb-svc-pulse {
-  0% {
-    transform: scale(1);
-    opacity: 0.65;
-  }
-  100% {
-    transform: scale(2.6);
-    opacity: 0;
-  }
+  animation: bb-pin-drop 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
 @keyframes bb-pin-drop {
-  0% {
-    transform: translateY(-22px) scale(0.35);
+  from {
+    transform: translateY(-14px) scale(0.94);
     opacity: 0;
   }
-  55% {
-    transform: translateY(2px) scale(1.06);
-    opacity: 1;
-  }
-  75% {
-    transform: translateY(-1px) scale(0.97);
-  }
-  100% {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes bb-pin-pop {
-  0% {
-    transform: translateY(-28px) scale(0.45);
-    opacity: 0;
-  }
-  45% {
-    transform: translateY(4px) scale(1.35);
-    opacity: 1;
-  }
-  68% {
-    transform: translateY(-6px) scale(0.92);
-  }
-  84% {
-    transform: translateY(2px) scale(1.08);
-  }
-  100% {
+  to {
     transform: translateY(0) scale(1);
     opacity: 1;
   }
@@ -839,13 +812,8 @@ html[data-ui-theme="soft"] h4 {
     animation: none;
     opacity: 0;
   }
-  .bb-svc-pin--enter,
-  .bb-svc-pin--active.bb-svc-pin--enter {
+  .bb-svc-pin--enter {
     animation: none;
-  }
-  .bb-svc-pin__pulse {
-    animation: none;
-    opacity: 0;
   }
   .bb-route-bubble {
     animation: none;
@@ -853,8 +821,11 @@ html[data-ui-theme="soft"] h4 {
   .bb-matrix-line,
   .bb-matrix-dot,
   .bb-unit-chip,
+  .bb-unit-edge-chip,
   .bb-unit-pop .bb-svc-pin,
   .bb-unit-pop .bb-unit-chip,
+  .bb-unit-arrive .bb-unit-chip,
+  .bb-unit-arrive .bb-svc-pin,
   .bb-map-loader,
   .bb-map-loader__spin {
     animation: none;
@@ -980,15 +951,10 @@ html[data-ui-theme="soft"] h4 {
   transform-origin: 50% 100%;
 }
 
-/* Slim the route stroke on zoom-out — default 5 / 8 → 3 / 4.5.
- * `!important` because Leaflet also writes stroke-width as an SVG attribute
- * on every redraw. */
+/* Slim the route stroke on zoom-out — 4 → 3. `!important` because Leaflet also
+ * writes stroke-width as an SVG attribute on every redraw. */
 .bb-map--zoomed-out .bb-route-line {
   stroke-width: 3 !important;
-}
-.bb-map--zoomed-out .bb-route-casing {
-  stroke-width: 4.5 !important;
-  opacity: 0.85;
 }
 
 /* ETA badge stays visible on zoom-out but at ~72% scale so it doesn't cover
@@ -1302,10 +1268,4 @@ html[data-ui-theme="soft"] .eticket-ui .font-semibold,
   color: #344054;
 }
 
-/* ── Route focus mode: hide everything except active unit + ETA ─────── */
-/* :has() is baseline-supported in all modern browsers (Chrome 105+, Safari 16+) */
-.bb-route-focus .bb-svc-pin-wrap:not(:has(.bb-svc-pin--active)) {
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
 
