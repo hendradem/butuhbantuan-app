@@ -13,7 +13,6 @@ export function closeAllSheets() {
   useMoreSheetStore().onClose();
   useSosStore().close();
   useNeedHelpSheetStore().onClose();
-  useUnitsSheetStore().onClose();
   useAppErrorStore().onCloseSheet();
   useSheetStackStore().clear();
   useMapUrl().clearUnit();

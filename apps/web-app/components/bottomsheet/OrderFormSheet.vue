@@ -288,23 +288,6 @@ async function submit() {
     const live = useEmergencyStore().filteredEmergency.find(
       (item: any) => String(item?.emergencyData?.id) === String(orderSheet.emergencyUUID),
     );
-    if (live) {
-      useRecentUnits().rememberFromEmergency(live, "order");
-    } else if (orderSheet.emergencyUUID) {
-      useRecentUnits().rememberFromEmergency(
-        {
-          emergencyData: {
-            id: orderSheet.emergencyUUID,
-            name: orderSheet.unitName,
-            address: {
-              regency_id: userLocation.currentRegion.regency.id,
-              regency: userLocation.currentRegion.regency.name,
-            },
-          },
-        },
-        "order",
-      );
-    }
 
     const ticketNumber = res.data?.ticket_number ?? "";
     if (!ticketNumber) {

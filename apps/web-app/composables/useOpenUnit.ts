@@ -1,4 +1,3 @@
-import type { UnitChip } from "~/utils/savedUnits";
 import { recordServiceDemand } from "~/utils/serviceDemand";
 
 type OpenDetailOpts = {
@@ -76,25 +75,7 @@ export function useOpenUnit() {
     if (!opts?.skipUrl) mapUrl.setService(String(service.id ?? ""));
   }
 
-  function openUnit(unit: UnitChip) {
-    const live = emergencyStore.filteredEmergency.find(
-      (item: any) => String(item.emergencyData?.id) === unit.id,
-    );
-    if (live) {
-      openEmergencyDetail(live);
-      return;
-    }
-
-    const typeName = unit.typeName;
-    if (!typeName || !emergencyTypeData.value?.data) return;
-    const service = emergencyTypeData.value.data.find(
-      (t: any) => t.name === typeName,
-    );
-    if (service) openService(service);
-  }
-
   return {
-    openUnit,
     openService,
     openEmergencyDetail,
     emergencyTypeData,

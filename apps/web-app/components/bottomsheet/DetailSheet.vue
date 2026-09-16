@@ -11,8 +11,7 @@
  *   ───────── scrollable body ─────────
  *   [ Perhatian penting card ]
  *   [ Kontak · Alamat · Layanan (rounded collapsibles) ]
- *   ───────── fixed footer ─────────
- *   [ Laporan · Telepon · Share · Simpan ]
+ *   [ action pills ] — Laporan · WhatsApp · Telepon · Share
  */
 import { Icon } from "@iconify/vue";
 import { isAmbulanceServiceType, isDamkarType, isSarType, jenisPelayananLabel } from "@butuhbantuan/utils";
@@ -31,8 +30,6 @@ const orderSheet = useOrderSheetStore();
 const reviewSheet = useReviewSheetStore();
 const mapUrl = useMapUrl();
 const leaflet = useLeafletStore();
-const { saved, toggleFromEmergency } = useSavedUnits();
-const { rememberFromEmergency } = useRecentUnits();
 const toast = appToast();
 
 const data = computed(() => detailSheet.detailSheetData);
@@ -226,8 +223,6 @@ const serviceTypeLabel = computed(() => {
 const headerTitle = computed(() => emergencyData.value?.name ?? "Bantuan darurat");
 const headerSubtitle = computed(() => emergencyData.value?.organization_name ?? "");
 
-const isUnitSaved = computed(() => saved(emergencyData.value?.id));
-
 // ── Notice items (Perhatian penting) ─────────────────────────────────────────
 
 const noticeItems = [
@@ -248,17 +243,8 @@ const description = computed<string>(() => String(emergencyData.value?.descripti
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 
-function toggleSaveUnit() {
-  if (!emergencyData.value?.id) return;
-  const next = toggleFromEmergency(emergency.value);
-  toast.success(
-    next ? `${emergencyData.value.name} tersimpan` : "Dihapus dari unit tersimpan",
-  );
-}
-
 function onLaporan() {
   if (isHospital.value) return onTelepon();
-  rememberFromEmergency(emergency.value, "whatsapp");
   const wa =
     emergencyData.value?.contact?.whatsapp ||
     emergencyData.value?.contact?.phone ||
@@ -273,7 +259,6 @@ function onLaporan() {
 }
 
 function onTelepon() {
-  rememberFromEmergency(emergency.value, "phone");
   const phone = emergencyData.value?.contact?.phone;
   if (!phone) {
     toast.error("Nomor telepon tidak tersedia");
@@ -290,7 +275,6 @@ function onWhatsAppChat() {
     toast.error("WhatsApp tidak tersedia");
     return;
   }
-  rememberFromEmergency(emergency.value, "whatsapp");
   window.location.href = `https://wa.me/${convertPhoneNumber(wa)}`;
 }
 
@@ -494,16 +478,6 @@ watch(activeTab, () => {
           <button type="button" class="bb-action-pill shrink-0" @click="onShare">
             <Icon icon="lucide:share-2" class="text-[14px]" />
             Share
-          </button>
-          <button
-            type="button"
-            class="bb-action-pill shrink-0"
-            :class="isUnitSaved && 'bb-action-pill--saved'"
-            :aria-pressed="isUnitSaved"
-            @click="toggleSaveUnit"
-          >
-            <Icon :icon="isUnitSaved ? 'lucide:bookmark-check' : 'lucide:bookmark'" class="text-[14px]" />
-            {{ isUnitSaved ? "Tersimpan" : "Simpan" }}
           </button>
         </div>
 
@@ -794,11 +768,6 @@ watch(activeTab, () => {
 }
 .bb-action-pill--primary:active {
   background: #a52a1e;
-}
-.bb-action-pill--saved {
-  color: var(--bb-accent, #d93025);
-  border-color: var(--bb-accent, #d93025);
-  background: #ffffff;
 }
 
 /* Tab strip — GMaps: medium weight, 3px underline */

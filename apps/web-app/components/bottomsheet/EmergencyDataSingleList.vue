@@ -5,7 +5,6 @@ import { unitUsesWaDispatch } from "~/utils/waContact";
 const props = defineProps<{ data: any }>();
 
 const orderSheet = useOrderSheetStore();
-const { rememberFromEmergency } = useRecentUnits();
 
 const emergencyData = computed(() => props.data?.emergencyData);
 const isHospital = computed(() => emergencyData.value?.organization_type === "rumah_sakit");
@@ -17,7 +16,6 @@ function onHubungi() {
     onTelepon();
     return;
   }
-  rememberFromEmergency(props.data, "whatsapp");
   const wa =
     emergencyData.value?.contact?.whatsapp ||
     emergencyData.value?.contact?.phone ||
@@ -32,7 +30,6 @@ function onHubungi() {
 }
 
 function onTelepon() {
-  rememberFromEmergency(props.data, "phone");
   const phone = emergencyData.value?.contact?.phone;
   if (!phone) return;
   const digits = convertPhoneNumber(phone);
