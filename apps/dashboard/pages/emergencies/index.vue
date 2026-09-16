@@ -27,6 +27,34 @@ const { data: types } = await useAsyncData("types-filter", () =>
 const refresh = useSoftRefresh(refreshEmergencies);
 const showSkeleton = computed(() => isInitialPending(pending.value, data.value));
 
+// ── Views: registered services vs inbound partner requests ──────────────────
+// Fetched eagerly (not on tab open) so the "Request" tab can carry a badge for
+// requests nobody has looked at yet.
+const TABS = [
+  { value: "layanan", label: "Layanan" },
+  { value: "request", label: "Request" },
+] as const;
+
+const { tab: view, setTab: setView } = usePersistedTab(
+  "bb-emergencies-view",
+  "layanan",
+  ["layanan", "request"] as const,
+  "view",
+);
+
+const {
+  data: partnerRequests,
+  pending: partnerRequestsPending,
+  refresh: refreshPartnerRequests,
+} = await useAsyncData("partner-requests", () =>
+  authGet<{ data: any[] }>("/api/v1/admin/partner-requests"),
+);
+
+const partnerRequestList = computed(() => partnerRequests.value?.data ?? []);
+const pendingRequestCount = computed(
+  () => partnerRequestList.value.filter((r: any) => r.status === "pending").length,
+);
+
 watch([search, selectedType, filterProvince], () => { page.value = 1; });
 
 type EmSortCol = 'name' | 'organization_name' | 'type' | 'status';
@@ -255,19 +283,49 @@ async function executeDelete() {
         <div>
           <h1 class="page-subheader-title">Layanan Darurat</h1>
           <p class="page-subheader-desc">
-            <span v-if="showSkeleton">Memuat...</span>
-            <span v-else>{{ filtered.length }} dari {{ data?.data?.length ?? 0 }} layanan terdaftar</span>
+            <template v-if="view === 'request'">
+              <span v-if="pendingRequestCount">{{ pendingRequestCount }} permintaan menunggu ditinjau</span>
+              <span v-else>{{ partnerRequestList.length }} permintaan mitra</span>
+            </template>
+            <template v-else>
+              <span v-if="showSkeleton">Memuat...</span>
+              <span v-else>{{ filtered.length }} dari {{ data?.data?.length ?? 0 }} layanan terdaftar</span>
+            </template>
           </p>
         </div>
-        <UiButton @click="showCreate = true; createError = ''">
+        <UiButton v-if="view === 'layanan'" @click="showCreate = true; createError = ''">
           <Icon icon="lucide:plus" class="text-sm" />
           Tambah Layanan
         </UiButton>
       </div>
     </div>
 
-    <!-- Table card -->
-    <div class="p-4 sm:p-6">
+    <!-- Service list vs partner requests -->
+    <div class="px-4 sm:px-6">
+      <div class="flex items-center gap-1 border-b border-neutral-200" role="tablist" aria-label="Tampilan layanan darurat">
+        <button
+          v-for="t in TABS"
+          :key="t.value"
+          type="button"
+          role="tab"
+          :aria-selected="view === t.value"
+          class="-mb-px inline-flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors"
+          :class="view === t.value ? 'border-primary-600 text-neutral-900' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
+          @click="setView(t.value)"
+        >
+          {{ t.label }}
+          <span
+            v-if="t.value === 'request' && pendingRequestCount"
+            class="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-amber-800"
+          >
+            {{ pendingRequestCount }}
+          </span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Service table -->
+    <div v-if="view === 'layanan'" class="p-4 sm:p-6">
       <UiTableCard
         title="Daftar Layanan"
         :badge="filtered.length"
@@ -462,6 +520,15 @@ async function executeDelete() {
           />
         </template>
       </UiTableCard>
+    </div>
+
+    <!-- Partner requests (daftar jadi mitra) -->
+    <div v-else class="p-4 sm:p-6">
+      <PartnerRequestTab
+        :requests="partnerRequestList"
+        :loading="partnerRequestsPending"
+        @refresh="refreshPartnerRequests"
+      />
     </div>
 
     <!-- Row dropdown (teleported) -->
