@@ -6,6 +6,7 @@ import { displayEtaMinutes } from "~/utils/rankUnits";
 import {
   ROUTE_LINE_CASING_WEIGHT,
   ROUTE_LINE_COLOR,
+  ROUTE_LINE_COLOR_FAR,
   ROUTE_LINE_COLOR_MID,
   ROUTE_LINE_COLOR_NEAR,
   ROUTE_LINE_WEIGHT,
@@ -55,6 +56,8 @@ let activeEmergencyId = "";
  * screen while it is open. null = no restriction (list closed).
  */
 let visibleUnitIdSet: Set<string> | null = null;
+/** The same set as an ordered list, so a change is detectable. */
+let shownUnitIds: string[] = [];
 /** Ids of the units the list leads with, in list order — each gets a connector. */
 let topUnitIds: string[] = [];
 /**
@@ -123,10 +126,16 @@ const ROUTE_OVERLAY_MIN_ZOOM = 13;
  * rather than a straight-line estimate.
  */
 const MATRIX_LINE_COLOR = ROUTE_LINE_COLOR_NEAR;
-/** Past this many minutes a unit's connector turns orange, so the ones that
- *  are a longer drive than the rest stand out on their own. */
-const CONNECTOR_FAR_MINUTES = 10;
-const MATRIX_LINE_COLOR_FAR = ROUTE_LINE_COLOR_MID;
+/**
+ * Connector tones by drive time, on the app's own palette: blue while a unit is
+ * close, orange past this, red from the far one. A connector then reads at a
+ * glance as "worth calling / slower / a long way off", and the chip's ETA takes
+ * the same colour.
+ */
+const CONNECTOR_MID_MINUTES = 10;
+const CONNECTOR_FAR_MINUTES = 15;
+const MATRIX_LINE_COLOR_MID = ROUTE_LINE_COLOR_MID;
+const MATRIX_LINE_COLOR_FAR = ROUTE_LINE_COLOR_FAR;
 const MATRIX_LINE_WEIGHT = 4;
 /** End cap where a connector leaves its unit — a dot in the line's own colour
  *  with a white ring, sized in pixels so it holds its size at any zoom. */
@@ -421,8 +430,14 @@ onMounted(async () => {
   watch(
     () => exploreSheet.visibleUnitIds,
     (ids) => {
-      visibleUnitIdSet = ids ? new Set(ids) : null;
+      const next = ids ?? [];
+      const changed = next.join() !== shownUnitIds.join();
+      shownUnitIds = next;
+      visibleUnitIdSet = ids ? new Set(next) : null;
       applyMarkerListFilter();
+      // Opening the list, or a new filter: say it, once. Closing doesn't —
+      // the map is already handing itself back.
+      if (changed && next.length) popUnitMarkers();
     },
     { immediate: true },
   );
@@ -864,6 +879,26 @@ function applyMarkerListFilter() {
   }
 }
 
+/**
+ * Swell every unit marker once — the map's answer to a filter change, or to the
+ * connectors finishing their fetch. Without it those two moments rearrange
+ * things silently behind the sheet.
+ */
+function popUnitMarkers() {
+  const els: HTMLElement[] = [];
+  for (const marker of markersById.values()) {
+    const el = marker.getElement?.();
+    if (el) els.push(el as HTMLElement);
+  }
+  if (!els.length) return;
+
+  for (const el of els) el.classList.remove("bb-unit-pop");
+  // One reflow for the whole batch. Without it the browser coalesces the remove
+  // and the add, and an animation that never left can't restart.
+  void els[0]!.offsetWidth;
+  for (const el of els) el.classList.add("bb-unit-pop");
+}
+
 /** Name a unit is listed under. */
 function unitName(id: string): string {
   const data = markerMetaById.get(id)?.item?.emergencyData;
@@ -1146,11 +1181,12 @@ async function fetchConnectorRoute(
   }
 }
 
-/** A connector's tone — blue, or orange once its own drive time runs long. */
+/** A connector's tone, from its own drive time. */
 function connectorColor(minutes: number | null): string {
-  return minutes != null && minutes > CONNECTOR_FAR_MINUTES
-    ? MATRIX_LINE_COLOR_FAR
-    : MATRIX_LINE_COLOR;
+  if (minutes == null) return MATRIX_LINE_COLOR;
+  if (minutes >= CONNECTOR_FAR_MINUTES) return MATRIX_LINE_COLOR_FAR;
+  if (minutes > CONNECTOR_MID_MINUTES) return MATRIX_LINE_COLOR_MID;
+  return MATRIX_LINE_COLOR;
 }
 
 /**
@@ -1173,10 +1209,43 @@ function trackRouteLoad(delta: number) {
   clearTimeout(routeLoaderTimer);
   routeLoaderTimer = undefined;
   showRouteLoader.value = false;
+  // Everything the list asked for has landed — let the markers say so.
+  if (topUnitIds.length) popUnitMarkers();
+}
+
+/**
+ * Reveal a connector by growing it out of the unit towards the user pin — the
+ * same reading as the selected route drawing itself, and the reason the matrix
+ * lines announce the direction they run in.
+ *
+ * Reserved for a freshly fetched route: a cached one is already known, and
+ * replaying this on every filter change would be noise.
+ */
+function animateConnectorDraw(line: Polyline, latlngs: [number, number][]) {
+  if (latlngs.length < 2) return;
+
+  const DURATION_MS = 850;
+  const started = performance.now();
+
+  const step = (now: number) => {
+    // Gone — a closed list, or a newer route replaced it.
+    if (!map?.hasLayer(line)) return;
+
+    const t = Math.min(1, (now - started) / DURATION_MS);
+    const eased = 1 - (1 - t) ** 3;
+    const upto = Math.max(2, Math.round(eased * latlngs.length));
+    line.setLatLngs(latlngs.slice(0, upto));
+
+    if (t < 1) requestAnimationFrame(step);
+    else line.setLatLngs(latlngs);
+  };
+
+  line.setLatLngs(latlngs.slice(0, 1));
+  requestAnimationFrame(step);
 }
 
 /** Draw or refresh one connector from road geometry the map now has. */
-function drawConnector(L: any, id: string, route: ConnectorRoute) {
+function drawConnector(L: any, id: string, route: ConnectorRoute, animate = false) {
   if (!map) return;
 
   const color = connectorColor(chipEtaMinutes(id));
@@ -1210,6 +1279,7 @@ function drawConnector(L: any, id: string, route: ConnectorRoute) {
     dot.getElement()?.setAttribute("vector-effect", "non-scaling-stroke");
     entry = { line, dot };
     matrixLines.set(id, entry);
+    if (animate) animateConnectorDraw(line, route.latlngs);
   } else {
     entry.line.setLatLngs(route.latlngs);
     entry.line.setStyle({ color });
@@ -1242,7 +1312,8 @@ async function loadConnector(
     const pinLng = Number(userLocationStore.long);
     if (connectorCacheKey(id, pinLat, pinLng) !== key) return;
 
-    drawConnector(L, id, route);
+    // Fresh geometry: this is the one draw that reveals itself.
+    drawConnector(L, id, route, true);
     // A unit the matrix had no ETA for takes its drive time from here, so the
     // chip may still have text to gain.
     applyTopUnitMarkers(L);

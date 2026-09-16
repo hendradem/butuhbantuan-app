@@ -381,6 +381,22 @@ html[data-ui-theme="soft"] h4 {
   transition: opacity 0.18s ease, visibility 0s linear 0.18s;
 }
 
+/* The map's answer to a filter change, or to the connectors finishing their
+   fetch: one quick swell per unit. `scale` rather than `transform`, because
+   Leaflet writes a marker's transform and the pins' own drop-in animation owns
+   that property — the shape has to be animated on an axis of its own. The
+   legacy circle has no inner element to scale, so it sits this one out. */
+@keyframes bb-unit-pop {
+  0% { scale: 0.88; }
+  55% { scale: 1.06; }
+  100% { scale: 1; }
+}
+
+.bb-unit-pop .bb-svc-pin,
+.bb-unit-pop .bb-unit-chip {
+  animation: bb-unit-pop 0.42s cubic-bezier(0.22, 1.3, 0.36, 1);
+}
+
 /* The units the explore list leads with wear one chip each — icon, name and
    ETA together on the marker — instead of a pin with badges scattered around
    the map. The chip is content-sized and hangs off its marker's own point, so
@@ -837,6 +853,8 @@ html[data-ui-theme="soft"] h4 {
   .bb-matrix-line,
   .bb-matrix-dot,
   .bb-unit-chip,
+  .bb-unit-pop .bb-svc-pin,
+  .bb-unit-pop .bb-unit-chip,
   .bb-map-loader,
   .bb-map-loader__spin {
     animation: none;
