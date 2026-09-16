@@ -3,7 +3,17 @@
   "version": "0.0.1",
   "private": true,
   "exports": { ".": "./index.ts" },
-  "dependencies": { "reka-ui": "^2.10.1" },
-  "devDependencies": { "vue": "^3.5.17", "typescript": "^5.8.3" },
-  "peerDependencies": { "vue": "^3.5.0" }
+  "dependencies": {
+    "@butuhbantuan/utils": "workspace:*",
+    "reka-ui": "^2.10.1"
+  },
+  "devDependencies": {
+    "@iconify/vue": "^5.0.1",
+    "vue": "^3.5.17",
+    "typescript": "^5.8.3"
+  },
+  "peerDependencies": {
+    "@iconify/vue": "^5.0.1",
+    "vue": "^3.5.0"
+  }
 }

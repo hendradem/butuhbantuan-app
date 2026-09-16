@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { PARTNER_TIER_OPTIONS } from "~/utils/partnerTier";
+import { PARTNER_TIER_OPTIONS } from "@butuhbantuan/utils";
 
 const emit = defineEmits<{ openMapPicker: [] }>();
 
@@ -251,7 +251,7 @@ function selectAddress(item: any) {
       <UiFormField label="Tipe Organisasi">
         <UiInput v-model="form.organization_type" placeholder="mis. Rumah Sakit Pemerintah" />
       </UiFormField>
-      <JenisPelayananPicker
+      <UiJenisPelayananPicker
         v-model="form.tipe_emergency"
         :emergency-type-name="selectedTypeName"
       />

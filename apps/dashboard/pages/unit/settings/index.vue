@@ -386,7 +386,7 @@ const archiveLinks = [
           title="Jenis Pelayanan"
           description="Mode layanan yang unit siap terima dari warga"
         >
-          <JenisPelayananPicker
+          <UiJenisPelayananPicker
             v-model="jenisPelayanan"
             :emergency-type-name="emergencyTypeName"
           />

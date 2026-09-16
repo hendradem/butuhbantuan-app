@@ -6,6 +6,11 @@ import {
   showJenisPelayananPicker,
 } from "@butuhbantuan/utils";
 
+/**
+ * Multi-select cards for the service modes a unit accepts. Lives in packages/ui
+ * because both the dashboard's emergency form and the public partner form ask
+ * for the same field.
+ */
 const props = defineProps<{
   modelValue: string[];
   emergencyTypeName?: string;
