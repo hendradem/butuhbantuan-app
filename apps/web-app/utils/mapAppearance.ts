@@ -140,7 +140,9 @@ export function tileAttribution(tiles: MapTileStyle): string {
  * Leaflet halves tileSize and bumps zoomOffset, so it asks for four @2x tiles
  * at z+1 where one would do. Same pixels on screen, 4x the requests.
  */
-export function tileLayerExtraOptions(tiles: MapTileStyle): Record<string, unknown> {
+export function tileLayerExtraOptions(
+  tiles: MapTileStyle,
+): Record<string, unknown> {
   return tiles === "classic" && !stadiaBlocked ? { ext: "png" } : {};
 }
 
@@ -221,7 +223,9 @@ export function emergencyPinIconHtml(
     opts?.delayMs != null && opts.delayMs > 0
       ? ` style="animation-delay:${opts.delayMs}ms"`
       : "";
-  return `<div class="bb-svc-pin bb-svc-pin--${mod}${enter}" role="img" aria-label="${typeName || "Layanan"}"${delay}><div class="bb-svc-pin__head"><span class="bb-svc-pin__icon"></span></div></div>`;
+  return `<div class="bb-svc-pin bb-svc-pin--${mod}${enter}" role="img" aria-label="${
+    typeName || "Layanan"
+  }"${delay}><div class="bb-svc-pin__head"><span class="bb-svc-pin__icon"></span></div></div>`;
 }
 
 /**

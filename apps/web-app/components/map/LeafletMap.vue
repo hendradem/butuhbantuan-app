@@ -251,7 +251,12 @@ onMounted(async () => {
     subdomains: tileSubdomains(initialTiles),
     crossOrigin: true,
     keepBuffer: 8,
-    updateWhenIdle: false,
+    // Leaflet's own default — and on a phone the difference is the whole drag:
+    // tiles only refresh once the pan settles, instead of a grid rebuild on
+    // every frame of it. `keepBuffer: 8` means the tiles already on screen
+    // cover a long drag, and the service worker answers the rest from cache,
+    // so the strip that appears at the end fills immediately.
+    updateWhenIdle: true,
     ...tileLayerExtraOptions(initialTiles),
   }).addTo(map);
   watchTileQuota(L, map!, baseTileLayer, initialTiles);
@@ -267,7 +272,7 @@ onMounted(async () => {
       subdomains: tileSubdomains(next),
       crossOrigin: true,
       keepBuffer: 8,
-      updateWhenIdle: false,
+      updateWhenIdle: true,
       ...tileLayerExtraOptions(next),
     }).addTo(map);
     watchTileQuota(L, map, baseTileLayer, next);
@@ -1212,10 +1217,17 @@ function clearEdgeMarkers() {
 function updateEdgeIndicators(L: any) {
   if (!map) return;
 
-  const strip = visibleStrip();
   const wanted = new Set(trackedUnitIds().filter((id) => markersById.has(id)));
+  if (!wanted.size) {
+    clearEdgeMarkers();
+    return;
+  }
 
-  if (!strip || !wanted.size) {
+  // Measured only once there is something to place: reading the sheet's layout
+  // on every frame of a pan — which is what this used to do, list or no list —
+  // forces a style flush per frame for nothing.
+  const strip = visibleStrip();
+  if (!strip) {
     clearEdgeMarkers();
     return;
   }

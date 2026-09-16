@@ -275,7 +275,7 @@ html[data-ui-theme="soft"] h4 {
 
 .ambulance-marker {
   background-image: url('/assets/icons/ambulance-logo.svg');
-  background-color: #1e1e1e;
+  background-color: #8b5cf6;
   box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
   border: 2px solid #fff;
   background-size: 12px 12px;
@@ -303,7 +303,7 @@ html[data-ui-theme="soft"] h4 {
 
 .hospital-marker {
   background-image: url('/assets/icons/hospital-logo.svg');
-  background-color: #8b5cf6;
+  background-color: #4a90e2;
   box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
   border: 2px solid #fff;
   background-size: 12px 12px;
@@ -333,6 +333,14 @@ html[data-ui-theme="soft"] h4 {
    keep animating behind it — constant compositing that competes with the list
    scroll. Park them until the sheet comes back down. */
 .bb-map--sheet-max .bb-user-pin__ring {
+  animation-play-state: paused;
+}
+
+/* Same idea for a live gesture. The rings sit in a pane Leaflet transforms on
+   every frame of a pan or zoom, so a running animation there keeps the
+   compositor busy for the whole gesture — the one thing the user is judging
+   smoothness by. They resume the moment the map settles. */
+.bb-map-interacting .bb-user-pin__ring {
   animation-play-state: paused;
 }
 
@@ -424,9 +432,11 @@ html[data-ui-theme="soft"] h4 {
   padding: 5px 10px 5px 5px;
   border-radius: 14px;
   background: #ffffff;
-  /* drop-shadow rather than box-shadow, so the tail is shadowed with the chip
-     instead of looking drawn on top of the map. */
-  filter: drop-shadow(0 2px 6px rgba(15, 23, 42, 0.26));
+  /* box-shadow, deliberately not `filter: drop-shadow`. A filter put the chip
+     on its own render surface, which the compositor had to re-rasterise while
+     Leaflet moved it — one of the costs that made panning stutter on a phone.
+     The cost is that the tail below is no longer shadowed with the chip. */
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.26);
   white-space: nowrap;
   animation: bb-fade-in 0.22s ease;
 }
@@ -716,7 +726,9 @@ html[data-ui-theme="soft"] h4 {
   background-repeat: no-repeat;
 }
 
-.bb-svc-pin--ambulance .bb-svc-pin__head { background-color: #1e1e1e; }
+/* Ambulance and hospitals swapped colours: ambulance took the violet that
+   used to mean hospital, hospital took the softer blue. */
+.bb-svc-pin--ambulance .bb-svc-pin__head { background-color: #8b5cf6; }
 .bb-svc-pin--ambulance .bb-svc-pin__icon {
   background-image: url('/assets/icons/ambulance-logo.svg');
 }
@@ -726,7 +738,7 @@ html[data-ui-theme="soft"] h4 {
   background-image: url('/assets/icons/fire-fighter-logo.svg');
 }
 
-.bb-svc-pin--hospital .bb-svc-pin__head { background-color: #8b5cf6; }
+.bb-svc-pin--hospital .bb-svc-pin__head { background-color: #4a90e2; }
 .bb-svc-pin--hospital .bb-svc-pin__icon {
   background-image: url('/assets/icons/hospital-logo.svg');
 }

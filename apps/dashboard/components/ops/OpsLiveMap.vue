@@ -780,13 +780,15 @@ function etaLabel(i: OpsIncident) {
   background-repeat: no-repeat;
 }
 
-.bb-svc-pin--ambulance .bb-svc-pin__head { background-color: #1e1e1e; }
+/* Ambulance and hospitals swapped colours: ambulance took the violet that
+   used to mean hospital, hospital took the softer blue. */
+.bb-svc-pin--ambulance .bb-svc-pin__head { background-color: #8b5cf6; }
 .bb-svc-pin--ambulance .bb-svc-pin__icon { background-image: url('/assets/icons/ambulance-logo.svg'); }
 
 .bb-svc-pin--damkar .bb-svc-pin__head { background-color: #ef4444; }
 .bb-svc-pin--damkar .bb-svc-pin__icon { background-image: url('/assets/icons/fire-fighter-logo.svg'); }
 
-.bb-svc-pin--hospital .bb-svc-pin__head { background-color: #8b5cf6; }
+.bb-svc-pin--hospital .bb-svc-pin__head { background-color: #4a90e2; }
 .bb-svc-pin--hospital .bb-svc-pin__icon { background-image: url('/assets/icons/hospital-logo.svg'); }
 
 .bb-svc-pin--sar .bb-svc-pin__head { background-color: #f97316; }
@@ -801,14 +803,14 @@ function etaLabel(i: OpsIncident) {
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
 }
 
-/* Legend mini-pin swatch */
+/* Legend mini-pin swatch — the ambulance pins' current colour. */
 .ops-legend-pin {
   display: inline-block;
   width: 10px;
   height: 10px;
   border-radius: 50% 50% 50% 2px;
   transform: rotate(-45deg);
-  background: #1e1e1e;
+  background: #8b5cf6;
   border: 1.5px solid #fff;
   box-shadow: 0 1px 3px rgba(15,23,42,.3);
 }
