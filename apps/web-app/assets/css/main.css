@@ -358,6 +358,232 @@ html[data-ui-theme="soft"] h4 {
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
 }
 
+/* The explore list mirrors itself onto the map, so pins come and go as its
+   filters change — faded, never blinked in or out.
+
+   Only opacity transitions. Leaflet positions markers by writing their
+   transform directly, so animating transform here would make pins drift
+   behind a pan or zoom. Visibility (not display) does the actual hiding:
+   display:none cancels the pin's entry animation, so every pin a filter
+   brought back would replay its drop-in, and visibility also takes the pin
+   out of hit-testing, which keeps an invisible pin from swallowing taps
+   meant for the map. */
+.bb-unit-marker {
+  transition: opacity 0.18s ease;
+}
+
+/* Two classes here so the fade also wins over the muted-marker opacity rule. */
+.bb-unit-marker.bb-map-marker--hidden {
+  opacity: 0;
+  visibility: hidden;
+  /* Drop out only once the fade has run; the way back is instant, since
+     visibility isn't part of the base rule's transition. */
+  transition: opacity 0.18s ease, visibility 0s linear 0.18s;
+}
+
+/* The units the explore list leads with wear one chip each — icon, name and
+   ETA together on the marker — instead of a pin with badges scattered around
+   the map. The chip is content-sized and hangs off its marker's own point, so
+   it stays glued to it through pans and zooms. */
+.bb-unit-chip-wrap {
+  background: transparent !important;
+  border: none !important;
+  overflow: visible !important;
+}
+
+.bb-unit-chip {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 5px;
+  border-radius: 14px;
+  background: #ffffff;
+  /* drop-shadow rather than box-shadow, so the tail is shadowed with the chip
+     instead of looking drawn on top of the map. */
+  filter: drop-shadow(0 2px 6px rgba(15, 23, 42, 0.26));
+  white-space: nowrap;
+  animation: bb-fade-in 0.22s ease;
+}
+
+/* Which side of its point the chip hangs off, and where its tail points. */
+.bb-unit-chip-wrap--up .bb-unit-chip {
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+}
+.bb-unit-chip-wrap--down .bb-unit-chip {
+  left: 50%;
+  top: 8px;
+  transform: translateX(-50%);
+}
+.bb-unit-chip-wrap--right .bb-unit-chip {
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.bb-unit-chip-wrap--left .bb-unit-chip {
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.bb-unit-chip::after {
+  content: "";
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 5px solid transparent;
+}
+.bb-unit-chip-wrap--up .bb-unit-chip::after {
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-top-color: #ffffff;
+  border-bottom-width: 0;
+}
+.bb-unit-chip-wrap--down .bb-unit-chip::after {
+  bottom: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-bottom-color: #ffffff;
+  border-top-width: 0;
+}
+.bb-unit-chip-wrap--right .bb-unit-chip::after {
+  right: 100%;
+  top: 50%;
+  margin-top: -5px;
+  border-right-color: #ffffff;
+  border-left-width: 0;
+}
+.bb-unit-chip-wrap--left .bb-unit-chip::after {
+  left: 100%;
+  top: 50%;
+  margin-top: -5px;
+  border-left-color: #ffffff;
+  border-right-width: 0;
+}
+
+/* The icon well borrows .bb-svc-pin__head / .bb-svc-pin__icon for its colour
+   and service logo, and overrides only their teardrop shape. */
+.bb-unit-chip .bb-unit-chip__icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 0;
+  transform: none;
+  margin: 0;
+}
+
+.bb-unit-chip .bb-unit-chip__glyph {
+  width: 14px;
+  height: 14px;
+  transform: none;
+}
+
+.bb-unit-chip__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.bb-unit-chip__name {
+  max-width: 128px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: #202124;
+}
+
+/* Tone is set from the map, so the chip and its route line can't disagree. */
+.bb-unit-chip__eta {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.bb-unit-chip__eta:empty {
+  display: none;
+}
+
+/* Connectors from the top of the explore list to the user pin: one thin blue
+   line per leading unit, following the road it would drive and ending on a dot.
+   The ETA rides on the unit's own chip, so nothing floats over the route. They
+   fade with the unit they belong to, so a filter change moves pins and lines as
+   one gesture, and fade in as their route arrives. */
+@keyframes bb-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Deliberately no fill mode: a held end state would out-rank the hidden class
+   and the line could never fade back out. */
+.bb-matrix-line {
+  transition: opacity 0.18s ease;
+  animation: bb-fade-in 0.22s ease;
+}
+
+.bb-matrix-line--hidden {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0s linear 0.18s;
+}
+
+/* End cap where a connector leaves its unit — rides the route line's fade. */
+.bb-matrix-dot {
+  transition: opacity 0.18s ease;
+  animation: bb-fade-in 0.22s ease;
+}
+
+.bb-matrix-dot--hidden {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0s linear 0.18s;
+}
+
+/* Map overlay while the connectors' road routes are still being fetched. Sits
+   in the band the list fit keeps clear at the top, so it can't cover a pin. */
+.bb-map-loader {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Leaflet's panes stop at 700 (popups); the loader has to clear them. */
+  z-index: 800;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #3c4043;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: bb-fade-in 0.2s ease;
+}
+
+.bb-map-loader__spin {
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  border: 2px solid #d8dade;
+  border-top-color: #2563eb;
+  animation: bb-spin 0.7s linear infinite;
+}
+
+@keyframes bb-spin {
+  to { transform: rotate(360deg); }
+}
+
 .bb-svc-pin-wrap,
 .bb-user-pin-wrap {
   background: transparent !important;
@@ -608,6 +834,13 @@ html[data-ui-theme="soft"] h4 {
   .bb-route-bubble {
     animation: none;
   }
+  .bb-matrix-line,
+  .bb-matrix-dot,
+  .bb-unit-chip,
+  .bb-map-loader,
+  .bb-map-loader__spin {
+    animation: none;
+  }
 }
 
 /* Route ETA bubble — black chip + pointer to route + advice hint */
@@ -720,7 +953,10 @@ html[data-ui-theme="soft"] h4 {
 
 /* Zoomed-out state: shrink service pins, thin the route stroke, and scale
  * the ETA badge to a compact version so the whole route stays readable
- * without overpainting street labels or marker pins. */
+ * without overpainting street labels or marker pins.
+ *
+ * Leading units wear chips rather than pins, so they are untouched by this —
+ * which is what keeps their names legible at any zoom. */
 .bb-map--zoomed-out .bb-svc-pin {
   transform: scale(0.6) !important;
   transform-origin: 50% 100%;

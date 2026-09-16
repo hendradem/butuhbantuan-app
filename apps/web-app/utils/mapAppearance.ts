@@ -229,6 +229,22 @@ export function emergencyPinIconHtml(
   return `<div class="bb-svc-pin bb-svc-pin--${mod}${enter}${active}${muted}" role="img" aria-label="${typeName || "Layanan"}"${delay}>${pulse}<div class="bb-svc-pin__head"><span class="bb-svc-pin__icon"></span></div></div>`;
 }
 
+/**
+ * Marker for a unit at the top of the explore list: icon, name and ETA in one
+ * chip, instead of a pin plus two badges floating elsewhere on the map.
+ *
+ * The icon well carries the service type's own class, so it keeps the colour
+ * and logo every other marker uses — those logos are drawn for a coloured
+ * background, so a neutral well would swallow them.
+ *
+ * Both texts are written by the map (see applyTopUnitMarkers), which keeps a
+ * unit name out of the markup entirely.
+ */
+export function unitChipIconHtml(typeName: string): string {
+  const mod = pinMarkerModifier(typeName);
+  return `<span class="bb-unit-chip bb-svc-pin--${mod}"><span class="bb-unit-chip__icon bb-svc-pin__head"><span class="bb-svc-pin__icon bb-unit-chip__glyph"></span></span><span class="bb-unit-chip__text"><span class="bb-unit-chip__name"></span><span class="bb-unit-chip__eta"></span></span></span>`;
+}
+
 export function userLocationIconHtml(): string {
   return `<div class="bb-user-pin" title="Lokasi kamu — klik peta atau geser pin">
     <span class="bb-user-pin__ring"></span>

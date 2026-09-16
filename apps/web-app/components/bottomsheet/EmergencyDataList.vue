@@ -6,10 +6,14 @@ defineProps<{
   emergencyData: any[];
   /** When true, show #1/#2/#3 smart-rank hints. */
   showRankHints?: boolean;
+  /** A filter is narrowing the list — an empty list then means "no match",
+   *  not "there is nothing around you", and the two need different copy. */
+  filtersActive?: boolean;
 }>();
 
 const emit = defineEmits<{
   select: [emergency: any];
+  "reset-filters": [];
 }>();
 
 const exploreSheet = useExploreSheetStore();
@@ -76,6 +80,18 @@ function openSearch() {
         </button>
       </div>
     </div>
+
+    <!-- Filters, not the area, emptied the list — say so, and offer the way back. -->
+    <UiEmptyState
+      v-else-if="emergencyData.length === 0 && filtersActive"
+      image-src="/assets/illustration/not-found.svg"
+      title="Tidak ada unit yang cocok"
+      description="Filter yang aktif belum menyisakan satu unit pun. Longgarkan filternya, atau reset untuk melihat semua unit di sekitar."
+    >
+      <button type="button" class="btn-dark text-xs py-2 px-4" @click="emit('reset-filters')">
+        Reset filter
+      </button>
+    </UiEmptyState>
 
     <UiEmptyState
       v-else-if="emergencyData.length === 0"

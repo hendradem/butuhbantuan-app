@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import type { Map as LeafletMap, Marker, Polyline } from "leaflet";
+import type { CircleMarker, Map as LeafletMap, Marker, Polyline } from "leaflet";
 import { appToast } from "~/utils/appToast";
 import { formatDistance } from "~/utils/geo";
+import { displayEtaMinutes } from "~/utils/rankUnits";
 import {
   ROUTE_LINE_CASING_WEIGHT,
   ROUTE_LINE_COLOR,
+  ROUTE_LINE_COLOR_MID,
+  ROUTE_LINE_COLOR_NEAR,
   ROUTE_LINE_WEIGHT,
   routeAdviceFromTravel,
   routeLineCasingColor,
@@ -14,6 +17,7 @@ import {
   classicMarkerClass,
   effectiveTileStyle,
   emergencyPinIconHtml,
+  unitChipIconHtml,
   getMapAppearance,
   tileAttribution,
   tileLayerExtraOptions,
@@ -46,6 +50,42 @@ const markersById = new Map<string, Marker>();
 /** emergency id → type name for rebuilding icons. */
 const markerMetaById = new Map<string, { typeName: string; item: any }>();
 let activeEmergencyId = "";
+/**
+ * Units the explore list is currently showing — the map keeps only these on
+ * screen while it is open. null = no restriction (list closed).
+ */
+let visibleUnitIdSet: Set<string> | null = null;
+/** Ids of the units the list leads with, in list order — each gets a connector. */
+let topUnitIds: string[] = [];
+/**
+ * id → connector (route line + end cap). Entries outlive a filter change so a
+ * unit that drops out of the top few fades out instead of being torn down and
+ * rebuilt when it comes back; the pool dies with the open sheet.
+ */
+const matrixLines = new Map<string, { line: Polyline; dot: CircleMarker }>();
+/** Units currently wearing a chip instead of a pin, so swaps happen once. */
+const chipMarkerIds = new Set<string>();
+/** A connector's road geometry, plus the drive time it stands for. */
+type ConnectorRoute = { latlngs: [number, number][]; durationSec: number };
+/**
+ * Connector routes already fetched, keyed by unit + pin position, so shuffling
+ * the list around under a filter re-uses a line instead of re-asking OSRM for
+ * one it just drew. Plain data — it outlives the map instance on purpose.
+ */
+const connectorRoutes = new Map<string, ConnectorRoute>();
+/** Bound on that cache, so panning around can't pin every route in memory. */
+const CONNECTOR_CACHE_MAX = 60;
+/** Pending re-frame of the leading units, held until the sheet stops moving. */
+let listFitTimer: ReturnType<typeof setTimeout> | undefined;
+/** A re-frame is owed; it waits for the routes and for CoreSheet to settle. */
+let listFitPending = false;
+let listFitNotBefore = 0;
+/** Connector routes still in flight, and the pill that reports them. */
+let routesInFlight = 0;
+let routeLoaderTimer: ReturnType<typeof setTimeout> | undefined;
+const showRouteLoader = ref(false);
+/** Pin rounding for the cache key — ~110 m, well under what the eye can see. */
+const CONNECTOR_KEY_DECIMALS = 3;
 let currentLocationMarker: Marker | null = null;
 let accuracyCircle: any = null;
 let routeLine: Polyline | null = null;
@@ -76,6 +116,56 @@ const EXPAND_MAX_HALF_DEG = 0.12;
 const OVERVIEW_FLOOR_ZOOM = 11;
 /** Below this zoom the ETA badge is hidden and service pins shrink so the route stays readable. */
 const ROUTE_OVERLAY_MIN_ZOOM = 13;
+/**
+ * Top-list connectors — one thin blue line per leading unit, following the
+ * roads it would actually drive, with its ETA on a pill. Blue is the same
+ * "dekat" tone the app gives a short route, so a connector reads as a route
+ * rather than a straight-line estimate.
+ */
+const MATRIX_LINE_COLOR = ROUTE_LINE_COLOR_NEAR;
+/** Past this many minutes a unit's connector turns orange, so the ones that
+ *  are a longer drive than the rest stand out on their own. */
+const CONNECTOR_FAR_MINUTES = 10;
+const MATRIX_LINE_COLOR_FAR = ROUTE_LINE_COLOR_MID;
+const MATRIX_LINE_WEIGHT = 4;
+/** End cap where a connector leaves its unit — a dot in the line's own colour
+ *  with a white ring, sized in pixels so it holds its size at any zoom. */
+const MATRIX_DOT_RADIUS = 5;
+const MATRIX_DOT_RING = 2;
+/**
+ * Sides a leading unit's chip can hang off its own point, tried in this order.
+ * The chips are wide, so neighbours would otherwise sit on each other.
+ */
+const CHIP_SIDES = ["up", "right", "left", "down"] as const;
+/** Clear space kept between two chips, in pixels. */
+const CHIP_GAP = 6;
+/** zIndexOffset for a leading unit's chip — above plain pins, under the active one. */
+const TOP_MARKER_Z = 400;
+/**
+ * Padding for framing the leading units in the strip the sheet leaves visible.
+ * The top carries the most: it has to clear the floating banners and leave room
+ * for a chip hanging above its unit.
+ */
+const LIST_FIT_LEFT = 40;
+const LIST_FIT_TOP = 68;
+const LIST_FIT_RIGHT = 48;
+const LIST_FIT_GAP = 12;
+/**
+ * How much to pull the framed bounds in on themselves, per side. The list is
+ * what the sheet is for, so the units are shown a step closer than the exact
+ * fit — the outermost one may need a small pan to reach, which is the trade
+ * this buys.
+ */
+const LIST_FIT_TIGHTEN = 0.15;
+/** Ceiling for that fit. Street level: a cluster of units inside a few blocks
+ *  would otherwise land at neighbourhood scale and look tiny in the strip. */
+const LIST_FIT_MAX_ZOOM = 16;
+/** CoreSheet's snap runs 480 ms — wait it out before re-framing on open. */
+const SHEET_SETTLE_MS = 540;
+/** Don't flash the route loader for a route that lands almost immediately. */
+const ROUTE_LOADER_GRACE_MS = 260;
+/** Give up on a connector route rather than let a hung request stall the map. */
+const CONNECTOR_FETCH_TIMEOUT_MS = 8000;
 
 onMounted(async () => {
   if (!mapContainer.value) return;
@@ -170,6 +260,9 @@ onMounted(async () => {
     leafletStore.setMapZoom(z);
     mapUrl.syncZoom(z);
     applyZoomOverlayState(z);
+    // Zooming out pulls the units together in pixel terms while their chips
+    // keep their size, so they may need re-hanging.
+    placeUnitChips();
   });
   applyZoomOverlayState(map!.getZoom());
 
@@ -324,6 +417,48 @@ onMounted(async () => {
     { immediate: true }
   );
 
+  // Explore list open → only the units that list is showing stay on the map.
+  watch(
+    () => exploreSheet.visibleUnitIds,
+    (ids) => {
+      visibleUnitIdSet = ids ? new Set(ids) : null;
+      applyMarkerListFilter();
+    },
+    { immediate: true },
+  );
+
+  // …and the units it leads with get a bigger pin, their name beside it, a
+  // connector to the user pin, and the map framed around all of it.
+  watch(
+    () => exploreSheet.topUnitIds,
+    (ids) => {
+      const next = ids ?? [];
+      const wasEmpty = topUnitIds.length === 0;
+      const changed = next.join() !== topUnitIds.join();
+      topUnitIds = next;
+
+      applyTopUnitMarkers(L);
+      applyMatrixLines(L);
+      placeUnitChips();
+
+      // A closed list has nothing left to frame, and a fit still queued would
+      // only fight the recentre that closing hands back to the user.
+      if (!next.length) {
+        listFitPending = false;
+        clearTimeout(listFitTimer);
+        return;
+      }
+      // Only a different set of leaders is worth re-framing for — re-running
+      // the fit on every GPS tick would fight the user's own panning.
+      if (!changed) return;
+      // Opening the list means CoreSheet is mid-slide; the fit waits that out
+      // to stay off the slide's animation budget and because the sheet height
+      // that pads the bounds is still moving.
+      requestListFit(L, wasEmpty ? SHEET_SETTLE_MS : 0);
+    },
+    { immediate: true },
+  );
+
   watch(
     () => [emergencyStore.isCovered, emergencyStore.coverageChecked] as const,
     ([covered, checked]) => {
@@ -341,6 +476,8 @@ onMounted(async () => {
     ([lat, lng, acc]) => {
       if (!lat || !lng) return;
       renderCurrentLocation(L, lat, lng, !currentLocationMarker, Number(acc) || undefined);
+      // The pin is the far end of every connector.
+      applyMatrixLines(L);
     },
     { immediate: true },
   );
@@ -406,6 +543,11 @@ onUnmounted(() => {
     window.removeEventListener("bb-color-mode", onColorModeChange);
     onColorModeChange = null;
   }
+  // These overlays belong to this map instance; a remount builds its own.
+  matrixLines.clear();
+  chipMarkerIds.clear();
+  clearTimeout(listFitTimer);
+  clearTimeout(routeLoaderTimer);
 });
 
 /** Move blue pin to an explicit lat/lng (map click / drag). Stops GPS from yanking it back.
@@ -608,14 +750,36 @@ function renderCurrentLocation(
   }
 }
 
+/**
+ * Icon for a unit that is not leading the list: the teardrop pin, or the
+ * legacy circle when the rollback appearance is on. One place decides, so the
+ * pin a chip is swapped back to is the same pin it would have been given.
+ */
+function unitPinIcon(
+  L: any,
+  typeName: string,
+  opts: { enter?: boolean; delayMs?: number; active?: boolean; muted?: boolean },
+) {
+  const active = !!opts.active;
+  if (mapAppearance.markers === "pin") {
+    return buildServicePinIcon(L, typeName, { ...opts, active });
+  }
+  return L.divIcon({
+    className: `${classicMarkerClass(typeName)} bb-unit-marker${opts.muted && !active ? " bb-marker--muted" : ""}`,
+    iconSize: active ? [32, 32] : [25, 25],
+    iconAnchor: active ? [16, 16] : [12, 12],
+  });
+}
+
 function renderMarkers(L: any, data: any[]) {
   markers.forEach((m) => m.remove());
   markers = [];
   markersById.clear();
   markerMetaById.clear();
+  // Every marker below is built fresh, as a pin — whatever wore a chip before.
+  chipMarkerIds.clear();
   if (!map) return;
 
-  const usePin = mapAppearance.markers === "pin";
   let pinIndex = 0;
   const selectedId =
     detailSheet.isOpen && detailSheet.detailSheetData?.emergency?.emergencyData?.id != null
@@ -632,18 +796,12 @@ function renderMarkers(L: any, data: any[]) {
     const isActive = !!id && id === selectedId;
     const muted = muteOthers && !isActive;
 
-    const icon = usePin
-      ? buildServicePinIcon(L, typeName, {
-          enter: true,
-          delayMs: Math.min(pinIndex * 45, 360),
-          active: isActive,
-          muted,
-        })
-      : L.divIcon({
-          className: `${classicMarkerClass(typeName)}${muted ? " bb-marker--muted" : ""}`,
-          iconSize: isActive ? [32, 32] : [25, 25],
-          iconAnchor: isActive ? [16, 16] : [12, 12],
-        });
+    const icon = unitPinIcon(L, typeName, {
+      enter: true,
+      delayMs: Math.min(pinIndex * 45, 360),
+      active: isActive,
+      muted,
+    });
 
     pinIndex += 1;
 
@@ -661,6 +819,7 @@ function renderMarkers(L: any, data: any[]) {
     if (id) {
       markersById.set(id, marker);
       markerMetaById.set(id, { typeName, item });
+      setMarkerHidden(marker, markerHiddenByList(id));
     }
   });
 
@@ -677,10 +836,466 @@ function renderMarkers(L: any, data: any[]) {
     needsEmergencyReframe = false;
     frameLocationOverview(L, userLocationStore.lat, userLocationStore.long);
   }
+
+  // Fresh coordinates and fresh elements — re-apply the list's lead styling,
+  // then re-route the connectors onto the new pins.
+  applyTopUnitMarkers(L);
+  applyMatrixLines(L);
+  placeUnitChips();
 }
 
 function routeIsDrawn(): boolean {
   return Boolean(leafletStore.routeEndPoint?.lat && leafletStore.routeEndPoint?.lng);
+}
+
+/** True when the explore list has ruled this unit out. Units without an id
+ *  can't be matched against the list, so they stay visible. */
+function markerHiddenByList(id: string): boolean {
+  return Boolean(id) && visibleUnitIdSet !== null && !visibleUnitIdSet.has(id);
+}
+
+function setMarkerHidden(marker: Marker, hidden: boolean) {
+  marker.getElement()?.classList.toggle("bb-map-marker--hidden", hidden);
+}
+
+function applyMarkerListFilter() {
+  for (const [id, marker] of markersById) {
+    setMarkerHidden(marker, markerHiddenByList(id));
+  }
+}
+
+/** Name a unit is listed under. */
+function unitName(id: string): string {
+  const data = markerMetaById.get(id)?.item?.emergencyData;
+  return String(data?.name || data?.organization_name || "");
+}
+
+/** Marker whose whole content is one chip: icon, unit name, ETA. */
+function chipIconFor(L: any, typeName: string) {
+  return L.divIcon({
+    className: "bb-unit-chip-wrap bb-unit-marker",
+    html: unitChipIconHtml(typeName),
+    // Zero-sized: the chip inside is content-sized and hangs off this point.
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+}
+
+/**
+ * ETA a chip shows: the list's own matrix figure, so the chip and its card can
+ * never disagree, falling back to the drive time OSRM returned for its
+ * connector when the matrix had nothing for that unit.
+ */
+function chipEtaMinutes(id: string): number | null {
+  const fromMatrix = displayEtaMinutes(markerMetaById.get(id)?.item?.trip?.duration);
+  if (fromMatrix != null) return fromMatrix;
+
+  const route = connectorRoutes.get(
+    connectorCacheKey(id, Number(userLocationStore.lat), Number(userLocationStore.long)),
+  );
+  if (!route || !Number.isFinite(route.durationSec)) return null;
+  return Math.max(1, Math.round(route.durationSec / 60));
+}
+
+/**
+ * Write a chip's texts. Always through textContent, so a unit name from the API
+ * is never markup, and always re-measured by placeUnitChips afterwards because
+ * the name decides how wide the chip is.
+ */
+function fillChip(marker: Marker, id: string) {
+  const el = marker.getElement?.();
+  if (!el) return;
+
+  const name = el.querySelector(".bb-unit-chip__name");
+  if (name && name.textContent !== unitName(id)) name.textContent = unitName(id);
+
+  const minutes = chipEtaMinutes(id);
+  const eta = el.querySelector(".bb-unit-chip__eta") as HTMLElement | null;
+  if (eta) {
+    const label = minutes == null ? "" : `${minutes} min`;
+    if (eta.textContent !== label) eta.textContent = label;
+    eta.style.color = connectorColor(minutes);
+  }
+}
+
+/**
+ * The units the list leads with wear a chip — icon, name and ETA on the marker
+ * itself — instead of a pin with two badges scattered around it.
+ *
+ * The icon is swapped rather than a class toggled: a chip and a pin are
+ * different shapes, not different sizes, so there is nothing to restyle.
+ */
+function applyTopUnitMarkers(L: any) {
+  const top = new Set(topUnitIds);
+  for (const [id, marker] of markersById) {
+    const meta = markerMetaById.get(id);
+    if (!meta) continue;
+
+    const wantsChip = top.has(id);
+    const hasChip = chipMarkerIds.has(id);
+    if (wantsChip !== hasChip) {
+      marker.setIcon(
+        wantsChip
+          ? chipIconFor(L, meta.typeName)
+          : unitPinIcon(L, meta.typeName, { enter: false }),
+      );
+      // setIcon hands back a fresh element, so the filter's hidden state on the
+      // old one has to be re-applied.
+      setMarkerHidden(marker, markerHiddenByList(id));
+      if (wantsChip) chipMarkerIds.add(id);
+      else chipMarkerIds.delete(id);
+    }
+
+    if (!wantsChip) continue;
+    // Only ever lifted, never lowered: the offsets a drawn route hands out
+    // (muted/active) are none of this function's business.
+    marker.setZIndexOffset(TOP_MARKER_Z);
+    fillChip(marker, id);
+  }
+}
+
+/** Do two chip boxes need more room than they have? Anywhere but their centres. */
+function chipBoxOf(
+  centre: { x: number; y: number },
+  size: { w: number; h: number },
+  side: (typeof CHIP_SIDES)[number],
+) {
+  const gap = 8 + 5; // the chip's offset from its point + its tail
+  const dx = side === "right" ? gap + size.w / 2 : side === "left" ? -gap - size.w / 2 : 0;
+  const dy = side === "up" ? -gap - size.h / 2 : side === "down" ? gap + size.h / 2 : 0;
+  return {
+    left: centre.x + dx - size.w / 2,
+    right: centre.x + dx + size.w / 2,
+    top: centre.y + dy - size.h / 2,
+    bottom: centre.y + dy + size.h / 2,
+  };
+}
+
+function chipBoxesClash(
+  a: { left: number; right: number; top: number; bottom: number },
+  b: { left: number; right: number; top: number; bottom: number },
+): boolean {
+  return (
+    a.left < b.right + CHIP_GAP &&
+    a.right > b.left - CHIP_GAP &&
+    a.top < b.bottom + CHIP_GAP &&
+    a.bottom > b.top - CHIP_GAP
+  );
+}
+
+/**
+ * Hang each chip off whichever side of its own point keeps it clear of the
+ * chips already placed, in list order. Chips are wide and their units sit
+ * close together, so without this the top three would sit on each other.
+ *
+ * Run after every draw and after a zoom: zooming out pulls the units together
+ * in pixel terms while the chips keep their size.
+ */
+function placeUnitChips() {
+  if (!map || !topUnitIds.length) return;
+
+  const placed: ReturnType<typeof chipBoxOf>[] = [];
+  for (const id of topUnitIds) {
+    const marker = markersById.get(id);
+    const el = marker?.getElement?.();
+    if (!marker || !el) continue;
+
+    const chip = el.querySelector(".bb-unit-chip") as HTMLElement | null;
+    if (!chip) continue;
+
+    const centre = map.latLngToLayerPoint(marker.getLatLng());
+    const size = { w: chip.offsetWidth, h: chip.offsetHeight };
+    let chosen: (typeof CHIP_SIDES)[number] | null = null;
+    let chosenBox = chipBoxOf(centre, size, CHIP_SIDES[0]);
+
+    for (const side of CHIP_SIDES) {
+      const box = chipBoxOf(centre, size, side);
+      if (!placed.some((other) => chipBoxesClash(box, other))) {
+        chosen = side;
+        chosenBox = box;
+        break;
+      }
+    }
+
+    // Nowhere clear: the first side is as good as any.
+    for (const side of CHIP_SIDES) {
+      el.classList.toggle(`bb-unit-chip-wrap--${side}`, side === (chosen ?? CHIP_SIDES[0]));
+    }
+    placed.push(chosenBox);
+  }
+}
+
+/**
+ * Frame the user pin and the units the list leads with, inside the strip the
+ * sheet leaves visible.
+ *
+ * The pins are the frame — deliberately not the routes they came with. A
+ * route's envelope is a good deal wider (it follows the roads), so framing it
+ * lands the map a couple of steps further out and the units end up small. A
+ * route that reaches past the edge is fine: the list is about the units, and
+ * the map can be panned to follow a line.
+ */
+function fitListUnitsInView(L: any) {
+  if (!map) return;
+
+  const points: [number, number][] = [];
+  const lat = Number(userLocationStore.lat);
+  const lng = Number(userLocationStore.long);
+  if (lat && lng) points.push([lat, lng]);
+  for (const id of topUnitIds) {
+    const coords = markerMetaById.get(id)?.item?.emergencyData?.coordinates as
+      | number[]
+      | undefined;
+    if (coords?.length) points.push([Number(coords[1]), Number(coords[0])]);
+  }
+  if (!points.length) return;
+
+  map.invalidateSize({ animate: false });
+
+  if (points.length === 1) {
+    // Pin alone — nothing to bound, so fall back to the neighbourhood scale.
+    map.setView(points[0], DEFAULT_ZOOM, {
+      animate: true,
+      duration: 0.45,
+      easeLinearity: 0.2,
+    });
+    return;
+  }
+
+  map.fitBounds(L.latLngBounds(points).pad(-LIST_FIT_TIGHTEN), {
+    paddingTopLeft: [LIST_FIT_LEFT, LIST_FIT_TOP],
+    paddingBottomRight: [LIST_FIT_RIGHT, measureBottomSheetInset() + LIST_FIT_GAP],
+    maxZoom: LIST_FIT_MAX_ZOOM,
+    animate: true,
+  });
+}
+
+/**
+ * Run the re-frame a list change asked for, once CoreSheet has stopped sliding.
+ * Anything that would move the map twice — a second filter tap mid-slide — just
+ * replaces what is already pending.
+ */
+function tryListFit(L: any) {
+  if (!listFitPending) return;
+  if (!topUnitIds.length) {
+    listFitPending = false;
+    return;
+  }
+
+  const wait = listFitNotBefore - Date.now();
+  if (wait > 0) {
+    clearTimeout(listFitTimer);
+    listFitTimer = setTimeout(() => tryListFit(L), wait);
+    return;
+  }
+
+  listFitPending = false;
+  fitListUnitsInView(L);
+}
+
+/** Ask for a re-frame; `settleMs` covers the sheet slide when the list opens. */
+function requestListFit(L: any, settleMs: number) {
+  listFitPending = true;
+  listFitNotBefore = Date.now() + settleMs;
+  tryListFit(L);
+}
+
+function setConnectorHidden(
+  entry: { line: Polyline; dot: CircleMarker },
+  hidden: boolean,
+) {
+  entry.line.getElement()?.classList.toggle("bb-matrix-line--hidden", hidden);
+  entry.dot.getElement()?.classList.toggle("bb-matrix-dot--hidden", hidden);
+}
+
+function connectorCacheKey(id: string, lat: number, lng: number): string {
+  return `${id}:${lat.toFixed(CONNECTOR_KEY_DECIMALS)}:${lng.toFixed(CONNECTOR_KEY_DECIMALS)}`;
+}
+
+function rememberConnectorRoute(key: string, route: ConnectorRoute) {
+  connectorRoutes.set(key, route);
+  while (connectorRoutes.size > CONNECTOR_CACHE_MAX) {
+    const oldest = connectorRoutes.keys().next().value;
+    if (oldest == null) break;
+    connectorRoutes.delete(oldest);
+  }
+}
+
+/** Drive route unit → pin. Same public OSRM service the selected route uses. */
+async function fetchConnectorRoute(
+  from: [number, number],
+  to: [number, number],
+): Promise<ConnectorRoute | null> {
+  const url =
+    `https://router.project-osrm.org/route/v1/driving/${from[1]},${from[0]};` +
+    `${to[1]},${to[0]}?overview=full&geometries=geojson`;
+  try {
+    // Timed out rather than left hanging: a request that never settles would
+    // stall both the loading pill and the re-frame that waits on it.
+    const res = await fetch(url, { signal: AbortSignal.timeout(CONNECTOR_FETCH_TIMEOUT_MS) });
+    const data = await res.json();
+    const route = data?.routes?.[0];
+    const coords = route?.geometry?.coordinates as [number, number][] | undefined;
+    if (!coords?.length) return null;
+    return {
+      latlngs: coords.map((c) => [c[1]!, c[0]!] as [number, number]),
+      durationSec: Number(route?.duration),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** A connector's tone — blue, or orange once its own drive time runs long. */
+function connectorColor(minutes: number | null): string {
+  return minutes != null && minutes > CONNECTOR_FAR_MINUTES
+    ? MATRIX_LINE_COLOR_FAR
+    : MATRIX_LINE_COLOR;
+}
+
+/**
+ * Count connector fetches so the map can say it is still working, with enough
+ * grace that a route arriving straight away never flashes a loader.
+ */
+function trackRouteLoad(delta: number) {
+  routesInFlight = Math.max(0, routesInFlight + delta);
+
+  if (routesInFlight > 0) {
+    if (routeLoaderTimer !== undefined || showRouteLoader.value) return;
+    routeLoaderTimer = setTimeout(() => {
+      routeLoaderTimer = undefined;
+      // The list may have closed while this was pending — nothing to load for.
+      if (topUnitIds.length) showRouteLoader.value = true;
+    }, ROUTE_LOADER_GRACE_MS);
+    return;
+  }
+
+  clearTimeout(routeLoaderTimer);
+  routeLoaderTimer = undefined;
+  showRouteLoader.value = false;
+}
+
+/** Draw or refresh one connector from road geometry the map now has. */
+function drawConnector(L: any, id: string, route: ConnectorRoute) {
+  if (!map) return;
+
+  const color = connectorColor(chipEtaMinutes(id));
+
+  let entry = matrixLines.get(id);
+  if (!entry) {
+    const line = L.polyline(route.latlngs, {
+      interactive: false,
+      className: "bb-matrix-line",
+      color,
+      weight: MATRIX_LINE_WEIGHT,
+      opacity: 1,
+      lineCap: "round",
+      lineJoin: "round",
+    }).addTo(map);
+    // Keeps the stroke at one width while Leaflet scales its SVG through a
+    // zoom; without it the line thickens mid-animation and snaps back at the end.
+    line.getElement()?.setAttribute("vector-effect", "non-scaling-stroke");
+    // End cap, drawn where the route leaves the unit — the far end is already
+    // the user's own pin.
+    const dot = L.circleMarker(route.latlngs[0]!, {
+      className: "bb-matrix-dot",
+      radius: MATRIX_DOT_RADIUS,
+      color: "#ffffff",
+      weight: MATRIX_DOT_RING,
+      opacity: 1,
+      fillColor: color,
+      fillOpacity: 1,
+      interactive: false,
+    }).addTo(map);
+    dot.getElement()?.setAttribute("vector-effect", "non-scaling-stroke");
+    entry = { line, dot };
+    matrixLines.set(id, entry);
+  } else {
+    entry.line.setLatLngs(route.latlngs);
+    entry.line.setStyle({ color });
+    entry.dot.setLatLng(route.latlngs[0]!);
+    entry.dot.setStyle({ fillColor: color });
+  }
+  setConnectorHidden(entry, false);
+}
+
+/**
+ * Fetch a connector's road geometry and draw it — unless the list reshuffled
+ * or the pin moved while it was in flight, in which case that newer pass owns
+ * the id and this result is only worth caching.
+ */
+async function loadConnector(
+  L: any,
+  id: string,
+  key: string,
+  from: [number, number],
+  to: [number, number],
+) {
+  trackRouteLoad(1);
+  try {
+    const route = await fetchConnectorRoute(from, to);
+    if (!route) return;
+    rememberConnectorRoute(key, route);
+
+    if (!topUnitIds.includes(id)) return;
+    const pinLat = Number(userLocationStore.lat);
+    const pinLng = Number(userLocationStore.long);
+    if (connectorCacheKey(id, pinLat, pinLng) !== key) return;
+
+    drawConnector(L, id, route);
+    // A unit the matrix had no ETA for takes its drive time from here, so the
+    // chip may still have text to gain.
+    applyTopUnitMarkers(L);
+    placeUnitChips();
+  } finally {
+    trackRouteLoad(-1);
+  }
+}
+
+/**
+ * Keep one labelled connector per leading list unit. Called whenever the list,
+ * its data or the user pin changes: units that dropped out of the top few fade
+ * out, the rest are re-routed in place, and the whole pool is dropped once the
+ * list closes — its geometry is only meaningful while the list is open.
+ */
+function applyMatrixLines(L: any) {
+  if (!map) return;
+
+  if (!topUnitIds.length) {
+    for (const entry of matrixLines.values()) {
+      entry.line.remove();
+      entry.dot.remove();
+    }
+    matrixLines.clear();
+    return;
+  }
+
+  const keep = new Set(topUnitIds);
+  for (const [id, entry] of matrixLines) {
+    if (!keep.has(id)) setConnectorHidden(entry, true);
+  }
+
+  const userLat = Number(userLocationStore.lat);
+  const userLng = Number(userLocationStore.long);
+  if (!userLat || !userLng) return;
+
+  for (const id of topUnitIds) {
+    const meta = markerMetaById.get(id);
+    const coords = meta?.item?.emergencyData?.coordinates as number[] | undefined;
+    if (!coords?.length) continue;
+
+    const from: [number, number] = [Number(coords[1]), Number(coords[0])];
+    const key = connectorCacheKey(id, userLat, userLng);
+    const cached = connectorRoutes.get(key);
+    if (cached) {
+      drawConnector(L, id, cached);
+      continue;
+    }
+    void loadConnector(L, id, key, from, [userLat, userLng]);
+  }
+
+  // Last, so every chip placed this pass is clear of the others.
+  placeUnitChips();
 }
 
 function applyMutedMarkers() {
@@ -712,7 +1327,7 @@ function buildServicePinIcon(
 ) {
   const active = !!opts.active;
   return L.divIcon({
-    className: "bb-svc-pin-wrap",
+    className: "bb-svc-pin-wrap bb-unit-marker",
     html: emergencyPinIconHtml(typeName, {
       enter: opts.enter,
       delayMs: opts.delayMs,
@@ -1174,5 +1789,12 @@ async function renderRoute(L: any, endPoint: { lat: number; lng: number }) {
 </script>
 
 <template>
-  <div ref="mapContainer" class="w-full h-full" />
+  <div class="relative w-full h-full">
+    <!-- Leaflet owns this element; overlays go beside it, never inside. -->
+    <div ref="mapContainer" class="w-full h-full" />
+    <div v-if="showRouteLoader" class="bb-map-loader" role="status" aria-live="polite">
+      <span class="bb-map-loader__spin" aria-hidden="true" />
+      Menghitung rute…
+    </div>
+  </div>
 </template>

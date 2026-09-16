@@ -21,21 +21,11 @@ const sheetData = computed(() => exploreSheet.sheetData);
 const areaName = computed(() => cityNameFormat(userLocation.currentRegion.regency.name));
 const scrollContainer = ref<HTMLElement | null>(null);
 
-// ── Snap coordination ──────────────────────────────────────────────────────
-// The list sheet has two heights: default (0.5vh) and tall (0.75vh). CoreSheet
-// runs in content-drag mode: dragging the list moves the sheet until it's
-// tall, then the list scrolls; pulling down from the top collapses it.
-// Whenever the snap changes, the map is re-fit so the user marker + nearby
-// unit pins stay visible above the sheet.
-const SNAP_DEFAULT = 0;
-const SNAP_TALL = 1;
-const currentSnapIdx = ref(SNAP_DEFAULT);
-// Must match LeafletMap.vue's DEFAULT_ZOOM — opening the list always
-// resets to this, even if the user had zoomed the map out/in beforehand.
-const DEFAULT_ZOOM = 14;
-// Baseline map zoom captured when the sheet opens; used as the anchor for
-// `fitMapForSheet` so tall → default restores exactly (not `current - (-1)`).
-let baseZoom: number | null = null;
+// ── Sheet height ───────────────────────────────────────────────────────────
+// One fixed height, no taller snap: the list scrolls inside it, and dragging
+// down from the top (or the handle) closes the sheet. Framing the map around
+// the units this list leads with is the map's job — see fitListUnitsInView.
+const SHEET_VH = 0.5;
 
 const emergencyList = computed(() => {
   const typeName = sheetData.value?.emergencyType?.name;
@@ -60,13 +50,7 @@ const onlyComplete = ref(false);
 const filterOpen = ref(false);
 const filterMenuRef = ref<HTMLElement | null>(null);
 
-// ── Search + quick filters ──────────────────────────────────────────────────
-// Shown once the sheet is raised to its tall snap — that's when the list is
-// long enough to be worth narrowing down. At the default height the header
-// alone keeps the map visible.
-const searchQuery = ref("");
-const showQuickFilters = computed(() => currentSnapIdx.value === SNAP_TALL);
-
+// ── Filters ─────────────────────────────────────────────────────────────────
 const showServiceFilter = computed(() => {
   const name = String(sheetData.value?.emergencyType?.name || "").toLowerCase();
   return name.includes("ambulance");
@@ -128,91 +112,12 @@ watch(
   }
 );
 
-/**
- * Position the user marker in the centre of the visible map strip (the area
- * above the sheet). Optionally applies a zoom delta so we can zoom out when
- * the sheet expands so nearby unit markers stay in view.
- */
-function fitMapForSheet(snapVh: number, zoomDelta = 0) {
-  if (!import.meta.client || !leaflet.mapInstance || !userLocation.lat || !userLocation.long) return;
-  const map = leaflet.mapInstance as any;
-  // Anchor on the standard zoom, not whatever the map happened to be at —
-  // otherwise opening the list while zoomed out just re-centers at that
-  // zoom instead of returning to the default view.
-  if (baseZoom == null) baseZoom = DEFAULT_ZOOM;
-  const anchor = baseZoom;
-  const targetZoom = Math.max(10, anchor + zoomDelta);
-  const H = window.innerHeight;
-  // Visible strip = (1 - snapVh) * H at the top of the viewport. Place the
-  // user marker ~1/3 down that strip so nearby unit pins still fit below it.
-  const targetUserY = Math.round(((1 - snapVh) / 3) * H);
-  const offset = Math.round(H / 2 - targetUserY);
-  const userPx = map.project([userLocation.lat, userLocation.long], targetZoom);
-  const centrePx = userPx.add([0, offset]);
-  const centreLatLng = map.unproject(centrePx, targetZoom);
-  map.setView(centreLatLng, targetZoom, {
-    animate: true,
-    duration: 0.42,
-    easeLinearity: 0.2,
-  });
-}
-
-/** CoreSheet snaps over 480 ms; a little past that so the re-frame lands
- *  after the last animated frame rather than on it. */
-const SNAP_SETTLE_MS = 540;
-let mapFitTimer: ReturnType<typeof setTimeout> | undefined;
-
-/**
- * Leaflet's setView is main-thread heavy: a zoom change rebuilds the tile
- * pyramid and runs its own animation. Doing that while the sheet is sliding
- * cost ~4 dropped frames and made the header's search/filter reveal stutter,
- * so the re-frame is queued until the sheet has settled.
- */
-function scheduleMapFit(snapVh: number, zoomDelta = 0) {
-  clearTimeout(mapFitTimer);
-  mapFitTimer = setTimeout(() => fitMapForSheet(snapVh, zoomDelta), SNAP_SETTLE_MS);
-}
-
-function centerUserAboveSheet() {
-  scheduleMapFit(0.5, 0);
-}
-
-onUnmounted(() => clearTimeout(mapFitTimer));
-
-/** Parks the map's looping marker pulses while the sheet covers it — they
- *  keep compositing behind the panel and fight the list scroll otherwise. */
-function toggleMapSheetMax(on: boolean) {
-  leaflet.mapInstance?.getContainer?.()?.classList.toggle("bb-map--sheet-max", on);
-}
-
 watch(
   () => exploreSheet.isOpen,
   (open) => {
-    if (!open) {
-      filterOpen.value = false;
-      currentSnapIdx.value = SNAP_DEFAULT;
-      baseZoom = null;
-      searchQuery.value = "";
-      toggleMapSheetMax(false);
-      clearTimeout(mapFitTimer);
-      return;
-    }
-    baseZoom = null; // capture on first fit call
-    centerUserAboveSheet();
+    if (!open) filterOpen.value = false;
   }
 );
-
-function onSnapChange(idx: number) {
-  currentSnapIdx.value = idx;
-  // Zoom out ~2 levels when tall so the user marker + emergency pins stay
-  // peekable above the raised sheet; restore to base zoom on collapse.
-  toggleMapSheetMax(idx === SNAP_TALL);
-  if (idx === SNAP_TALL) {
-    scheduleMapFit(0.75, -2);
-  } else {
-    scheduleMapFit(0.5, 0);
-  }
-}
 
 function etaMinutes(duration?: number) {
   const m = displayEtaMinutes(duration);
@@ -234,17 +139,8 @@ function matchesService(item: any): boolean {
   return tipes.includes(serviceMode.value);
 }
 
-function matchesSearch(item: any): boolean {
-  const q = searchQuery.value.trim().toLowerCase();
-  if (!q) return true;
-  const name = String(item.emergencyData?.name ?? "").toLowerCase();
-  const org = String(item.emergencyData?.organization_name ?? "").toLowerCase();
-  return name.includes(q) || org.includes(q);
-}
-
 const filteredEmergencyList = computed(() => {
   let list = emergencyList.value.filter((item: any) => {
-    if (!matchesSearch(item)) return false;
     if (!matchesService(item)) return false;
 
     if (tierFilter.value !== "all") {
@@ -279,6 +175,34 @@ const filteredEmergencyList = computed(() => {
   return list;
 });
 
+/** How many entries at the top of the list get a labelled connector on the map. */
+const CONNECTOR_COUNT = 3;
+
+function unitIdOf(item: any): string {
+  return String(item.emergencyData?.id ?? "");
+}
+
+/**
+ * Mirror the list onto the map: while the sheet is open the map keeps only the
+ * units shown here — a service/filter that rules a unit out takes its pin off
+ * the map rather than contradicting the list — and the first few get a
+ * labelled connector to the user pin. Closing hands the whole set back.
+ */
+watch(
+  [() => exploreSheet.isOpen, filteredEmergencyList],
+  ([open, list]) => {
+    if (!open) {
+      exploreSheet.setVisibleUnitIds(null);
+      exploreSheet.setTopUnitIds(null);
+      return;
+    }
+    const ids = list.map(unitIdOf).filter(Boolean);
+    exploreSheet.setVisibleUnitIds(ids);
+    exploreSheet.setTopUnitIds(ids.slice(0, CONNECTOR_COUNT));
+  },
+  { immediate: true },
+);
+
 function onClickOutside(e: MouseEvent) {
   if (filterMenuRef.value && !filterMenuRef.value.contains(e.target as Node)) {
     filterOpen.value = false;
@@ -299,9 +223,6 @@ async function handleSelect(item: any) {
 const LIST_SCROLL_TOP_MARGIN = 16;
 
 function scrollSelectedCardToTop(idx: number) {
-  // Only the tall sheet scrolls; at default height the list is locked at top
-  // and the tapped card is already on screen.
-  if (currentSnapIdx.value !== SNAP_TALL) return;
   const el = scrollContainer.value?.querySelector(
     `[data-item-idx="${idx}"]`,
   ) as HTMLElement | null;
@@ -375,20 +296,19 @@ function chipClass(active: boolean) {
 <template>
   <CoreSheet
     :is-open="exploreSheet.isOpen"
-    :snap-points="[0.5, 0.75]"
-    :initial-snap="0"
+    :snap-points="[SHEET_VH]"
     draggable
-    no-swipe-dismiss
     scrollable
     content-drag
     @close="handleClose()"
-    @snap-change="onSnapChange"
   >
     <template #header>
+      <!-- `z-10` matters: the list is a later sibling, and its own background
+           would otherwise paint straight over the header's shadow. -->
       <div
         v-if="sheetData?.emergencyType"
-        class="relative"
-        style="background: #ffffff; border-bottom: 1px solid var(--bb-border); border-radius: var(--bb-radius-sheet) var(--bb-radius-sheet) 0 0"
+        class="relative z-10"
+        style="background: #ffffff; border-bottom: 1px solid var(--bb-border); box-shadow: 0 1px 2px rgba(26, 28, 46, 0.04), 0 4px 10px -6px rgba(26, 28, 46, 0.12); border-radius: var(--bb-radius-sheet) var(--bb-radius-sheet) 0 0"
       >
         <div class="flex items-center justify-between gap-2.5 py-2 px-4">
         <div class="flex items-center gap-2.5 min-w-0 flex-1">
@@ -647,51 +567,29 @@ function chipClass(active: boolean) {
         </div>
         </div>
 
-        <!-- Raised sheet: search + one-tap filter chips. The funnel button
-             above still opens the full dropdown for sort/24h/compliance.
-             Kept mounted and collapsed by height so the header shrinks with
-             the sheet instead of the block popping out of the layout. -->
-        <div class="bb-quick" :class="showQuickFilters && 'bb-quick--open'">
-          <div class="bb-quick__inner" :inert="!showQuickFilters">
-            <div class="relative px-4">
-              <Icon
-                icon="lucide:search"
-                class="pointer-events-none absolute left-7 top-1/2 -translate-y-1/2 text-[15px]"
-                style="color: var(--bb-text-tertiary)"
-              />
-              <input
-                v-model="searchQuery"
-                type="search"
-                inputmode="search"
-                placeholder="Cari unit"
-                class="bb-quick-search"
-              />
-            </div>
+        <!-- One-tap filter chips, always in the header. The funnel button
+             above still opens the full dropdown for sort/24h/compliance. -->
+        <div class="flex items-center gap-1.5 overflow-x-auto scrollbar-none px-4 pb-2">
+          <button
+            v-for="f in quickFilters"
+            :key="f.key"
+            type="button"
+            class="bb-quick-chip"
+            :class="f.active && 'bb-quick-chip--on'"
+            @click="f.apply()"
+          >
+            <Icon :icon="f.icon" class="text-[14px]" />
+            {{ f.label }}
+          </button>
 
-            <!-- Single row, scrolls sideways with no visible scrollbar. -->
-            <div class="mt-1.5 flex items-center gap-1.5 overflow-x-auto scrollbar-none px-4 pb-2">
-              <button
-                v-for="f in quickFilters"
-                :key="f.key"
-                type="button"
-                class="bb-quick-chip"
-                :class="f.active && 'bb-quick-chip--on'"
-                @click="f.apply()"
-              >
-                <Icon :icon="f.icon" class="text-[14px]" />
-                {{ f.label }}
-              </button>
-
-              <button
-                type="button"
-                class="bb-quick-chip bb-quick-chip--more"
-                @click="filterOpen = true"
-              >
-                <Icon icon="ion:options-outline" class="text-[14px]" />
-                Filter lainnya
-              </button>
-            </div>
-          </div>
+          <button
+            type="button"
+            class="bb-quick-chip bb-quick-chip--more"
+            @click="filterOpen = true"
+          >
+            <Icon icon="ion:options-outline" class="text-[14px]" />
+            Filter lainnya
+          </button>
         </div>
       </div>
     </template>
@@ -725,7 +623,9 @@ function chipClass(active: boolean) {
         v-else
         :emergency-data="filteredEmergencyList"
         :show-rank-hints="sortMode === 'smart'"
+        :filters-active="activeFilterCount > 0"
         @select="handleSelect"
+        @reset-filters="resetFilters"
       />
     </div>
   </CoreSheet>
@@ -740,45 +640,6 @@ function chipClass(active: boolean) {
 .filter-drop-leave-to {
   opacity: 0;
   transform: translateY(-4px) scale(0.97);
-}
-
-/* Collapses by height rather than unmounting, on the same duration and curve
-   CoreSheet uses for its snap, so the header shrinks with the sheet instead
-   of the block disappearing partway through the slide. */
-.bb-quick {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  transition:
-    grid-template-rows 480ms cubic-bezier(0.32, 0.72, 0, 1),
-    opacity 200ms ease;
-}
-.bb-quick--open {
-  grid-template-rows: 1fr;
-  opacity: 1;
-}
-.bb-quick__inner {
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* iOS-style search field: filled, borderless, compact. */
-.bb-quick-search {
-  width: 100%;
-  height: 34px;
-  padding: 0 12px 0 32px;
-  border: none;
-  border-radius: 10px;
-  background: #f1f3f4;
-  font-size: 14px;
-  color: #202124;
-  outline: none;
-}
-.bb-quick-search::placeholder {
-  color: #9aa0a6;
-}
-.bb-quick-search::-webkit-search-cancel-button {
-  cursor: pointer;
 }
 
 /* Filter chips: plain text until selected, then a soft filled pill. */
