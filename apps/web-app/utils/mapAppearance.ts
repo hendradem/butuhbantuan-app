@@ -111,8 +111,8 @@ export function tileLayerUrl(tiles: MapTileStyle): string {
     return `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png`;
   }
   if (stadiaBlocked) return FALLBACK_TILE_URL;
-  // Stadia Maps OSM Bright — single host, no {s} shard. {r}/{ext} are
-  // resolved via tileLayerExtraOptions() below (detectRetina + ext:"png").
+  // Stadia Maps OSM Bright — single host, no {s} shard. {ext} comes from
+  // tileLayerExtraOptions() below; {r} resolves on its own from Browser.retina.
   return `https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.{ext}?api_key=${STADIA_API_KEY}`;
 }
 
@@ -133,10 +133,15 @@ export function tileAttribution(tiles: MapTileStyle): string {
 /**
  * L.tileLayer options a style needs beyond url/attribution/subdomains.
  * Stadia's OSM Bright template uses Leaflet's built-in {r} retina
- * placeholder (needs detectRetina:true) and a custom {ext} placeholder.
+ * placeholder and a custom {ext} placeholder.
+ *
+ * `{r}` resolves to `@2x` from Browser.retina alone — it does not need
+ * detectRetina — and turning detectRetina on top of it is actively harmful:
+ * Leaflet halves tileSize and bumps zoomOffset, so it asks for four @2x tiles
+ * at z+1 where one would do. Same pixels on screen, 4x the requests.
  */
 export function tileLayerExtraOptions(tiles: MapTileStyle): Record<string, unknown> {
-  return tiles === "classic" && !stadiaBlocked ? { ext: "png", detectRetina: true } : {};
+  return tiles === "classic" && !stadiaBlocked ? { ext: "png" } : {};
 }
 
 /**

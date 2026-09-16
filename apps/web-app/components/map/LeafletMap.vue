@@ -108,7 +108,6 @@ onMounted(async () => {
     crossOrigin: true,
     keepBuffer: 8,
     updateWhenIdle: false,
-    updateWhenZooming: false,
     ...tileLayerExtraOptions(initialTiles),
   }).addTo(map);
   watchTileQuota(L, map!, baseTileLayer, initialTiles);
@@ -125,7 +124,6 @@ onMounted(async () => {
       crossOrigin: true,
       keepBuffer: 8,
       updateWhenIdle: false,
-      updateWhenZooming: false,
       ...tileLayerExtraOptions(next),
     }).addTo(map);
     watchTileQuota(L, map, baseTileLayer, next);
@@ -1158,7 +1156,6 @@ async function renderRoute(L: any, endPoint: { lat: number; lng: number }) {
   };
   const color = routeLineColorFromTravel(etaOpts);
 
-  fitRouteInViewSoon(L, fallback);
   await animateRouteDraw(L, fallback, token, color);
   if (token !== routeRenderToken) {
     toast.dismiss();
